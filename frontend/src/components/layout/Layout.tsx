@@ -26,6 +26,14 @@ export const Layout = ({ children }: LayoutProps) => {
     navigate('/login');
   };
 
+  const getModuleName = () => {
+    const path = location.pathname;
+    if (path.includes('/admin/women-safety/') && path !== '/admin/women-safety') return 'Women Safety Details';
+    if (path.includes('/admin/complaints/') && path !== '/admin/complaints') return 'Complaint Details';
+    const match = menuItems.find(item => path === item.path || path.startsWith(item.path));
+    return match ? `${match.label} Module` : 'Dashboard';
+  };
+
   return (
     <div className="app-container">
       <header className="top-header">
@@ -37,7 +45,7 @@ export const Layout = ({ children }: LayoutProps) => {
           </svg>
         </button>
 
-        <div className="header-brand">
+        <div className="header-brand" style={{ flex: 1 }}>
           <img src="/PHQlogo.png" alt="PHQ" className="header-logo" />
           <div className="header-text">
             <span className="header-title">Complaint Monitoring System</span>
@@ -45,7 +53,13 @@ export const Layout = ({ children }: LayoutProps) => {
           </div>
         </div>
 
-        <div className="header-right">
+        <div className="header-center" style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
+          <span style={{ fontSize: '1.1rem', fontWeight: 600, color: '#e2e8f0', letterSpacing: '1px', textTransform: 'uppercase', textShadow: '0 2px 4px rgba(0,0,0,0.3)' }}>
+            {getModuleName()}
+          </span>
+        </div>
+
+        <div className="header-right" style={{ flex: 1, display: 'flex', justifyContent: 'flex-end' }}>
           <button className="logout-btn" onClick={handleLogout} title="Sign Out">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
