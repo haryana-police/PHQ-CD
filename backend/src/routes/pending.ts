@@ -3,18 +3,18 @@ import { prisma } from '../config/database.js';
 import { sendSuccess } from '../utils/response.js';
 import { authenticate } from '../middleware/auth.js';
 
+const PENDING_WHERE = [
+  { statusOfComplaint: null },
+  { statusOfComplaint: { equals: '' } },
+  { statusOfComplaint: { contains: 'Pending' } },
+];
+
 export const pendingRoutes = async (fastify: FastifyInstance) => {
   fastify.get('/pending/all', {
     preHandler: [authenticate],
   }, async (request, reply) => {
     const complaints = await prisma.complaint.findMany({
-      where: {
-        OR: [
-          { statusOfComplaint: null },
-          { statusOfComplaint: { equals: '' } },
-          { statusOfComplaint: { contains: 'Pending' } },
-        ],
-      },
+      where: { OR: PENDING_WHERE },
       orderBy: { complRegDt: 'asc' },
     });
     return sendSuccess(reply, complaints);
@@ -30,10 +30,7 @@ export const pendingRoutes = async (fastify: FastifyInstance) => {
     const complaints = await prisma.complaint.findMany({
       where: {
         complRegDt: { lte: fifteenDaysAgo, gt: thirtyDaysAgo },
-        OR: [
-          { statusOfComplaint: null },
-          { statusOfComplaint: { equals: '' } },
-        ],
+        OR: PENDING_WHERE,
       },
       orderBy: { complRegDt: 'asc' },
     });
@@ -50,10 +47,7 @@ export const pendingRoutes = async (fastify: FastifyInstance) => {
     const complaints = await prisma.complaint.findMany({
       where: {
         complRegDt: { lte: thirtyDaysAgo, gt: sixtyDaysAgo },
-        OR: [
-          { statusOfComplaint: null },
-          { statusOfComplaint: { equals: '' } },
-        ],
+        OR: PENDING_WHERE,
       },
       orderBy: { complRegDt: 'asc' },
     });
@@ -68,10 +62,7 @@ export const pendingRoutes = async (fastify: FastifyInstance) => {
     const complaints = await prisma.complaint.findMany({
       where: {
         complRegDt: { lte: sixtyDaysAgo },
-        OR: [
-          { statusOfComplaint: null },
-          { statusOfComplaint: { equals: '' } },
-        ],
+        OR: PENDING_WHERE,
       },
       orderBy: { complRegDt: 'asc' },
     });
@@ -84,13 +75,7 @@ export const pendingRoutes = async (fastify: FastifyInstance) => {
     const { branch } = request.params as { branch: string };
 
     const complaints = await prisma.complaint.findMany({
-      where: {
-        branch: branch,
-        OR: [
-          { statusOfComplaint: null },
-          { statusOfComplaint: { equals: '' } },
-        ],
-      },
+      where: { branch, OR: PENDING_WHERE },
       orderBy: { complRegDt: 'asc' },
     });
     return sendSuccess(reply, complaints);
@@ -108,10 +93,7 @@ export const pendingRoutes = async (fastify: FastifyInstance) => {
       where: {
         branch,
         complRegDt: { lte: fifteenDaysAgo, gt: thirtyDaysAgo },
-        OR: [
-          { statusOfComplaint: null },
-          { statusOfComplaint: { equals: '' } },
-        ],
+        OR: PENDING_WHERE,
       },
       orderBy: { complRegDt: 'asc' },
     });
@@ -130,10 +112,7 @@ export const pendingRoutes = async (fastify: FastifyInstance) => {
       where: {
         branch,
         complRegDt: { lte: thirtyDaysAgo, gt: sixtyDaysAgo },
-        OR: [
-          { statusOfComplaint: null },
-          { statusOfComplaint: { equals: '' } },
-        ],
+        OR: PENDING_WHERE,
       },
       orderBy: { complRegDt: 'asc' },
     });
@@ -150,10 +129,7 @@ export const pendingRoutes = async (fastify: FastifyInstance) => {
       where: {
         branch,
         complRegDt: { lte: sixtyDaysAgo },
-        OR: [
-          { statusOfComplaint: null },
-          { statusOfComplaint: { equals: '' } },
-        ],
+        OR: PENDING_WHERE,
       },
       orderBy: { complRegDt: 'asc' },
     });

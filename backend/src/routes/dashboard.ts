@@ -11,7 +11,7 @@ export const dashboardRoutes = async (fastify: FastifyInstance) => {
     
     const totalDisposed = await prisma.complaint.count({
       where: {
-        statusOfComplaint: { not: '', contains: 'Disposed' },
+        statusOfComplaint: { contains: 'Disposed' },
       },
     });
     
@@ -20,6 +20,7 @@ export const dashboardRoutes = async (fastify: FastifyInstance) => {
         OR: [
           { statusOfComplaint: null },
           { statusOfComplaint: { equals: '' } },
+          { statusOfComplaint: { contains: 'Pending' } },
         ],
       },
     });
@@ -35,6 +36,7 @@ export const dashboardRoutes = async (fastify: FastifyInstance) => {
         OR: [
           { statusOfComplaint: null },
           { statusOfComplaint: { equals: '' } },
+          { statusOfComplaint: { contains: 'Pending' } },
         ],
       },
     });
@@ -45,6 +47,7 @@ export const dashboardRoutes = async (fastify: FastifyInstance) => {
         OR: [
           { statusOfComplaint: null },
           { statusOfComplaint: { equals: '' } },
+          { statusOfComplaint: { contains: 'Pending' } },
         ],
       },
     });
@@ -55,6 +58,7 @@ export const dashboardRoutes = async (fastify: FastifyInstance) => {
         OR: [
           { statusOfComplaint: null },
           { statusOfComplaint: { equals: '' } },
+          { statusOfComplaint: { contains: 'Pending' } },
         ],
       },
     });
