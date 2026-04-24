@@ -106,7 +106,7 @@ export function DataTable<T extends Record<string, unknown>>({
           Close
         </button>
       </div>
-      <div className="chart-overlay-body" style={{ display: 'flex', flexDirection: 'column', padding: '0 40px 40px 40px', maxWidth: '1600px', margin: '0 auto', width: '100%' }}>
+      <div className="chart-overlay-body" style={{ display: 'flex', flexDirection: 'column', padding: '0 40px 40px 40px', maxWidth: '1600px', margin: '0 auto', width: '100%', alignItems: 'stretch' }}>
         {renderTable(true)}
       </div>
     </div>
