@@ -27,39 +27,36 @@ export const dashboardRoutes = async (fastify: FastifyInstance) => {
 
     const now = new Date();
     const fifteenDaysAgo = new Date(now.getTime() - 15 * 24 * 60 * 60 * 1000);
-    const oneMonthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-    const twoMonthsAgo = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000);
+    const oneMonthAgo    = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const twoMonthsAgo   = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000);
 
+    const PENDING_WHERE = [
+      { statusOfComplaint: null },
+      { statusOfComplaint: { equals: '' } },
+      { statusOfComplaint: { contains: 'Pending' } },
+    ];
+
+    // 15–30 days pending: registered between 15 and 30 days ago
     const pending15 = await prisma.complaint.count({
       where: {
-        complRegDt: { lte: fifteenDaysAgo },
-        OR: [
-          { statusOfComplaint: null },
-          { statusOfComplaint: { equals: '' } },
-          { statusOfComplaint: { contains: 'Pending' } },
-        ],
+        complRegDt: { lte: fifteenDaysAgo, gt: oneMonthAgo },
+        OR: PENDING_WHERE,
       },
     });
 
+    // 1–2 months pending: registered between 30 and 60 days ago
     const pendingOver1 = await prisma.complaint.count({
       where: {
-        complRegDt: { lte: oneMonthAgo, gt: fifteenDaysAgo },
-        OR: [
-          { statusOfComplaint: null },
-          { statusOfComplaint: { equals: '' } },
-          { statusOfComplaint: { contains: 'Pending' } },
-        ],
+        complRegDt: { lte: oneMonthAgo, gt: twoMonthsAgo },
+        OR: PENDING_WHERE,
       },
     });
 
+    // Over 2 months pending: registered more than 60 days ago
     const pendingOver2 = await prisma.complaint.count({
       where: {
         complRegDt: { lte: twoMonthsAgo },
-        OR: [
-          { statusOfComplaint: null },
-          { statusOfComplaint: { equals: '' } },
-          { statusOfComplaint: { contains: 'Pending' } },
-        ],
+        OR: PENDING_WHERE,
       },
     });
 
