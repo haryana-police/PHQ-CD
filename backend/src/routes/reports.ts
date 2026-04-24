@@ -43,13 +43,27 @@ export const reportRoutes = async (fastify: FastifyInstance) => {
       where: { receptionMode: { not: '' } },
     });
 
-    const modeMap = new Map<string, number>();
+    const modeMap = new Map<string, { total: number; pending: number; disposed: number }>();
     for (const comp of complaints) {
       const mode = comp.receptionMode || 'Unknown';
-      modeMap.set(mode, (modeMap.get(mode) || 0) + 1);
+      const status = (comp.statusOfComplaint || '').toLowerCase();
+      const isPending = status === '' || status.includes('pending');
+      const isDisposed = status.includes('disposed');
+
+      const existing = modeMap.get(mode) || { total: 0, pending: 0, disposed: 0 };
+      existing.total++;
+      if (isPending) existing.pending++;
+      if (isDisposed) existing.disposed++;
+      modeMap.set(mode, existing);
     }
 
-    const data = Array.from(modeMap.entries()).map(([mode, count]) => ({ mode, count }));
+    const data = Array.from(modeMap.entries()).map(([mode, stats]) => ({
+      mode,
+      total: stats.total,
+      pending: stats.pending,
+      disposed: stats.disposed,
+      count: stats.total,
+    }));
     return sendSuccess(reply, data);
   });
 
@@ -124,13 +138,27 @@ export const reportRoutes = async (fastify: FastifyInstance) => {
       where: { statusOfComplaint: { not: '' } },
     });
 
-    const statusMap = new Map<string, number>();
+    const statusMap = new Map<string, { total: number; pending: number; disposed: number }>();
     for (const comp of complaints) {
-      const status = comp.statusOfComplaint || 'Unknown';
-      statusMap.set(status, (statusMap.get(status) || 0) + 1);
+      const statusStr = comp.statusOfComplaint || 'Unknown';
+      const statusLower = statusStr.toLowerCase();
+      const isPending = statusLower === '' || statusLower.includes('pending');
+      const isDisposed = statusLower.includes('disposed');
+
+      const existing = statusMap.get(statusStr) || { total: 0, pending: 0, disposed: 0 };
+      existing.total++;
+      if (isPending) existing.pending++;
+      if (isDisposed) existing.disposed++;
+      statusMap.set(statusStr, existing);
     }
 
-    const data = Array.from(statusMap.entries()).map(([status, count]) => ({ status, count }));
+    const data = Array.from(statusMap.entries()).map(([status, stats]) => ({
+      status,
+      total: stats.total,
+      pending: stats.pending,
+      disposed: stats.disposed,
+      count: stats.total,
+    }));
     return sendSuccess(reply, data);
   });
 
