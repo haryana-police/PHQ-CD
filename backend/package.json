@@ -1,0 +1,35 @@
+{
+  "name": "phq-dashboard-backend",
+  "version": "1.0.0",
+  "description": "PHQ Complaint Dashboard Backend API",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:push": "prisma db push"
+  },
+  "dependencies": {
+    "@fastify/cors": "^9.0.1",
+    "@fastify/jwt": "^8.0.1",
+    "@fastify/multipart": "^8.3.0",
+    "@prisma/client": "^5.22.0",
+    "bcrypt": "^5.1.1",
+    "dotenv": "^17.4.2",
+    "fastify": "^4.28.1",
+    "mssql": "^12.5.0",
+    "tedious": "^19.2.1",
+    "xlsx": "^0.18.5",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/bcrypt": "^5.0.2",
+    "@types/mssql": "^12.3.0",
+    "@types/node": "^20.17.9",
+    "prisma": "^5.22.0",
+    "tsx": "^4.7.2",
+    "typescript": "^5.7.3"
+  }
+}

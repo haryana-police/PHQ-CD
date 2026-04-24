@@ -1,0 +1,175 @@
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+
+export const useAuth = () => {
+  const queryClient = useQueryClient();
+  
+  const login = useMutation({
+    mutationFn: async (credentials: { username: string; password: string }) => {
+      const { data } = await import('@/services/api').then(m => m.default.post('/api/auth/login', credentials));
+      return data;
+    },
+    onSuccess: (data) => {
+      if (data?.data?.token) {
+        localStorage.setItem('token', data.data.token);
+        window.location.href = '/admin/dashboard';
+      }
+    },
+  });
+
+  const logout = () => {
+    localStorage.removeItem('token');
+    window.location.href = '/login';
+  };
+
+  const { data: user, isLoading } = useQuery({
+    queryKey: ['user'],
+    queryFn: async () => {
+      const token = localStorage.getItem('token');
+      if (!token) return null;
+      const response = await fetch('/api/auth/me', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!response.ok) throw new Error('Not authenticated');
+      return response.json();
+    },
+    retry: false,
+  });
+
+  return { login, logout, user, isLoading };
+};
+
+export const useComplaints = (params?: Record<string, string>) => {
+  return useQuery({
+    queryKey: ['complaints', params],
+    queryFn: async () => {
+      const response = await fetch(`/api/complaints?${new URLSearchParams(params)}`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+      });
+      return response.json();
+    },
+  });
+};
+
+export const useDashboardSummary = () => {
+  return useQuery({
+    queryKey: ['dashboard', 'summary'],
+    queryFn: async () => {
+      const response = await fetch('/api/dashboard/summary', {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+      });
+      return response.json();
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+};
+
+export const useDistrictChart = () => {
+  return useQuery({
+    queryKey: ['dashboard', 'district'],
+    queryFn: async () => {
+      const response = await fetch('/api/dashboard/district-wise', {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+      });
+      return response.json();
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+};
+
+export const useDurationChart = (year?: number) => {
+  return useQuery({
+    queryKey: ['dashboard', 'duration', year],
+    queryFn: async () => {
+      const params = year ? `?year=${year}` : '';
+      const response = await fetch(`/api/dashboard/duration-wise${params}`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+      });
+      return response.json();
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+};
+
+export const useMonthWiseData = () => {
+  return useQuery({
+    queryKey: ['dashboard', 'month-wise'],
+    queryFn: async () => {
+      const response = await fetch('/api/dashboard/month-wise', {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+      });
+      return response.json();
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+};
+
+export const useReports = (type: string) => {
+  return useQuery({
+    queryKey: ['reports', type],
+    queryFn: async () => {
+      const response = await fetch(`/api/reports/${type}`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+      });
+      return response.json();
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+};
+
+export const usePending = (type = 'all') => {
+  return useQuery({
+    queryKey: ['pending', type],
+    queryFn: async () => {
+      const typeMap: Record<string, string> = {
+        all: '/api/pending/all',
+        '15-30': '/api/pending/15-30-days',
+        '30-60': '/api/pending/30-60-days',
+        'over-60': '/api/pending/over-60-days',
+      };
+      const response = await fetch(typeMap[type] || typeMap.all, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+      });
+      return response.json();
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+};
+
+export const useReference = (type: string) => {
+  return useQuery({
+    queryKey: ['reference', type],
+    queryFn: async () => {
+      const response = await fetch(`/api/${type}`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+      });
+      return response.json();
+    },
+    staleTime: 10 * 60 * 1000,
+  });
+};
+
+export const useWomenSafety = () => {
+  return useQuery({
+    queryKey: ['women-safety'],
+    queryFn: async () => {
+      const response = await fetch('/api/women-safety', {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+      });
+      return response.json();
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+};
+
+export const useCctns = () => {
+  return useQuery({
+    queryKey: ['cctns'],
+    queryFn: async () => {
+      const response = await fetch('/api/cctns', {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+      });
+      return response.json();
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+};
