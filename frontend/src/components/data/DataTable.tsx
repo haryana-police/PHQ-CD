@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 
 export interface Column<T> {
   key: string;
@@ -46,13 +47,19 @@ export function DataTable<T extends Record<string, unknown>>({
 
   const renderTable = (isExpanded: boolean) => (
     <div style={{ overflowY: 'auto', flex: 1, maxHeight: isExpanded ? 'calc(100vh - 120px)' : maxHeight }}>
-      <table className="data-table">
+      <table className="data-table" style={isExpanded ? { fontSize: '15px' } : undefined}>
         <thead>
           <tr>
             {columns.map(col => (
               <th
                 key={col.key}
-                style={{ width: col.width, cursor: col.sortable ? 'pointer' : 'default', textAlign: col.align }}
+                style={{ 
+                  width: col.width, 
+                  cursor: col.sortable ? 'pointer' : 'default', 
+                  textAlign: col.align,
+                  fontSize: isExpanded ? '13px' : undefined,
+                  padding: isExpanded ? '18px 24px' : undefined
+                }}
                 onClick={() => col.sortable && handleSort(col.key)}
               >
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
@@ -71,7 +78,13 @@ export function DataTable<T extends Record<string, unknown>>({
           {sorted.map((row, i) => (
             <tr key={i} onClick={() => onRowClick?.(row)} style={{ cursor: onRowClick ? 'pointer' : 'default' }}>
               {columns.map(col => (
-                <td key={col.key} style={{ textAlign: col.align }}>
+                <td 
+                  key={col.key} 
+                  style={{ 
+                    textAlign: col.align, 
+                    padding: isExpanded ? '18px 24px' : undefined 
+                  }}
+                >
                   {col.render ? col.render(row) : String(row[col.key] ?? '-')}
                 </td>
               ))}
@@ -82,38 +95,39 @@ export function DataTable<T extends Record<string, unknown>>({
     </div>
   );
 
-  if (expanded) {
-    return (
-      <div className="chart-overlay" style={{ zIndex: 1000 }}>
-        <div className="chart-overlay-header">
-          <span className="chart-overlay-title">{title}</span>
-          <button className="chart-overlay-close" onClick={() => setExpanded(false)}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-            Close
-          </button>
-        </div>
-        <div className="chart-overlay-body" style={{ display: 'flex', flexDirection: 'column', padding: '0 20px 20px 20px' }}>
-          {renderTable(true)}
-        </div>
+  const overlayContent = expanded ? (
+    <div className="chart-overlay" style={{ zIndex: 9999 }}>
+      <div className="chart-overlay-header">
+        <span className="chart-overlay-title" style={{ fontSize: '1.2rem', fontWeight: 600 }}>{title}</span>
+        <button className="chart-overlay-close" onClick={() => setExpanded(false)}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+          Close
+        </button>
       </div>
-    );
-  }
+      <div className="chart-overlay-body" style={{ display: 'flex', flexDirection: 'column', padding: '0 40px 40px 40px', maxWidth: '1600px', margin: '0 auto', width: '100%' }}>
+        {renderTable(true)}
+      </div>
+    </div>
+  ) : null;
 
   return (
-    <div className="card data-table-container" style={{ position: 'relative', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-      <button 
-        onClick={() => setExpanded(true)}
-        className="table-expand-btn"
-        title="Expand Table"
-      >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <polyline points="15 3 21 3 21 9" /><polyline points="9 21 3 21 3 15" />
-          <line x1="21" y1="3" x2="14" y2="10" /><line x1="3" y1="21" x2="10" y2="14" />
-        </svg>
-      </button>
-      {renderTable(false)}
-    </div>
+    <>
+      <div className="card data-table-container" style={{ position: 'relative', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <button 
+          onClick={() => setExpanded(true)}
+          className="table-expand-btn"
+          title="Expand Table"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <polyline points="15 3 21 3 21 9" /><polyline points="9 21 3 21 3 15" />
+            <line x1="21" y1="3" x2="14" y2="10" /><line x1="3" y1="21" x2="10" y2="14" />
+          </svg>
+        </button>
+        {renderTable(false)}
+      </div>
+      {expanded && typeof document !== 'undefined' && createPortal(overlayContent, document.body)}
+    </>
   );
 }
