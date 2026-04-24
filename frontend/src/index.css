@@ -1109,6 +1109,37 @@ body {
   border-radius: var(--radius-md);
   overflow: hidden;
   box-shadow: var(--shadow-md);
+  /* allow section to shrink/grow independently */
+  min-width: 0;
+}
+
+/* Side-by-side adaptive grid for Highlights tables */
+.highlights-tables-grid {
+  display: grid;
+  /* Left (narrow: 3 cols) gets roughly 38%, Right (wide: 6 cols) gets roughly 62% */
+  grid-template-columns: 7fr 11fr;
+  gap: 16px;
+  align-items: start; /* each card sizes to its own content */
+}
+
+/* Adjust table padding inside highlights grid to prevent horizontal scrolling */
+.highlights-tables-grid .data-table th,
+.highlights-tables-grid .data-table td {
+  padding: 10px 12px;
+  white-space: normal;
+}
+.highlights-tables-grid .data-table th {
+  font-size: 10px;
+}
+.highlights-tables-grid .data-table td {
+  font-size: 13px;
+}
+
+/* Collapse to single column on narrower viewports */
+@media (max-width: 1200px) {
+  .highlights-tables-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .highlights-section-header {
