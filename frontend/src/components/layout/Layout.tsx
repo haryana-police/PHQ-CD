@@ -31,7 +31,7 @@ export const Layout = ({ children }: LayoutProps) => {
     if (path.includes('/admin/women-safety/') && path !== '/admin/women-safety') return 'Women Safety Details';
     if (path.includes('/admin/complaints/') && path !== '/admin/complaints') return 'Complaint Details';
     const match = menuItems.find(item => path === item.path || path.startsWith(item.path));
-    return match ? `${match.label} Module` : 'Dashboard';
+    return match ? match.label : 'Dashboard';
   };
 
   return (
