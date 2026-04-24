@@ -55,7 +55,7 @@ export function DataTable<T extends Record<string, unknown>>({
   }, [filteredData, sortKey, sortDir]);
 
   const renderTable = (isExpanded: boolean) => (
-    <div style={{ overflowY: 'auto', flex: 1, maxHeight: isExpanded ? 'calc(100vh - 180px)' : maxHeight }}>
+    <div style={{ overflowY: 'auto', flex: 1, maxHeight: isExpanded ? 'calc(100vh - 100px)' : maxHeight }}>
       <table className="data-table" style={isExpanded ? { fontSize: '15px' } : undefined}>
         <thead>
           <tr>
@@ -114,21 +114,16 @@ export function DataTable<T extends Record<string, unknown>>({
 
   const overlayContent = expanded ? (
     <div className="chart-overlay" style={{ zIndex: 9999 }}>
-      <div className="chart-overlay-header">
-        <span className="chart-overlay-title" style={{ fontSize: '1.2rem', fontWeight: 600 }}>{title}</span>
-        <button className="chart-overlay-close" onClick={() => { setExpanded(false); setSearchQuery(''); }}>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-          </svg>
-          Close
-        </button>
-      </div>
-      <div className="chart-overlay-body" style={{ display: 'flex', flexDirection: 'column', padding: '20px 40px 40px 40px', maxWidth: '1600px', margin: '0 auto', width: '100%', alignItems: 'stretch' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-          <span style={{ fontSize: '15px', color: 'var(--text-secondary)', fontWeight: 500 }}>
-            Showing {sorted.length} record{sorted.length !== 1 ? 's' : ''}
+      <div className="chart-overlay-header" style={{ padding: '16px 40px', gap: '20px' }}>
+        <span className="chart-overlay-title" style={{ fontSize: '1.2rem', fontWeight: 600, flexShrink: 0 }}>
+          {title}
+          <span style={{ fontSize: '14px', color: 'var(--text-muted)', fontWeight: 400, marginLeft: '12px' }}>
+            ({sorted.length} record{sorted.length !== 1 ? 's' : ''})
           </span>
-          <div style={{ width: '300px', position: 'relative' }}>
+        </span>
+        
+        <div style={{ display: 'flex', alignItems: 'center', gap: '20px', flex: 1, justifyContent: 'flex-end' }}>
+          <div style={{ width: '280px', position: 'relative' }}>
             <input 
               type="text"
               placeholder="Search in table..."
@@ -136,23 +131,32 @@ export function DataTable<T extends Record<string, unknown>>({
               onChange={(e) => setSearchQuery(e.target.value)}
               style={{ 
                 width: '100%', 
-                padding: '10px 16px 10px 40px', 
-                borderRadius: '8px', 
+                padding: '8px 16px 8px 36px', 
+                borderRadius: '6px', 
                 background: 'rgba(255, 255, 255, 0.05)', 
                 border: '1px solid var(--border)', 
                 color: '#fff',
-                fontSize: '14px',
+                fontSize: '13px',
                 outline: 'none',
                 transition: 'border-color 0.2s'
               }}
               onFocus={(e) => e.target.style.borderColor = 'var(--primary-light)'}
               onBlur={(e) => e.target.style.borderColor = 'var(--border)'}
             />
-            <svg style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
           </div>
+          
+          <button className="chart-overlay-close" onClick={() => { setExpanded(false); setSearchQuery(''); }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+            Close
+          </button>
         </div>
+      </div>
+      <div className="chart-overlay-body" style={{ display: 'flex', flexDirection: 'column', padding: '0 40px 20px 40px', maxWidth: '1600px', margin: '0 auto', width: '100%', alignItems: 'stretch' }}>
         {renderTable(true)}
       </div>
     </div>
