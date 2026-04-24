@@ -134,6 +134,70 @@ export const reportRoutes = async (fastify: FastifyInstance) => {
     return sendSuccess(reply, data);
   });
 
+  fastify.get('/reports/complaint-source', {
+    preHandler: [authenticate],
+  }, async (request, reply) => {
+    const complaints = await prisma.complaint.findMany({
+      where: { complaintSource: { not: '' } },
+    });
+
+    const sourceMap = new Map<string, { total: number; pending: number; disposed: number }>();
+
+    for (const comp of complaints) {
+      const source = comp.complaintSource || 'Unknown';
+      const status = (comp.statusOfComplaint || '').toLowerCase();
+      const isPending = status === '' || status.includes('pending');
+      const isDisposed = status.includes('disposed');
+
+      const existing = sourceMap.get(source) || { total: 0, pending: 0, disposed: 0 };
+      existing.total++;
+      if (isPending) existing.pending++;
+      if (isDisposed) existing.disposed++;
+      sourceMap.set(source, existing);
+    }
+
+    const data = Array.from(sourceMap.entries()).map(([complaintSource, stats]) => ({
+      complaintSource,
+      total: stats.total,
+      pending: stats.pending,
+      disposed: stats.disposed,
+    }));
+
+    return sendSuccess(reply, data);
+  });
+
+  fastify.get('/reports/type-complaint', {
+    preHandler: [authenticate],
+  }, async (request, reply) => {
+    const complaints = await prisma.complaint.findMany({
+      where: { typeOfComplaint: { not: '' } },
+    });
+
+    const typeMap = new Map<string, { total: number; pending: number; disposed: number }>();
+
+    for (const comp of complaints) {
+      const type = comp.typeOfComplaint || 'Unknown';
+      const status = (comp.statusOfComplaint || '').toLowerCase();
+      const isPending = status === '' || status.includes('pending');
+      const isDisposed = status.includes('disposed');
+
+      const existing = typeMap.get(type) || { total: 0, pending: 0, disposed: 0 };
+      existing.total++;
+      if (isPending) existing.pending++;
+      if (isDisposed) existing.disposed++;
+      typeMap.set(type, existing);
+    }
+
+    const data = Array.from(typeMap.entries()).map(([typeOfComplaint, stats]) => ({
+      typeOfComplaint,
+      total: stats.total,
+      pending: stats.pending,
+      disposed: stats.disposed,
+    }));
+
+    return sendSuccess(reply, data);
+  });
+
   fastify.get('/reports/branch-wise', {
     preHandler: [authenticate],
   }, async (request, reply) => {
@@ -180,8 +244,7 @@ export const reportRoutes = async (fastify: FastifyInstance) => {
     }
 
     const sortedCategories = Array.from(categoryMap.entries())
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 5);
+      .sort((a, b) => b[1] - a[1]);
 
     const data = sortedCategories.map(([category, count]) => ({ category, count }));
     return sendSuccess(reply, data);

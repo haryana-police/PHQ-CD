@@ -1,10 +1,16 @@
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Layout } from '@/components/layout/Layout';
 import { ChartCard } from '@/components/charts/ChartCard';
 import { DataTable, Column } from '@/components/data/DataTable';
 import { getPieOptions, getStackedBarOptions } from '@/components/charts/Charts';
 
+const PREVIEW_COUNT = 5;
+
 export const HighlightsPage = () => {
+  const [showAllCategories, setShowAllCategories] = useState(false);
+  const [showAllNature, setShowAllNature] = useState(false);
+
   const { data: hd, isLoading: hl } = useQuery({
     queryKey: ['reports', 'highlights'],
     queryFn: async () => {
@@ -24,9 +30,13 @@ export const HighlightsPage = () => {
   const highlights = (hd?.data || []) as Record<string, unknown>[];
   const natures = (nd?.data || []) as Record<string, unknown>[];
 
-  const topRows = highlights.slice(0, 10).map((r, i) => ({ name: String(r.category || `Item ${i + 1}`), count: Number(r.count || 0) }));
+  const allTopRows = highlights.map((r, i) => ({
+    rank: i + 1,
+    name: String(r.category || `Item ${i + 1}`),
+    count: Number(r.count || 0),
+  }));
 
-  const natureRows = natures.slice(0, 15).map((r, i) => {
+  const allNatureRows = natures.map((r, i) => {
     const tot = Number(r.total || 0);
     const p = Number(r.pending || 0);
     const d = Number(r.disposed || 0);
@@ -40,7 +50,16 @@ export const HighlightsPage = () => {
     };
   });
 
-  const natureCols: Column<typeof natureRows[0]>[] = [
+  const topRows = showAllCategories ? allTopRows : allTopRows.slice(0, PREVIEW_COUNT);
+  const natureRows = showAllNature ? allNatureRows : allNatureRows.slice(0, PREVIEW_COUNT);
+
+  const catCols: Column<typeof allTopRows[0]>[] = [
+    { key: 'rank', label: '#', width: '50px', align: 'center' },
+    { key: 'name', label: 'Category', sortable: true },
+    { key: 'count', label: 'Total Count', sortable: true, align: 'right' },
+  ];
+
+  const natureCols: Column<typeof allNatureRows[0]>[] = [
     { key: 'name', label: 'Incident Type', sortable: true },
     { key: 'total', label: 'Total', sortable: true, align: 'right' },
     { key: 'pending', label: 'Pending', sortable: true, align: 'right' },
@@ -56,35 +75,141 @@ export const HighlightsPage = () => {
           <div className="loading-spinner"><svg width="28" height="28" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg></div>
         ) : (
           <>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+            {/* Charts Row */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '24px' }}>
               <ChartCard
                 title="Top Categories"
-                option={getPieOptions(topRows.map(r => ({ name: r.name, value: r.count })))}
+                option={getPieOptions(allTopRows.slice(0, 10).map(r => ({ name: r.name, value: r.count })))}
                 height="260px"
               />
               <ChartCard
                 title="Nature of Incidents"
-                option={getStackedBarOptions(natureRows.map(r => ({ category: r.name, total: r.total, pending: r.pending, disposed: r.disposed })))}
+                option={getStackedBarOptions(allNatureRows.slice(0, 10).map(r => ({ category: r.name, total: r.total, pending: r.pending, disposed: r.disposed })))}
                 height="260px"
               />
             </div>
 
-            <DataTable
-              data={natureRows}
-              columns={natureCols.map(c => ({
-                ...c,
-                render: (row) => {
-                  if (c.key === 'name') return <span style={{ fontWeight: 500 }}>{String(row.name)}</span>;
-                  if (c.key === 'total') return <span style={{ fontWeight: 600 }}>{row.total}</span>;
-                  if (c.key === 'pending') return <span style={{ color: '#fbbf24' }}>{row.pending}</span>;
-                  if (c.key === 'disposed') return <span style={{ color: '#34d399' }}>{row.disposed}</span>;
-                  if (c.key === 'pendPct') return <span style={{ color: '#fbbf24' }}>{String(row.pendPct)}</span>;
-                  if (c.key === 'dispPct') return <span style={{ color: '#34d399' }}>{String(row.dispPct)}</span>;
-                  return String(row[c.key as keyof typeof row] ?? '-');
-                },
-              }))}
-              maxHeight="calc(100vh - 460px)"
-            />
+            {/* Top Categories Table */}
+            <div className="highlights-section">
+              <div className="highlights-section-header">
+                <div>
+                  <h3 className="highlights-section-title">Top Complaint Categories</h3>
+                  <span className="highlights-section-meta">
+                    Showing {topRows.length} of {allTopRows.length} categories
+                  </span>
+                </div>
+                {allTopRows.length > PREVIEW_COUNT && (
+                  <button
+                    className={`show-all-btn ${showAllCategories ? 'expanded' : ''}`}
+                    onClick={() => setShowAllCategories(!showAllCategories)}
+                  >
+                    <span>{showAllCategories ? 'Show Less' : `Show All ${allTopRows.length}`}</span>
+                    <svg
+                      width="16" height="16" fill="none" viewBox="0 0 24 24"
+                      style={{ transition: 'transform 0.3s ease', transform: showAllCategories ? 'rotate(180deg)' : 'none' }}
+                    >
+                      <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </button>
+                )}
+              </div>
+
+              <div
+                className="highlights-table-wrapper"
+                style={{
+                  maxHeight: showAllCategories ? '600px' : `${PREVIEW_COUNT * 52 + 48}px`,
+                  transition: 'max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
+                  overflowY: showAllCategories ? 'auto' : 'hidden',
+                }}
+              >
+                <DataTable
+                  data={topRows}
+                  columns={catCols.map(c => ({
+                    ...c,
+                    render: (row) => {
+                      if (c.key === 'rank') return (
+                        <span style={{
+                          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                          width: '26px', height: '26px', borderRadius: '50%',
+                          background: row.rank <= 3 ? 'linear-gradient(135deg, #6366f1, #818cf8)' : 'rgba(255,255,255,0.05)',
+                          color: row.rank <= 3 ? '#fff' : 'var(--text-secondary)',
+                          fontSize: '11px', fontWeight: 700,
+                        }}>{row.rank}</span>
+                      );
+                      if (c.key === 'name') return <span style={{ fontWeight: 500 }}>{String(row.name)}</span>;
+                      if (c.key === 'count') return (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', justifyContent: 'flex-end' }}>
+                          <div style={{
+                            height: '6px', width: '80px', background: 'rgba(255,255,255,0.08)', borderRadius: '3px', overflow: 'hidden',
+                          }}>
+                            <div style={{
+                              height: '100%', borderRadius: '3px',
+                              width: `${allTopRows[0]?.count > 0 ? (row.count / allTopRows[0].count) * 100 : 0}%`,
+                              background: 'linear-gradient(90deg, #6366f1, #818cf8)',
+                            }} />
+                          </div>
+                          <span style={{ fontWeight: 600, minWidth: '40px', textAlign: 'right' }}>{row.count.toLocaleString()}</span>
+                        </div>
+                      );
+                      return String(row[c.key as keyof typeof row] ?? '-');
+                    },
+                  }))}
+                  maxHeight="none"
+                />
+              </div>
+            </div>
+
+            {/* Nature of Incidents Table */}
+            <div className="highlights-section" style={{ marginTop: '20px' }}>
+              <div className="highlights-section-header">
+                <div>
+                  <h3 className="highlights-section-title">Nature of Incidents Breakdown</h3>
+                  <span className="highlights-section-meta">
+                    Showing {natureRows.length} of {allNatureRows.length} incident types
+                  </span>
+                </div>
+                {allNatureRows.length > PREVIEW_COUNT && (
+                  <button
+                    className={`show-all-btn ${showAllNature ? 'expanded' : ''}`}
+                    onClick={() => setShowAllNature(!showAllNature)}
+                  >
+                    <span>{showAllNature ? 'Show Less' : `Show All ${allNatureRows.length}`}</span>
+                    <svg
+                      width="16" height="16" fill="none" viewBox="0 0 24 24"
+                      style={{ transition: 'transform 0.3s ease', transform: showAllNature ? 'rotate(180deg)' : 'none' }}
+                    >
+                      <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </button>
+                )}
+              </div>
+
+              <div
+                className="highlights-table-wrapper"
+                style={{
+                  maxHeight: showAllNature ? '600px' : `${PREVIEW_COUNT * 52 + 48}px`,
+                  transition: 'max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
+                  overflowY: showAllNature ? 'auto' : 'hidden',
+                }}
+              >
+                <DataTable
+                  data={natureRows}
+                  columns={natureCols.map(c => ({
+                    ...c,
+                    render: (row) => {
+                      if (c.key === 'name') return <span style={{ fontWeight: 500 }}>{String(row.name)}</span>;
+                      if (c.key === 'total') return <span style={{ fontWeight: 600 }}>{row.total.toLocaleString()}</span>;
+                      if (c.key === 'pending') return <span style={{ color: '#fbbf24', fontWeight: 500 }}>{row.pending.toLocaleString()}</span>;
+                      if (c.key === 'disposed') return <span style={{ color: '#34d399', fontWeight: 500 }}>{row.disposed.toLocaleString()}</span>;
+                      if (c.key === 'pendPct') return <span className="status-badge pending">{String(row.pendPct)}</span>;
+                      if (c.key === 'dispPct') return <span className="status-badge disposed">{String(row.dispPct)}</span>;
+                      return String(row[c.key as keyof typeof row] ?? '-');
+                    },
+                  }))}
+                  maxHeight="none"
+                />
+              </div>
+            </div>
           </>
         )}
       </div>

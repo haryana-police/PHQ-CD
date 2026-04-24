@@ -5,11 +5,14 @@ import { Layout } from '@/components/layout/Layout';
 import { ChartCard } from '@/components/charts/ChartCard';
 import { DataTable, Column } from '@/components/data/DataTable';
 import { getPieOptions, getStackedBarOptions, getDistrictBarOptions } from '@/components/charts/Charts';
+import { Button } from '@/components/common/Button';
 
 const tabs = [
   { id: 'district', label: 'District' },
   { id: 'mode-receipt', label: 'Receipt Mode' },
+  { id: 'complaint-source', label: 'Complaint Source' },
   { id: 'nature-incident', label: 'Incident Type' },
+  { id: 'type-complaint', label: 'Type of Complaint' },
   { id: 'type-against', label: 'Type Against' },
   { id: 'status', label: 'Status' },
   { id: 'branch-wise', label: 'Branch' },
@@ -45,7 +48,7 @@ export const ReportsPage = () => {
     const p = Number(r.pending || 0);
     const d = Number(r.disposed || 0);
     return {
-      name: String(r.district || r.branch || r.mode || r.status || r.natureOfIncident || r.typeAgainst || r.actionTaken || `Item ${i + 1}`),
+      name: String(r.district || r.branch || r.mode || r.status || r.natureOfIncident || r.typeAgainst || r.actionTaken || r.complaintSource || r.typeOfComplaint || `Item ${i + 1}`),
       total: tot,
       pending: p,
       disposed: d,
@@ -66,7 +69,7 @@ export const ReportsPage = () => {
   const chartOption = (() => {
     if (type === 'district' || type === 'branch-wise' || type === 'date-wise') return getDistrictBarOptions(rows);
     if (type === 'mode-receipt' || type === 'status') return getPieOptions(rows.map((d: Record<string, unknown>) => ({ name: String(d.mode || d.status || ''), value: Number(d.count || 0) })));
-    return getStackedBarOptions(rows.map((d: Record<string, unknown>) => ({ category: String(d.natureOfIncident || d.typeAgainst || d.actionTaken || ''), total: Number(d.total || 0), pending: Number(d.pending || 0), disposed: Number(d.disposed || 0) })));
+    return getStackedBarOptions(rows.map((d: Record<string, unknown>) => ({ category: String(d.natureOfIncident || d.typeAgainst || d.actionTaken || d.complaintSource || d.typeOfComplaint || ''), total: Number(d.total || 0), pending: Number(d.pending || 0), disposed: Number(d.disposed || 0) })));
   })();
 
   return (
@@ -84,31 +87,23 @@ export const ReportsPage = () => {
               type="date"
               value={fromDate}
               onChange={e => setFromDate(e.target.value)}
-              className="input-field"
-              style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #e5e7eb' }}
+              className="form-input"
+              style={{ width: 'auto' }}
             />
-            <span>to</span>
+            <span style={{ color: 'var(--text-secondary)' }}>to</span>
             <input
               type="date"
               value={toDate}
               onChange={e => setToDate(e.target.value)}
-              className="input-field"
-              style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #e5e7eb' }}
+              className="form-input"
+              style={{ width: 'auto' }}
             />
-            <button
+            <Button
               onClick={() => refetch()}
               disabled={!fromDate || !toDate}
-              style={{
-                padding: '8px 16px',
-                backgroundColor: fromDate && toDate ? '#4f46e5' : '#9ca3af',
-                color: '#fff',
-                border: 'none',
-                borderRadius: '6px',
-                cursor: fromDate && toDate ? 'pointer' : 'not-allowed',
-              }}
             >
               Apply
-            </button>
+            </Button>
           </div>
         )}
 
