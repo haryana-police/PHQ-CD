@@ -292,8 +292,8 @@ body {
 }
 
 .header-logo {
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
   border-radius: 6px;
   object-fit: contain;
   flex-shrink: 0;
@@ -306,7 +306,7 @@ body {
 }
 
 .header-title {
-  font-size: 13px;
+  font-size: 16px;
   font-weight: 700;
   color: var(--text-primary);
   white-space: nowrap;
@@ -316,7 +316,7 @@ body {
 }
 
 .header-dept {
-  font-size: 10px;
+  font-size: 12px;
   color: var(--text-muted);
   white-space: nowrap;
   overflow: hidden;
