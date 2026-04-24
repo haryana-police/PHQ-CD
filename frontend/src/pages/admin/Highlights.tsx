@@ -126,6 +126,7 @@ export const HighlightsPage = () => {
                   }}
                 >
                   <DataTable
+                    title="Top Complaint Categories"
                     data={topRows}
                     columns={catCols.map(c => ({
                       ...c,
@@ -194,6 +195,7 @@ export const HighlightsPage = () => {
                   }}
                 >
                   <DataTable
+                    title="Nature of Incidents"
                     data={natureRows}
                     columns={natureCols.map(c => ({
                       ...c,
