@@ -153,6 +153,7 @@ export const CCTNSPage = () => {
           <div className="empty-state"><p>No records found. Try syncing complaints first.</p></div>
         ) : (
           <DataTable
+            title="CCTNS Synchronization Logs"
             data={tableData}
             columns={cols.map(c => ({
               ...c,

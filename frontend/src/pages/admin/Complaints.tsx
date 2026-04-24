@@ -93,6 +93,7 @@ export const ComplaintsPage = () => {
         ) : (
           <>
             <DataTable
+              title="All Complaints"
               data={tableData}
               columns={cols.map(c => ({
                 ...c,

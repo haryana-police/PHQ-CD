@@ -102,6 +102,7 @@ export const WomenSafetyPage = () => {
           <div className="empty-state"><p>No records found</p></div>
         ) : (
           <DataTable
+            title="Women Safety Complaints"
             data={tableData}
             columns={cols.map(c => ({
               ...c,

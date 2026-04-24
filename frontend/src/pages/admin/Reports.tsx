@@ -137,6 +137,7 @@ export const ReportsPage = () => {
             />
 
             <DataTable
+              title={tabs.find(t => t.id === type)?.label || 'Report'}
               data={tableData}
               columns={columns.map(c => ({
                 ...c,

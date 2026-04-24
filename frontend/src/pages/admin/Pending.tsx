@@ -110,6 +110,7 @@ export const PendingPage = () => {
           <div className="empty-state"><p>No pending complaints</p></div>
         ) : (
           <DataTable
+            title="Pending Complaints"
             data={tableData}
             columns={cols.map(c => ({
               ...c,
