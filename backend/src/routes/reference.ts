@@ -73,6 +73,20 @@ export const referenceRoutes = async (fastify: FastifyInstance) => {
     return sendSuccess(reply, complaints.map(c => c.respondentCategories).filter(Boolean));
   });
 
+  fastify.get('/reference/nature-of-complaint', {
+    preHandler: [authenticate],
+  }, async (request, reply) => {
+    const list = await prisma.natureOfComplaint.findMany({ orderBy: { natureComplaints: 'asc' } });
+    return sendSuccess(reply, list.filter(item => item.natureComplaints !== null));
+  });
+
+  fastify.get('/reference/received-from', {
+    preHandler: [authenticate],
+  }, async (request, reply) => {
+    const list = await prisma.receivedFrom.findMany({ orderBy: { receivedFrom: 'asc' } });
+    return sendSuccess(reply, list.filter(item => item.receivedFrom !== null));
+  });
+
   fastify.post('/districts', {
     preHandler: [authenticate],
   }, async (request, reply) => {
