@@ -119,14 +119,38 @@ export const CCTNSPage = () => {
             <Button
               variant="primary"
               disabled={!isConfigured || isSyncing}
-              onClick={() => syncMutation.mutate({ timeFrom, timeTo })}
+              onClick={() => {
+                const dateFrom = new Date(timeFrom);
+                const dateTo = new Date(timeTo);
+                const diffTime = Math.abs(dateTo.getTime() - dateFrom.getTime());
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
+                if (diffDays > 31) {
+                  alert("Please sync a maximum of 1 month (31 days) at a time. The state-wide API data is too massive to download multiple months in a single request.");
+                  return;
+                }
+                const [y1, m1, d1] = timeFrom.split('-');
+                const [y2, m2, d2] = timeTo.split('-');
+                syncMutation.mutate({ timeFrom: `${d1}/${m1}/${y1}`, timeTo: `${d2}/${m2}/${y2}` });
+              }}
             >
               {isSyncing ? 'Syncing...' : 'Sync Complaints'}
             </Button>
             <Button
               variant="secondary"
               disabled={!isConfigured || isSyncing}
-              onClick={() => syncEnquiryMutation.mutate({ timeFrom, timeTo })}
+              onClick={() => {
+                const dateFrom = new Date(timeFrom);
+                const dateTo = new Date(timeTo);
+                const diffTime = Math.abs(dateTo.getTime() - dateFrom.getTime());
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
+                if (diffDays > 31) {
+                  alert("Please sync a maximum of 1 month (31 days) at a time. The state-wide API data is too massive to download multiple months in a single request.");
+                  return;
+                }
+                const [y1, m1, d1] = timeFrom.split('-');
+                const [y2, m2, d2] = timeTo.split('-');
+                syncEnquiryMutation.mutate({ timeFrom: `${d1}/${m1}/${y1}`, timeTo: `${d2}/${m2}/${y2}` });
+              }}
             >
               {isSyncing ? 'Syncing...' : 'Sync Enquiries'}
             </Button>
