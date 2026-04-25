@@ -4,17 +4,19 @@ import { Link } from 'react-router-dom';
 import { Layout } from '@/components/layout/Layout';
 import { Button } from '@/components/common/Button';
 import { DataTable, Column } from '@/components/data/DataTable';
+import { Select } from '@/components/common/Select';
 import * as XLSX from 'xlsx';
 
 export const ComplaintsPage = () => {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(100);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data, isLoading, refetch } = useQuery({
-    queryKey: ['complaints', page, search],
+    queryKey: ['complaints', page, limit, search],
     queryFn: async () => {
-      const params = new URLSearchParams({ page: String(page), limit: '50', search });
+      const params = new URLSearchParams({ page: String(page), limit: String(limit), search });
       const r = await fetch(`/api/complaints?${params}`, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
       return r.json();
     },
@@ -112,10 +114,26 @@ export const ComplaintsPage = () => {
               maxHeight="calc(100vh - 160px)"
             />
             {pagination && (
-              <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', padding: '10px' }}>
-                <Button variant="secondary" size="sm" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}>Prev</Button>
-                <span style={{ color: 'var(--text-muted)', fontSize: '12px', alignSelf: 'center' }}>{pagination.page} / {pagination.totalPages}</span>
-                <Button variant="secondary" size="sm" onClick={() => setPage(p => p + 1)} disabled={page >= pagination.totalPages}>Next</Button>
+              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '16px', padding: '10px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Button variant="secondary" size="sm" onClick={() => setPage((p: number) => Math.max(1, p - 1))} disabled={page === 1}>Prev</Button>
+                  <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>Page {pagination.page} of {pagination.totalPages || 1}</span>
+                  <Button variant="secondary" size="sm" onClick={() => setPage((p: number) => p + 1)} disabled={page >= pagination.totalPages}>Next</Button>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>Per page:</span>
+                  <Select
+                    value={limit}
+                    onChange={(v) => { setLimit(Number(v)); setPage(1); }}
+                    options={[
+                      { value: 50, label: '50' },
+                      { value: 100, label: '100' },
+                      { value: 200, label: '200' },
+                      { value: 500, label: '500' },
+                    ]}
+                    width="80px"
+                  />
+                </div>
               </div>
             )}
           </>

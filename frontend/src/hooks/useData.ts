@@ -1,11 +1,10 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
+import api from '@/services/api';
 
 export const useAuth = () => {
-  const queryClient = useQueryClient();
-  
   const login = useMutation({
     mutationFn: async (credentials: { username: string; password: string }) => {
-      const { data } = await import('@/services/api').then(m => m.default.post('/api/auth/login', credentials));
+      const { data } = await api.post('/api/auth/login', credentials);
       return data;
     },
     onSuccess: (data) => {
@@ -50,11 +49,12 @@ export const useComplaints = (params?: Record<string, string>) => {
   });
 };
 
-export const useDashboardSummary = () => {
+export const useDashboardSummary = (year?: number) => {
   return useQuery({
-    queryKey: ['dashboard', 'summary'],
+    queryKey: ['dashboard', 'summary', year],
     queryFn: async () => {
-      const response = await fetch('/api/dashboard/summary', {
+      const params = year ? `?year=${year}` : '';
+      const response = await fetch(`/api/dashboard/summary${params}`, {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
       });
       return response.json();

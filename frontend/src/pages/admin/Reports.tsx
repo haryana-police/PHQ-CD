@@ -6,8 +6,9 @@ import { ChartCard } from '@/components/charts/ChartCard';
 import { DataTable, Column } from '@/components/data/DataTable';
 import {
   getPieOptions, getStackedBarOptions, getDistrictBarOptions,
-  getYoYBarOptions, getDurationLineOptions,
+  getYoYBarOptions,
 } from '@/components/charts/Charts';
+import { Select } from '@/components/common/Select';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const CY = new Date().getFullYear();           // 2026
@@ -54,41 +55,7 @@ const PeriodBtn = ({
   </button>
 );
 
-const StyledSelect = ({
-  value, onChange, children, style = {},
-}: { value: string|number; onChange: (v: string) => void; children: React.ReactNode; style?: React.CSSProperties }) => (
-  <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', ...style }}>
-    <select
-      value={value}
-      onChange={e => onChange(e.target.value)}
-      style={{
-        appearance: 'none',
-        WebkitAppearance: 'none',
-        padding: '7px 32px 7px 12px',
-        borderRadius: '8px',
-        background: 'rgba(15,23,42,0.8)',
-        color: '#e2e8f0',
-        border: '1px solid rgba(255,255,255,0.1)',
-        fontSize: '12.5px',
-        fontWeight: 500,
-        cursor: 'pointer',
-        outline: 'none',
-        backdropFilter: 'blur(8px)',
-        boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
-        transition: 'border-color 0.15s',
-        minWidth: '90px',
-      }}
-    >
-      {children}
-    </select>
-    <svg
-      style={{ position: 'absolute', right: '10px', pointerEvents: 'none', color: '#64748b' }}
-      width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
-    >
-      <polyline points="6 9 12 15 18 9"/>
-    </svg>
-  </div>
-);
+
 
 const StyledDateInput = ({ value, onChange, label }: { value: string; onChange: (v: string) => void; label?: string }) => (
   <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -235,8 +202,8 @@ export const ReportsPage = () => {
     { key: 'total',    label: `Total (${periodLabel})`, sortable: true, align: 'right' },
     { key: 'pending',  label: 'Pending',  sortable: true, align: 'right' },
     { key: 'disposed', label: 'Disposed', sortable: true, align: 'right' },
-    { key: 'pendPct',  label: 'Pend%',   align: 'center' },
-    { key: 'dispPct',  label: 'Disp%',   align: 'center' },
+    { key: 'pendPct',  label: 'Pend%',   sortable: true, align: 'center' },
+    { key: 'dispPct',  label: 'Disp%',   sortable: true, align: 'center' },
     ...(showYoY ? [
       { key: 'prevTotal' as keyof typeof tableData[0], label: `${activeYear - 1} Total`, sortable: true, align: 'right' as const },
       { key: 'change'    as keyof typeof tableData[0], label: 'YoY',  align: 'center' as const },
@@ -309,12 +276,12 @@ export const ReportsPage = () => {
           <div style={{ width: '1px', height: '20px', background: 'rgba(255,255,255,0.08)', margin: '0 4px' }} />
 
           {/* Year dropdown */}
-          <StyledSelect
+          <Select
             value={selectedYear}
             onChange={v => { setSelectedYear(Number(v)); setPeriodMode('year'); }}
-          >
-            {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
-          </StyledSelect>
+            options={YEARS.map(y => ({ value: y, label: String(y) }))}
+            width="100px"
+          />
 
           <div style={{ width: '1px', height: '20px', background: 'rgba(255,255,255,0.08)', margin: '0 4px' }} />
 
@@ -424,7 +391,7 @@ export const ReportsPage = () => {
               data={tableData}
               columns={columns.map(c => ({
                 ...c,
-                render: (row) => {
+                render: (row: any) => {
                   if (c.key === 'name')      return <span style={{ fontWeight: 500, color: '#e2e8f0' }}>{String(row.name)}</span>;
                   if (c.key === 'total')     return <span style={{ fontWeight: 700 }}>{row.total.toLocaleString()}</span>;
                   if (c.key === 'pending')   return <span style={{ color: '#fbbf24', fontWeight: 600 }}>{row.pending.toLocaleString()}</span>;

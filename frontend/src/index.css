@@ -29,7 +29,7 @@
   --shadow-glow: 0 0 20px rgba(99, 102, 241, 0.4);
 
   --header-height: 60px;
-  --sidebar-width: 220px;
+  --sidebar-width: 210px;
 
   --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   --glass-blur: blur(16px);
@@ -450,7 +450,8 @@ body {
 }
 
 .page-content {
-  padding: 16px;
+  padding: 20px 22px;
+  max-width: 1600px;
 }
 
 /* Summary Row */
@@ -1256,6 +1257,11 @@ select:focus {
   to   { transform: rotate(360deg); }
 }
 
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
+}
+
 @keyframes fadeIn {
   from { opacity: 0; transform: scale(0.98); }
   to   { opacity: 1; transform: scale(1); }
@@ -1280,6 +1286,52 @@ select:focus {
 /* ── Summary row / cards ─────────────────────────────────────────────── */
 .summary-row {
   animation: slideUp 0.25s ease both;
+}
+
+/* ── Layout Overhaul Responsive ──────────────────────────────────────── */
+.app-sidebar {
+  width: 210px;
+  flex-shrink: 0;
+  position: fixed;
+  top: 58px;
+  bottom: 0;
+  left: 0;
+  background: rgba(10,17,32,0.97);
+  border-right: 1px solid rgba(255,255,255,0.05);
+  overflow-y: auto;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 4px 0 24px rgba(0,0,0,0.3);
+  transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.main-content-wrapper {
+  flex: 1;
+  margin-left: 210px;
+  min-height: calc(100vh - 58px);
+  background: #060d1a;
+  transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  flex-direction: column;
+}
+
+@media (max-width: 768px) {
+  .app-sidebar {
+    left: -210px;
+  }
+  .app-sidebar.open {
+    left: 0;
+  }
+  .mobile-menu-btn {
+    display: block !important;
+  }
+  .main-content-wrapper {
+    margin-left: 0;
+  }
+  .page-content {
+    padding: 12px 10px;
+  }
 }
 
 /* ── Tab hover ───────────────────────────────────────────────────────── */

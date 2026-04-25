@@ -7,8 +7,44 @@ export const womenSafetyRoutes = async (fastify: FastifyInstance) => {
   fastify.get('/women-safety', {
     preHandler: [authenticate],
   }, async (request, reply) => {
-    const records = await prisma.womenSafety.findMany({ orderBy: { complRegDt: 'desc' } });
-    return sendSuccess(reply, records);
+    try {
+      const { page = '1', limit = '100', search = '' } = request.query as Record<string, string>;
+      
+      const pageNum = parseInt(page);
+      const limitNum = parseInt(limit);
+      const skip = (pageNum - 1) * limitNum;
+
+      const where = search.trim() ? {
+        OR: [
+          { firstName: { contains: search } },
+          { mobile: { contains: search } },
+          { complRegNum: { contains: search } },
+        ],
+      } : {};
+
+      const [records, total] = await prisma.$transaction([
+        prisma.womenSafety.findMany({
+          where,
+          skip,
+          take: limitNum,
+          orderBy: { complRegDt: 'desc' },
+        }),
+        prisma.womenSafety.count({ where }),
+      ]);
+
+      return sendSuccess(reply, {
+        data: records,
+        pagination: {
+          page: pageNum,
+          limit: limitNum,
+          total,
+          totalPages: Math.ceil(total / limitNum),
+        },
+      });
+    } catch (error) {
+      console.error('[women-safety list] error:', error);
+      return sendSuccess(reply, { data: [], pagination: { page: 1, limit: 100, total: 0, totalPages: 1 } });
+    }
   });
 
   fastify.get('/women-safety/:id', {
