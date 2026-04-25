@@ -147,15 +147,29 @@ export const pendingRoutes = async (fastify: FastifyInstance) => {
   fastify.get('/pending/branches', {
     preHandler: [authenticate],
   }, async (request, reply) => {
-    // 'branch' field is populated by the old CMS system, not by CCTNS sync.
-    // Use addressDistrict as the grouping dimension instead — it has data.
-    const complaints = await prisma.complaint.findMany({
-      where: { addressDistrict: { not: null } },
+    // Return only the 22 official Haryana districts — filtered from DB
+    const HARYANA_DISTRICTS = [
+      'AMBALA', 'BHIWANI', 'CHARKHI DADRI', 'FARIDABAD', 'FATEHABAD',
+      'GURUGRAM', 'HISAR', 'JHAJJAR', 'JIND', 'KAITHAL', 'KARNAL',
+      'KURUKSHETRA', 'MAHENDERGARH', 'NUH', 'PALWAL', 'PANCHKULA',
+      'PANIPAT', 'REWARI', 'ROHTAK', 'SIRSA', 'SONIPAT', 'YAMUNANAGAR',
+    ];
+
+    // Get distinct districts in the DB that are in the Haryana list
+    const rows = await prisma.complaint.findMany({
+      where: {
+        addressDistrict: { in: HARYANA_DISTRICTS },
+        OR: PENDING_WHERE,
+      },
       select: { addressDistrict: true },
       distinct: ['addressDistrict'],
       orderBy: { addressDistrict: 'asc' },
     });
-    const branches = complaints.map(c => c.addressDistrict).filter(Boolean);
+
+    // Return all 22 official districts (regardless of whether they have pending data)
+    // so the dropdown is always complete
+    const inDb = new Set(rows.map(r => r.addressDistrict));
+    const branches = HARYANA_DISTRICTS.filter(d => inDb.has(d));
     return sendSuccess(reply, branches);
   });
 };
