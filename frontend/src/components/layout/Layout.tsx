@@ -144,16 +144,7 @@ export const Layout = ({ children }: LayoutProps) => {
 
       <div style={{ display: 'flex', flex: 1, marginTop: '58px' }}>
         {/* ── Sidebar ─────────────────────────────────────────────── */}
-        <aside style={{
-          width: '210px', flexShrink: 0,
-          position: 'fixed', top: '58px', bottom: 0, left: sidebarOpen ? 0 : '-210px',
-          background: 'rgba(10,17,32,0.97)',
-          borderRight: '1px solid rgba(255,255,255,0.05)',
-          overflowY: 'auto', zIndex: 100,
-          display: 'flex', flexDirection: 'column',
-          boxShadow: '4px 0 24px rgba(0,0,0,0.3)',
-          transition: 'left 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-        }}>
+        <aside className={`app-sidebar ${sidebarOpen ? 'open' : ''}`}>
           {/* Nav section label */}
           <div style={{ padding: '20px 16px 8px', fontSize: '9.5px', color: '#334155', letterSpacing: '1.2px', textTransform: 'uppercase', fontWeight: 700 }}>
             Navigation
@@ -203,7 +194,7 @@ export const Layout = ({ children }: LayoutProps) => {
         </aside>
 
         {/* ── Main Content ─────────────────────────────────────────── */}
-        <main style={{ flex: 1, marginLeft: '210px', minHeight: 'calc(100vh - 58px)', background: '#060d1a' }}>
+        <main className="main-content-wrapper">
           <ChartContext.Provider value={{ expanded: chartExpanded, setExpanded: setChartExpanded }}>
             {children}
           </ChartContext.Provider>
