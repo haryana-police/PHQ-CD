@@ -152,7 +152,7 @@ export const useGovDistricts = () => {
   return useQuery({
     queryKey: ['gov', 'districts'],
     queryFn: async () => {
-      const response = await fetch('/api/gov/districts/local', {
+      const response = await fetch('/api/gov/districts', {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
       });
       return response.json();
@@ -166,7 +166,7 @@ export const useGovPoliceStations = (districtId: string | null) => {
     queryKey: ['gov', 'police-stations', districtId],
     queryFn: async () => {
       if (!districtId) return { data: [] };
-      const response = await fetch(`/api/gov/police-stations/local?districtId=${districtId}`, {
+      const response = await fetch(`/api/gov/police-stations?districtId=${districtId}`, {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
       });
       return response.json();
@@ -180,7 +180,7 @@ export const useGovOffices = () => {
   return useQuery({
     queryKey: ['gov', 'offices'],
     queryFn: async () => {
-      const response = await fetch('/api/gov/offices/local', {
+      const response = await fetch('/api/gov/offices', {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
       });
       return response.json();

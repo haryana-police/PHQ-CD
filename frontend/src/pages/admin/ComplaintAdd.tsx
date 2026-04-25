@@ -119,7 +119,7 @@ export const ComplaintAdd = () => {
                 <select name="branch" value={formData.branch} onChange={handleChange} className="form-select">
                   <option value="">Select Branch</option>
                   {offices?.data?.map((o: any) => (
-                    <option key={o.ID} value={o.Name}>{o.Name}</option>
+                    <option key={o.id || o.ID} value={o.Name}>{o.Name}</option>
                   ))}
                 </select>
               </div>
@@ -177,7 +177,7 @@ export const ComplaintAdd = () => {
                   <select name="districtId" value={formData.districtId} onChange={handleChange} className="form-select">
                     <option value="">Select District</option>
                     {districts?.data?.map((d: any) => (
-                      <option key={d.ID} value={d.ID}>{d.DistrictName}</option>
+                      <option key={d.id || d.ID} value={d.id || d.ID}>{d.DistrictName}</option>
                     ))}
                   </select>
                 </div>
@@ -186,7 +186,7 @@ export const ComplaintAdd = () => {
                   <select name="policeStationId" value={formData.policeStationId} onChange={handleChange} className="form-select" disabled={!formData.districtId}>
                     <option value="">Select Police Station</option>
                     {stations?.data?.map((s: any) => (
-                      <option key={s.ID} value={s.ID}>{s.Name}</option>
+                      <option key={s.id || s.ID} value={s.id || s.ID}>{s.Name}</option>
                     ))}
                   </select>
                 </div>
