@@ -2,10 +2,15 @@
  * CCTNS Integration Service
  * Mirrors exactly the logic from old project: ComplaintDataFetch.aspx.cs
  *
- * Flow:
- * 1. GET /cmDashboard/api/HomeDashboard/ReqToken?SecretKey=UserHryDashboard  -> returns bearer token
- * 2. GET /phqdashboard/api/PHQDashboard/ComplaintData?TimeFrom=dd/MM/yyyy&TimeTo=dd/MM/yyyy  -> returns JSON array
- * 3. Upsert each record into local Complaint table (same as InsertComplaintData stored procedure)
+ * Two data endpoints — both share the same token:
+ * A) ComplaintData (PHQ complaints)
+ *    GET /phqdashboard/api/PHQDashboard/ComplaintData?TimeFrom=dd/MM/yyyy&TimeTo=dd/MM/yyyy
+ *
+ * B) ComplaintEnquiryData (CM Dashboard enquiry complaints)
+ *    GET /cmdashboard/api/HomeDashboard/ComplaintEnquiryData?TimeFrom=dd/MM/yyyy&TimeTo=dd/MM/yyyy
+ *
+ * Token flow (same for both):
+ *    GET /cmDashboard/api/HomeDashboard/ReqToken?SecretKey=UserHryDashboard → bearer token (cached 55 min)
  */
 
 interface CctnsToken {
@@ -113,9 +118,48 @@ export async function fetchCctnsComplaints(timeFrom: string, timeTo: string): Pr
 }
 
 /**
- * Parse date string from CCTNS API (format: "dd-MM-yyyy HH:mm:ss")
- * Returns Date object or null — same as old project's DateTime.TryParseExact
+ * Fetch ENQUIRY complaints from Haryana Police CCTNS API (Endpoint B).
+ * URL: /cmdashboard/api/HomeDashboard/ComplaintEnquiryData
+ * Same token, same date format, same JSON array response.
+ * These are CM Dashboard enquiry-type complaints (different source from PHQ complaints).
  */
+export async function fetchCctnsEnquiries(timeFrom: string, timeTo: string): Promise<Record<string, unknown>[]> {
+  const token = await getCctnsToken();
+  const enquiryApi = process.env.CCTNS_ENQUIRY_API || 'http://api.haryanapolice.gov.in/cmdashboard/api/HomeDashboard/ComplaintEnquiryData';
+
+  const url = `${enquiryApi}?TimeFrom=${encodeURIComponent(timeFrom)}&TimeTo=${encodeURIComponent(timeTo)}`;
+  console.log('[CCTNS] Fetching enquiry complaints:', url);
+
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Accept': 'application/json',
+      },
+    });
+  } catch (err) {
+    throw new Error(`CCTNS ComplaintEnquiryData API unreachable: ${err instanceof Error ? err.message : String(err)}`);
+  }
+
+  if (!res.ok) {
+    if (res.status === 401) clearCctnsToken();
+    throw new Error(`Enquiry API failed: ${res.status} ${res.statusText}`);
+  }
+
+  const responseText = await res.text();
+  if (!responseText || responseText.trim() === '' || responseText.trim() === '[]') return [];
+
+  try {
+    const parsed = JSON.parse(responseText);
+    const rows = Array.isArray(parsed) ? parsed : (parsed.data || parsed.complaints || []);
+    console.log(`[CCTNS] Fetched ${rows.length} enquiry records for ${timeFrom} - ${timeTo}`);
+    return rows;
+  } catch (error) {
+    console.error('[CCTNS] Failed to parse enquiry JSON. First 200 chars:', responseText.substring(0, 200));
+    return [];
+  }
+}
 export function parseCctnsDate(dateStr: string | null | undefined): Date | null {
   if (!dateStr || dateStr.trim() === '') return null;
 

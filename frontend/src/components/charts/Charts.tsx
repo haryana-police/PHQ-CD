@@ -5,14 +5,14 @@ export const BaseChart = ({ option, height = '400px', width = '100%' }: { option
   return <ReactECharts option={option} notMerge={true} style={{ height, width }} opts={{ renderer: 'canvas' }} />;
 };
 
-export const getDistrictBarOptions = (data: { district: string; total: number; pending: number; disposed: number }[]) => {
+export const getDistrictBarOptions = (data: { district: string; total: number; pending: number; disposed: number }[]): EChartsOption => {
   return {
     tooltip: {
-      trigger: 'item',
+      trigger: 'item' as const,
       backgroundColor: '#1e293b',
       borderColor: '#334155',
       textStyle: { color: '#e2e8f0', fontSize: 12 },
-      formatter: (params: { name: string; seriesName: string; value: number; color: string }) => {
+      formatter: (params: any) => {
         return `<div style="font-weight:600;margin-bottom:4px">${params.name}</div><div style="color:${params.color}">${params.seriesName}: <b>${params.value}</b></div>`;
       },
     },
@@ -25,14 +25,14 @@ export const getDistrictBarOptions = (data: { district: string; total: number; p
     },
     grid: { left: '2%', right: '2%', bottom: '12%', top: '2%', containLabel: true },
     xAxis: {
-      type: 'category',
+      type: 'category' as const,
       data: data.map(d => d.district),
       axisLabel: { rotate: 25, fontSize: 10, color: '#94a3b8', interval: 0 },
       axisLine: { lineStyle: { color: '#334155' } },
       axisTick: { show: false },
     },
     yAxis: {
-      type: 'value',
+      type: 'value' as const,
       axisLabel: { color: '#94a3b8', fontSize: 10 },
       splitLine: { lineStyle: { color: '#1e293b' } },
       axisLine: { show: false },
@@ -58,10 +58,10 @@ export const getDistrictBarOptions = (data: { district: string; total: number; p
   };
 };
 
-export const getDurationLineOptions = (data: { month: string; total: number; pending: number; disposed: number }[]) => {
+export const getDurationLineOptions = (data: { month: string; total: number; pending: number; disposed: number }[]): EChartsOption => {
   return {
     tooltip: {
-      trigger: 'axis',
+      trigger: 'axis' as const,
       backgroundColor: '#1e293b',
       borderColor: '#334155',
       textStyle: { color: '#e2e8f0', fontSize: 12 },
@@ -75,7 +75,7 @@ export const getDurationLineOptions = (data: { month: string; total: number; pen
     },
     grid: { left: '2%', right: '2%', bottom: '12%', top: '2%', containLabel: true },
     xAxis: {
-      type: 'category',
+      type: 'category' as const,
       data: data.map(d => d.month),
       axisLabel: { color: '#94a3b8', fontSize: 10 },
       axisLine: { lineStyle: { color: '#334155' } },
@@ -83,7 +83,7 @@ export const getDurationLineOptions = (data: { month: string; total: number; pen
       boundaryGap: false,
     },
     yAxis: {
-      type: 'value',
+      type: 'value' as const,
       axisLabel: { color: '#94a3b8', fontSize: 10 },
       splitLine: { lineStyle: { color: '#1e293b' } },
       axisLine: { show: false },

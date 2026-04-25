@@ -10,12 +10,16 @@ const PENDING_WHERE = [
 ];
 
 export const pendingRoutes = async (fastify: FastifyInstance) => {
+  // Hard limit for UI performance, prevents fetching tens of thousands of rows at once
+  const MAX_ROWS = 500;
+
   fastify.get('/pending/all', {
     preHandler: [authenticate],
   }, async (request, reply) => {
     const complaints = await prisma.complaint.findMany({
       where: { OR: PENDING_WHERE },
       orderBy: { complRegDt: 'asc' },
+      take: MAX_ROWS,
     });
     return sendSuccess(reply, complaints);
   });
@@ -33,6 +37,7 @@ export const pendingRoutes = async (fastify: FastifyInstance) => {
         OR: PENDING_WHERE,
       },
       orderBy: { complRegDt: 'asc' },
+      take: MAX_ROWS,
     });
     return sendSuccess(reply, complaints);
   });
@@ -50,6 +55,7 @@ export const pendingRoutes = async (fastify: FastifyInstance) => {
         OR: PENDING_WHERE,
       },
       orderBy: { complRegDt: 'asc' },
+      take: MAX_ROWS,
     });
     return sendSuccess(reply, complaints);
   });
@@ -65,6 +71,7 @@ export const pendingRoutes = async (fastify: FastifyInstance) => {
         OR: PENDING_WHERE,
       },
       orderBy: { complRegDt: 'asc' },
+      take: MAX_ROWS,
     });
     return sendSuccess(reply, complaints);
   });

@@ -12,7 +12,7 @@ import { FastifyInstance } from 'fastify';
 import { prisma } from '../config/database.js';
 import { sendSuccess, sendError } from '../utils/response.js';
 import { authenticate } from '../middleware/auth.js';
-import { getCctnsToken, fetchCctnsComplaints, clearCctnsToken, parseCctnsDate } from '../services/cctns.js';
+import { getCctnsToken, fetchCctnsComplaints, fetchCctnsEnquiries, clearCctnsToken, parseCctnsDate } from '../services/cctns.js';
 
 // Raw row shape from the CCTNS ComplaintData API — fields match exactly what API returns
 interface CctnsRow {
@@ -98,7 +98,7 @@ function mapRowToComplaint(row: CctnsRow) {
 
 export const cctnsSyncRoutes = async (fastify: FastifyInstance) => {
 
-  // Status check — confirms token API and complaint API env vars are configured
+  // Status check — shows configuration for BOTH complaint endpoints
   fastify.get('/cctns/status', {
     preHandler: [authenticate],
   }, async (_request, reply) => {
@@ -106,12 +106,14 @@ export const cctnsSyncRoutes = async (fastify: FastifyInstance) => {
       const secretKey = process.env.CCTNS_SECRET_KEY || 'UserHryDashboard';
       const tokenApi = process.env.CCTNS_TOKEN_API || 'http://api.haryanapolice.gov.in/cmDashboard/api/HomeDashboard/ReqToken';
       const complaintApi = process.env.CCTNS_COMPLAINT_API || 'http://api.haryanapolice.gov.in/phqdashboard/api/PHQDashboard/ComplaintData';
+      const enquiryApi = process.env.CCTNS_ENQUIRY_API || 'http://api.haryanapolice.gov.in/cmdashboard/api/HomeDashboard/ComplaintEnquiryData';
 
       return sendSuccess(reply, {
         configured: true,
         secretKey: secretKey.substring(0, 4) + '****',
         tokenApi,
-        complaintApi,
+        endpointA: { name: 'PHQ ComplaintData', url: complaintApi },
+        endpointB: { name: 'CM ComplaintEnquiryData', url: enquiryApi },
       });
     } catch (error) {
       return sendError(reply, 'Failed to get CCTNS status');
@@ -208,6 +210,76 @@ export const cctnsSyncRoutes = async (fastify: FastifyInstance) => {
     } catch (error) {
       console.error('[CCTNS] Sync error:', error);
       return sendError(reply, `Sync failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  });
+  /**
+   * Sync Endpoint B — ComplaintEnquiryData (CM Dashboard enquiry complaints)
+   * Same token, same date range format, same upsert logic into Complaint table.
+   * Body: { timeFrom: "dd/MM/yyyy", timeTo: "dd/MM/yyyy" }
+   */
+  fastify.post('/cctns/sync-enquiry', {
+    preHandler: [authenticate],
+  }, async (request, reply) => {
+    try {
+      const { timeFrom, timeTo } = request.body as Record<string, string>;
+
+      if (!timeFrom || !timeTo) {
+        return sendError(reply, 'timeFrom and timeTo are required (format: dd/MM/yyyy)');
+      }
+
+      const rows = await fetchCctnsEnquiries(timeFrom, timeTo) as CctnsRow[];
+
+      let created = 0;
+      let updated = 0;
+      let skipped = 0;
+
+      for (const row of rows) {
+        const complRegNum = str(row.COMPL_REG_NUM);
+
+        if (!complRegNum) {
+          skipped++;
+          continue;
+        }
+
+        try {
+          const mapped = mapRowToComplaint(row);
+
+          const existing = await prisma.complaint.findUnique({
+            where: { complRegNum },
+            select: { id: true },
+          });
+
+          if (existing) {
+            await prisma.complaint.update({
+              where: { id: existing.id },
+              data: {
+                statusOfComplaint: mapped.statusOfComplaint,
+                disposalDate: mapped.disposalDate,
+                ioDetails: mapped.ioDetails,
+              },
+            });
+            updated++;
+          } else {
+            await prisma.complaint.create({ data: mapped });
+            created++;
+          }
+        } catch (e) {
+          console.error('[CCTNS Enquiry] Error upserting row:', row.COMPL_REG_NUM, e instanceof Error ? e.message : e);
+          skipped++;
+        }
+      }
+
+      return sendSuccess(reply, {
+        message: 'CCTNS enquiry sync completed',
+        fetched: rows.length,
+        created,
+        updated,
+        skipped,
+      });
+
+    } catch (error) {
+      console.error('[CCTNS Enquiry] Sync error:', error);
+      return sendError(reply, `Enquiry sync failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   });
 

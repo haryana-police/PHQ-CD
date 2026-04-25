@@ -66,6 +66,11 @@ model Complaint {
   actionTaken      String?    @db.NVarChar(Max)
   createdAt          DateTime   @default(now())
   updatedAt          DateTime   @updatedAt
+
+  @@index([complRegDt])
+  @@index([statusOfComplaint])
+  @@index([addressDistrict])
+  @@index([complRegDt, statusOfComplaint])
 }
 
 model WomenSafety {

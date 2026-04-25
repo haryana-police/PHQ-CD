@@ -3,215 +3,239 @@ import { prisma } from '../config/database.js';
 import { sendSuccess, sendError } from '../utils/response.js';
 import { authenticate } from '../middleware/auth.js';
 
+/**
+ * Dashboard Routes
+ * Mirrors old project stored procedure logic but using Prisma's SQL aggregation.
+ * All heavy aggregations done in the DATABASE (not in JS) to handle 300K+ records fast.
+ *
+ * Old SP equivalents:
+ * - Display_totalcomplaintsdata_pending     → /dashboard/summary
+ * - GetNormalizedDistrictComplaints         → /dashboard/district-wise
+ * - Get_DurationWiseComplaints (@Year)      → /dashboard/duration-wise?year=2024
+ * - Get_DatewiseChart_Complaints (@From,@To)→ /dashboard/date-wise?fromDate=&toDate=
+ * - Display_totalcomplaints_monthwise_pending→ /dashboard/month-wise?year=2024
+ */
 export const dashboardRoutes = async (fastify: FastifyInstance) => {
+
+  /**
+   * Summary counts — mirrors Display_totalcomplaintsdata_pending SP
+   * All counts done via SQL COUNT on DB, not JS loop
+   */
   fastify.get('/dashboard/summary', {
     preHandler: [authenticate],
   }, async (request, reply) => {
-    const totalReceived = await prisma.complaint.count();
-    
-    const totalDisposed = await prisma.complaint.count({
-      where: {
-        statusOfComplaint: { contains: 'Disposed' },
-      },
-    });
-    
-    const totalPending = await prisma.complaint.count({
-      where: {
-        OR: [
-          { statusOfComplaint: null },
-          { statusOfComplaint: { equals: '' } },
-          { statusOfComplaint: { contains: 'Pending' } },
-        ],
-      },
-    });
+    try {
+      const now = new Date();
+      const fifteenDaysAgo = new Date(now.getTime() - 15 * 24 * 60 * 60 * 1000).toISOString();
+      const oneMonthAgo    = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
+      const twoMonthsAgo   = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000).toISOString();
 
-    const now = new Date();
-    const fifteenDaysAgo = new Date(now.getTime() - 15 * 24 * 60 * 60 * 1000);
-    const oneMonthAgo    = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-    const twoMonthsAgo   = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000);
+      const [counts] = await prisma.$queryRawUnsafe<any[]>(`
+        SELECT 
+          COUNT(*) as totalReceived,
+          SUM(CASE WHEN statusOfComplaint LIKE '%Disposed%' THEN 1 ELSE 0 END) as totalDisposed,
+          SUM(CASE WHEN statusOfComplaint LIKE '%Pending%' OR statusOfComplaint IS NULL OR statusOfComplaint = '' THEN 1 ELSE 0 END) as totalPending,
+          
+          SUM(CASE WHEN 
+            (statusOfComplaint LIKE '%Pending%' OR statusOfComplaint IS NULL OR statusOfComplaint = '') 
+            AND complRegDt <= '${fifteenDaysAgo}' AND complRegDt > '${oneMonthAgo}' 
+            THEN 1 ELSE 0 END) as pending15,
+            
+          SUM(CASE WHEN 
+            (statusOfComplaint LIKE '%Pending%' OR statusOfComplaint IS NULL OR statusOfComplaint = '') 
+            AND complRegDt <= '${oneMonthAgo}' AND complRegDt > '${twoMonthsAgo}' 
+            THEN 1 ELSE 0 END) as pendingOver1,
+            
+          SUM(CASE WHEN 
+            (statusOfComplaint LIKE '%Pending%' OR statusOfComplaint IS NULL OR statusOfComplaint = '') 
+            AND complRegDt <= '${twoMonthsAgo}' 
+            THEN 1 ELSE 0 END) as pendingOver2
+        FROM Complaint
+      `);
 
-    const PENDING_WHERE = [
-      { statusOfComplaint: null },
-      { statusOfComplaint: { equals: '' } },
-      { statusOfComplaint: { contains: 'Pending' } },
-    ];
-
-    // 15–30 days pending: registered between 15 and 30 days ago
-    const pending15 = await prisma.complaint.count({
-      where: {
-        complRegDt: { lte: fifteenDaysAgo, gt: oneMonthAgo },
-        OR: PENDING_WHERE,
-      },
-    });
-
-    // 1–2 months pending: registered between 30 and 60 days ago
-    const pendingOver1 = await prisma.complaint.count({
-      where: {
-        complRegDt: { lte: oneMonthAgo, gt: twoMonthsAgo },
-        OR: PENDING_WHERE,
-      },
-    });
-
-    // Over 2 months pending: registered more than 60 days ago
-    const pendingOver2 = await prisma.complaint.count({
-      where: {
-        complRegDt: { lte: twoMonthsAgo },
-        OR: PENDING_WHERE,
-      },
-    });
-
-    return sendSuccess(reply, {
-      totalReceived,
-      totalDisposed,
-      totalPending,
-      pendingOverFifteenDays: pending15,
-      pendingOverOneMonth: pendingOver1,
-      pendingOverTwoMonths: pendingOver2,
-    });
+      return sendSuccess(reply, {
+        totalReceived: Number(counts.totalReceived || 0),
+        totalDisposed: Number(counts.totalDisposed || 0),
+        totalPending: Number(counts.totalPending || 0),
+        pendingOverFifteenDays: Number(counts.pending15 || 0),
+        pendingOverOneMonth: Number(counts.pendingOver1 || 0),
+        pendingOverTwoMonths: Number(counts.pendingOver2 || 0),
+      });
+    } catch (error) {
+      return sendError(reply, 'Failed to load dashboard summary');
+    }
   });
 
+  /**
+   * District-wise complaints — mirrors GetNormalizedDistrictComplaints SP
+   * Uses raw SQL GROUP BY for performance. Accepts optional year filter.
+   * Old project: no date filter on district chart (shows all-time by district)
+   */
   fastify.get('/dashboard/district-wise', {
     preHandler: [authenticate],
   }, async (request, reply) => {
-    const complaints = await prisma.complaint.findMany();
+    try {
+      const { year } = request.query as Record<string, string>;
+      const yearNum = year ? parseInt(year) : null;
 
-    const districtMap = new Map();
+      // Use raw SQL GROUP BY — this is what the old SP did
+      // Much faster than fetching all rows and grouping in JS
+      let whereClause = '';
+      const params: unknown[] = [];
 
-    for (const comp of complaints) {
-      const districtName = comp.addressDistrict || 'Unknown';
-      const status = (comp.statusOfComplaint || '').toLowerCase();
-      const isPending = status === '' || status.includes('pending');
-      const isDisposed = status.includes('disposed');
+      if (yearNum) {
+        whereClause = `WHERE YEAR(complRegDt) = ${yearNum}`;
+      }
 
-      const existing = districtMap.get(districtName) || { total: 0, pending: 0, disposed: 0 };
-      existing.total++;
-      if (isPending) existing.pending++;
-      if (isDisposed) existing.disposed++;
-      districtMap.set(districtName, existing);
+      const data = await prisma.$queryRawUnsafe<Array<{
+        district: string;
+        TotalComplaints: number;
+        Pending: number;
+        Disposed: number;
+      }>>(
+        `SELECT 
+          ISNULL(addressDistrict, 'Unknown') AS district,
+          COUNT(*) AS TotalComplaints,
+          SUM(CASE WHEN statusOfComplaint LIKE '%Pending%' OR statusOfComplaint IS NULL OR statusOfComplaint = '' THEN 1 ELSE 0 END) AS Pending,
+          SUM(CASE WHEN statusOfComplaint LIKE '%Disposed%' THEN 1 ELSE 0 END) AS Disposed
+        FROM Complaint
+        ${whereClause}
+        GROUP BY addressDistrict
+        ORDER BY TotalComplaints DESC`
+      );
+
+      return sendSuccess(reply, data);
+    } catch (error) {
+      console.error('[dashboard/district-wise] error:', error);
+      return sendError(reply, 'Failed to load district-wise data');
     }
-
-    const data = Array.from(districtMap.entries()).map(([district, stats]) => ({
-      district,
-      totalComplaints: stats.total,
-      pending: stats.pending,
-      disposed: stats.disposed,
-    }));
-
-    return sendSuccess(reply, data);
   });
 
+  /**
+   * Duration-wise complaints by month — mirrors Get_DurationWiseComplaints(@Year) SP
+   * Required year param — same as old project dropdown that defaulted to current year
+   */
   fastify.get('/dashboard/duration-wise', {
     preHandler: [authenticate],
   }, async (request, reply) => {
-    const { year } = request.query as Record<string, string>;
-    const yearNum = year ? parseInt(year) : new Date().getFullYear();
+    try {
+      const { year } = request.query as Record<string, string>;
+      const yearNum = year ? parseInt(year) : new Date().getFullYear();
 
-    const startDate = new Date(yearNum + '-01-01');
-    const endDate = new Date(yearNum + '-12-31');
+      const data = await prisma.$queryRawUnsafe<Array<{
+        district: string;
+        TotalComplaints: number;
+        Pending: number;
+        Disposed: number;
+      }>>(
+        `SELECT 
+          ISNULL(addressDistrict, 'Unknown') AS district,
+          COUNT(*) AS TotalComplaints,
+          SUM(CASE WHEN statusOfComplaint LIKE '%Pending%' OR statusOfComplaint IS NULL OR statusOfComplaint = '' THEN 1 ELSE 0 END) AS Pending,
+          SUM(CASE WHEN statusOfComplaint LIKE '%Disposed%' THEN 1 ELSE 0 END) AS Disposed
+        FROM Complaint
+        WHERE YEAR(complRegDt) = ${yearNum}
+        GROUP BY addressDistrict
+        ORDER BY TotalComplaints DESC`
+      );
 
-    const complaints = await prisma.complaint.findMany({
-      where: { complRegDt: { gte: startDate, lte: endDate } },
-    });
-
-    const monthMap = new Map();
-
-    for (const comp of complaints) {
-      const month = comp.complRegDt 
-        ? comp.complRegDt.toLocaleString('default', { month: 'short' })
-        : 'Unknown';
-      
-      const status = (comp.statusOfComplaint || '').toLowerCase();
-      const isPending = status === '' || status.includes('pending');
-      const isDisposed = status.includes('disposed');
-
-      const existing = monthMap.get(month) || { total: 0, pending: 0, disposed: 0 };
-      existing.total++;
-      if (isPending) existing.pending++;
-      if (isDisposed) existing.disposed++;
-      monthMap.set(month, existing);
+      return sendSuccess(reply, data.map(d => ({
+        district: d.district,
+        year: yearNum,
+        totalComplaints: Number(d.TotalComplaints),
+        pending: Number(d.Pending),
+        disposed: Number(d.Disposed),
+      })));
+    } catch (error) {
+      console.error('[dashboard/duration-wise] error:', error);
+      return sendError(reply, 'Failed to load duration-wise data');
     }
-
-    const data = Array.from(monthMap.entries()).map(([month, stats]) => ({
-      month,
-      year: yearNum,
-      totalComplaints: stats.total,
-      pending: stats.pending,
-      disposed: stats.disposed,
-    }));
-
-    return sendSuccess(reply, data);
   });
 
+  /**
+   * Date-wise chart — mirrors Get_DatewiseChart_Complaints(@FromDate, @ToDate) SP
+   * Both dates are REQUIRED — same as old project which had date pickers
+   */
   fastify.get('/dashboard/date-wise', {
     preHandler: [authenticate],
   }, async (request, reply) => {
-    const { fromDate, toDate } = request.query as Record<string, string>;
+    try {
+      const { fromDate, toDate } = request.query as Record<string, string>;
 
-    if (!fromDate || !toDate) {
-      return sendError(reply, 'fromDate and toDate are required');
+      if (!fromDate || !toDate) {
+        return sendError(reply, 'fromDate and toDate are required');
+      }
+
+      const data = await prisma.$queryRawUnsafe<Array<{
+        district: string;
+        TotalComplaints: number;
+        Pending: number;
+        Disposed: number;
+      }>>(
+        `SELECT 
+          ISNULL(addressDistrict, 'Unknown') AS district,
+          COUNT(*) AS TotalComplaints,
+          SUM(CASE WHEN statusOfComplaint LIKE '%Pending%' OR statusOfComplaint IS NULL OR statusOfComplaint = '' THEN 1 ELSE 0 END) AS Pending,
+          SUM(CASE WHEN statusOfComplaint LIKE '%Disposed%' THEN 1 ELSE 0 END) AS Disposed
+        FROM Complaint
+        WHERE complRegDt >= '${fromDate}' AND complRegDt <= '${toDate}'
+        GROUP BY addressDistrict
+        ORDER BY TotalComplaints DESC`
+      );
+
+      return sendSuccess(reply, data.map(d => ({
+        district: d.district,
+        totalComplaints: Number(d.TotalComplaints),
+        pending: Number(d.Pending),
+        disposed: Number(d.Disposed),
+      })));
+    } catch (error) {
+      console.error('[dashboard/date-wise] error:', error);
+      return sendError(reply, 'Failed to load date-wise data');
     }
-
-    const complaints = await prisma.complaint.findMany({
-      where: {
-        complRegDt: { gte: new Date(fromDate), lte: new Date(toDate) },
-      },
-    });
-
-    const districtMap = new Map();
-
-    for (const comp of complaints) {
-      const districtName = comp.addressDistrict || 'Unknown';
-      const status = (comp.statusOfComplaint || '').toLowerCase();
-      const isPending = status === '' || status.includes('pending');
-      const isDisposed = status.includes('disposed');
-
-      const existing = districtMap.get(districtName) || { total: 0, pending: 0, disposed: 0 };
-      existing.total++;
-      if (isPending) existing.pending++;
-      if (isDisposed) existing.disposed++;
-      districtMap.set(districtName, existing);
-    }
-
-    const data = Array.from(districtMap.entries()).map(([district, stats]) => ({
-      district,
-      totalComplaints: stats.total,
-      pending: stats.pending,
-      disposed: stats.disposed,
-    }));
-
-    return sendSuccess(reply, data);
   });
 
+  /**
+   * Month-wise trend — mirrors Display_totalcomplaints_monthwise_pending SP
+   * Filtered by year. Returns monthly totals for trend chart.
+   */
   fastify.get('/dashboard/month-wise', {
     preHandler: [authenticate],
   }, async (request, reply) => {
-    const complaints = await prisma.complaint.findMany({
-      orderBy: { complRegDt: 'asc' },
-    });
+    try {
+      const { year } = request.query as Record<string, string>;
+      const yearNum = year ? parseInt(year) : new Date().getFullYear();
 
-    const monthMap = new Map();
+      const data = await prisma.$queryRawUnsafe<Array<{
+        monthNum: number;
+        monthName: string;
+        total: number;
+        pending: number;
+        disposed: number;
+      }>>(
+        `SELECT 
+          MONTH(complRegDt) AS monthNum,
+          DATENAME(MONTH, complRegDt) AS monthName,
+          COUNT(*) AS total,
+          SUM(CASE WHEN statusOfComplaint LIKE '%Pending%' OR statusOfComplaint IS NULL OR statusOfComplaint = '' THEN 1 ELSE 0 END) AS pending,
+          SUM(CASE WHEN statusOfComplaint LIKE '%Disposed%' THEN 1 ELSE 0 END) AS disposed
+        FROM Complaint
+        WHERE complRegDt IS NOT NULL AND YEAR(complRegDt) = ${yearNum}
+        GROUP BY MONTH(complRegDt), DATENAME(MONTH, complRegDt)
+        ORDER BY monthNum ASC`
+      );
 
-    for (const comp of complaints) {
-      if (!comp.complRegDt) continue;
-      
-      const monthKey = comp.complRegDt.getFullYear() + '-' + String(comp.complRegDt.getMonth() + 1).padStart(2, '0');
-      const status = (comp.statusOfComplaint || '').toLowerCase();
-      const isPending = status === '' || status.includes('pending');
-
-      const existing = monthMap.get(monthKey) || { total: 0, pending: 0 };
-      existing.total++;
-      if (isPending) existing.pending++;
-      monthMap.set(monthKey, existing);
+      return sendSuccess(reply, data.map(d => ({
+        month: d.monthName,
+        monthNum: Number(d.monthNum),
+        year: yearNum,
+        total: Number(d.total),
+        pending: Number(d.pending),
+        disposed: Number(d.disposed),
+      })));
+    } catch (error) {
+      console.error('[dashboard/month-wise] error:', error);
+      return sendError(reply, 'Failed to load month-wise data');
     }
-
-    const data = Array.from(monthMap.entries()).map(([month, stats]) => ({
-      month,
-      year: parseInt(month.split('-')[0]),
-      monthNum: parseInt(month.split('-')[1]),
-      total: stats.total,
-      pending: stats.pending,
-    }));
-
-    return sendSuccess(reply, data);
   });
 };

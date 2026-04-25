@@ -63,11 +63,12 @@ export const useDashboardSummary = () => {
   });
 };
 
-export const useDistrictChart = () => {
+export const useDistrictChart = (year?: number) => {
   return useQuery({
-    queryKey: ['dashboard', 'district'],
+    queryKey: ['dashboard', 'district', year],
     queryFn: async () => {
-      const response = await fetch('/api/dashboard/district-wise', {
+      const params = year ? `?year=${year}` : '';
+      const response = await fetch(`/api/dashboard/district-wise${params}`, {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
       });
       return response.json();
@@ -90,11 +91,12 @@ export const useDurationChart = (year?: number) => {
   });
 };
 
-export const useMonthWiseData = () => {
+export const useMonthWiseData = (year?: number) => {
   return useQuery({
-    queryKey: ['dashboard', 'month-wise'],
+    queryKey: ['dashboard', 'month-wise', year],
     queryFn: async () => {
-      const response = await fetch('/api/dashboard/month-wise', {
+      const params = year ? `?year=${year}` : '';
+      const response = await fetch(`/api/dashboard/month-wise${params}`, {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
       });
       return response.json();

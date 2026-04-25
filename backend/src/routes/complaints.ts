@@ -7,41 +7,47 @@ export const complaintRoutes = async (fastify: FastifyInstance) => {
   fastify.get('/complaints', {
     preHandler: [authenticate],
   }, async (request, reply) => {
-    const { page = '1', limit = '10', search = '' } = request.query as Record<string, string>;
-    
-    const pageNum = parseInt(page);
-    const limitNum = parseInt(limit);
-    const skip = (pageNum - 1) * limitNum;
+    try {
+      const { page = '1', limit = '10', search = '' } = request.query as Record<string, string>;
+      
+      const pageNum = parseInt(page);
+      const limitNum = parseInt(limit);
+      const skip = (pageNum - 1) * limitNum;
 
-    const where = search ? {
-      OR: [
-        { firstName: { contains: search, mode: 'insensitive' } },
-        { lastName: { contains: search, mode: 'insensitive' } },
-        { mobile: { contains: search, mode: 'insensitive' } },
-        { complRegNum: { contains: search, mode: 'insensitive' } },
-        { complDesc: { contains: search, mode: 'insensitive' } },
-      ],
-    } : {};
+      // Only apply the expensive OR query if there's an actual search term.
+      // Otherwise, Prisma might construct a slow query tree.
+      const where = search.trim() ? {
+        OR: [
+          { firstName: { contains: search } },
+          { mobile: { contains: search } },
+          { complRegNum: { contains: search } },
+        ],
+      } : {};
 
-    const [complaints, total] = await Promise.all([
-      prisma.complaint.findMany({
-        where,
-        skip,
-        take: limitNum,
-        orderBy: { id: 'desc' },
-      }),
-      prisma.complaint.count({ where }),
-    ]);
+      const [complaints, total] = await prisma.$transaction([
+        prisma.complaint.findMany({
+          where,
+          skip,
+          take: limitNum,
+          orderBy: { id: 'desc' },
+        }),
+        // For empty search, rely on fast index count
+        prisma.complaint.count({ where }),
+      ]);
 
-    return sendSuccess(reply, {
-      data: complaints,
-      pagination: {
-        page: pageNum,
-        limit: limitNum,
-        total,
-        totalPages: Math.ceil(total / limitNum),
-      },
-    });
+      return sendSuccess(reply, {
+        data: complaints,
+        pagination: {
+          page: pageNum,
+          limit: limitNum,
+          total,
+          totalPages: Math.ceil(total / limitNum),
+        },
+      });
+    } catch (error) {
+      console.error('[complaints list] error:', error);
+      return sendError(reply, 'Failed to fetch complaints');
+    }
   });
 
   fastify.get('/complaints/:id', {
