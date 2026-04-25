@@ -4,15 +4,19 @@ import { sendSuccess, sendError } from '../utils/response.js';
 import { authenticate } from '../middleware/auth.js';
 
 /**
- * Dashboard Routes — Performance-optimised for 500K+ rows.
- *
- * KEY RULES that make queries index-friendly on SQL Server:
- *  1. NEVER use LIKE '%word%' (leading wildcard = full scan).
- *     All statuses start with 'Disposed-' or 'Pending-', so use LIKE 'Disposed%'.
- *  2. NEVER wrap a column in YEAR(col) or MONTH(col) in WHERE — it breaks the index.
- *     Use range: complRegDt >= '2024-01-01' AND complRegDt < '2025-01-01' instead.
- *  3. All heavy aggregation done in DB (GROUP BY), never in JS.
+ * Official 22 Haryana districts — all chart/summary data is scoped to these only.
+ * This prevents non-Haryana entries (forwarded complaints) from polluting the charts.
  */
+const HARYANA_DISTRICTS = [
+  'AMBALA','BHIWANI','CHARKHI DADRI','FARIDABAD','FATEHABAD',
+  'GURUGRAM','HISAR','JHAJJAR','JIND','KAITHAL','KARNAL',
+  'KURUKSHETRA','MAHENDERGARH','NUH','PALWAL','PANCHKULA',
+  'PANIPAT','REWARI','ROHTAK','SIRSA','SONIPAT','YAMUNANAGAR',
+  'YAMUNA NAGAR','MEWAT','GURGAON',
+];
+const HARYANA_IN = HARYANA_DISTRICTS.map(d => `'${d}'`).join(', ');
+const HARYANA_FILTER = `UPPER(LTRIM(RTRIM(ISNULL(addressDistrict,'')))) IN (${HARYANA_IN})`;
+
 export const dashboardRoutes = async (fastify: FastifyInstance) => {
 
   /**
@@ -101,6 +105,7 @@ export const dashboardRoutes = async (fastify: FastifyInstance) => {
           SUM(CASE WHEN statusOfComplaint LIKE 'Disposed%' THEN 1 ELSE 0 END) AS Disposed
         FROM Complaint
         WHERE complRegDt >= '${yearStart}' AND complRegDt < '${yearEnd}'
+          AND ${HARYANA_FILTER}
         GROUP BY UPPER(LTRIM(RTRIM(ISNULL(addressDistrict, 'UNKNOWN'))))
         ORDER BY TotalComplaints DESC`
       );

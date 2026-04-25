@@ -4,398 +4,311 @@ import { sendSuccess, sendError } from '../utils/response.js';
 import { authenticate } from '../middleware/auth.js';
 
 /**
- * Reports Routes — ALL rewritten to use SQL GROUP BY aggregation.
- *
- * BEFORE: Each endpoint did prisma.complaint.findMany() → loaded 560K rows into JS memory
- *         → iterated in a JS loop → serialized into JSON → sent over network.
- *         Result: 30-60 seconds per request, OOM risk.
- *
- * AFTER: Each endpoint runs a single SQL SELECT ... GROUP BY query.
- *        SQL Server does the aggregation on disk. Response time: < 500ms.
- *
- * Rules: LIKE 'Disposed%' not LIKE '%Disposed%'. Date ranges not YEAR().
+ * Official 22 Haryana districts — used to filter out non-Haryana entries
+ * that entered the DB via CCTNS (complaints forwarded from other states).
  */
+const HARYANA_DISTRICTS = [
+  'AMBALA', 'BHIWANI', 'CHARKHI DADRI', 'FARIDABAD', 'FATEHABAD',
+  'GURUGRAM', 'HISAR', 'JHAJJAR', 'JIND', 'KAITHAL', 'KARNAL',
+  'KURUKSHETRA', 'MAHENDERGARH', 'NUH', 'PALWAL', 'PANCHKULA',
+  'PANIPAT', 'REWARI', 'ROHTAK', 'SIRSA', 'SONIPAT', 'YAMUNANAGAR',
+  // common aliases
+  'YAMUNA NAGAR', 'MEWAT', 'GURGAON',
+];
+
+/** Build a SQL IN clause for Haryana district names (case-insensitive via UPPER) */
+const HARYANA_IN = HARYANA_DISTRICTS.map(d => `'${d}'`).join(', ');
+const HARYANA_WHERE_DISTRICT = `UPPER(LTRIM(RTRIM(ISNULL(addressDistrict,'')))) IN (${HARYANA_IN})`;
+
+/** Build year-range WHERE clause — index-safe (no YEAR() function) */
+function yearWhere(yearNum: number | null): string {
+  if (!yearNum) return '';
+  return `complRegDt >= '${yearNum}-01-01' AND complRegDt < '${yearNum + 1}-01-01'`;
+}
+
+/** Build WHERE clause combining year + Haryana district filter */
+function buildWhere(yearNum: number | null, extraCondition = '', useDistrictFilter = false): string {
+  const parts: string[] = [];
+  if (yearNum) parts.push(yearWhere(yearNum));
+  if (useDistrictFilter) parts.push(HARYANA_WHERE_DISTRICT);
+  if (extraCondition) parts.push(extraCondition);
+  return parts.length ? `WHERE ${parts.join(' AND ')}` : '';
+}
+
 export const reportRoutes = async (fastify: FastifyInstance) => {
 
-  // ── District-wise ────────────────────────────────────────────────────────────
+  // ── District-wise ─────────────────────────────────────────────────────────
+  // Only Haryana's 22 districts. Defaults to current year, not all-time.
   fastify.get('/reports/district', {
     preHandler: [authenticate],
   }, async (request, reply) => {
     try {
-      const { year } = request.query as Record<string, string>;
-      const yearNum = year ? parseInt(year) : null;
+      const { year, fromDate, toDate } = request.query as Record<string, string>;
+      const yearNum = year ? parseInt(year) : new Date().getFullYear();
 
-      const whereClause = yearNum
-        ? `WHERE complRegDt >= '${yearNum}-01-01' AND complRegDt < '${yearNum + 1}-01-01'`
-        : '';
+      let whereParts: string[] = [HARYANA_WHERE_DISTRICT];
+      if (fromDate && toDate) {
+        whereParts.push(`complRegDt >= '${fromDate}' AND complRegDt <= '${toDate}'`);
+      } else {
+        whereParts.push(yearWhere(yearNum));
+      }
 
+      // Fetch current period
       const data = await prisma.$queryRawUnsafe<any[]>(`
         SELECT
-          ISNULL(addressDistrict, 'Unknown') AS district,
+          UPPER(LTRIM(RTRIM(addressDistrict))) AS district,
           COUNT(*) AS total,
           SUM(CASE WHEN statusOfComplaint LIKE 'Pending%' OR statusOfComplaint IS NULL OR statusOfComplaint = '' THEN 1 ELSE 0 END) AS pending,
           SUM(CASE WHEN statusOfComplaint LIKE 'Disposed%' THEN 1 ELSE 0 END) AS disposed
         FROM Complaint
-        ${whereClause}
-        GROUP BY addressDistrict
+        WHERE ${whereParts.join(' AND ')}
+        GROUP BY UPPER(LTRIM(RTRIM(addressDistrict)))
         ORDER BY total DESC
       `);
 
-      return sendSuccess(reply, data.map(r => ({
-        district: r.district,
-        total: Number(r.total),
-        pending: Number(r.pending),
-        disposed: Number(r.disposed),
-      })));
+      // Previous year comparison (always year-based)
+      let prevData: any[] = [];
+      if (!fromDate && !toDate && yearNum) {
+        const prevYear = yearNum - 1;
+        prevData = await prisma.$queryRawUnsafe<any[]>(`
+          SELECT
+            UPPER(LTRIM(RTRIM(addressDistrict))) AS district,
+            COUNT(*) AS total
+          FROM Complaint
+          WHERE ${HARYANA_WHERE_DISTRICT} AND complRegDt >= '${prevYear}-01-01' AND complRegDt < '${prevYear + 1}-01-01'
+          GROUP BY UPPER(LTRIM(RTRIM(addressDistrict)))
+        `);
+      }
+
+      const prevMap = new Map(prevData.map((r: any) => [r.district, Number(r.total)]));
+
+      return sendSuccess(reply, {
+        year: yearNum,
+        rows: data.map((r: any) => ({
+          district: r.district,
+          total: Number(r.total),
+          pending: Number(r.pending),
+          disposed: Number(r.disposed),
+          prevTotal: prevMap.get(r.district) || 0,
+          change: prevMap.get(r.district)
+            ? Math.round(((Number(r.total) - prevMap.get(r.district)!) / prevMap.get(r.district)!) * 100)
+            : null,
+        })),
+      });
     } catch (e) {
       console.error('[reports/district]', e);
       return sendError(reply, 'Failed to load district report');
     }
   });
 
-  // ── Mode of Receipt ─────────────────────────────────────────────────────────
+  // ── Mode of Receipt ───────────────────────────────────────────────────────
   fastify.get('/reports/mode-receipt', {
     preHandler: [authenticate],
   }, async (request, reply) => {
     try {
-      const { year } = request.query as Record<string, string>;
-      const yearNum = year ? parseInt(year) : null;
-      const whereClause = yearNum
-        ? `WHERE receptionMode IS NOT NULL AND receptionMode != '' AND complRegDt >= '${yearNum}-01-01' AND complRegDt < '${yearNum + 1}-01-01'`
-        : `WHERE receptionMode IS NOT NULL AND receptionMode != ''`;
+      const { year, fromDate, toDate } = request.query as Record<string, string>;
+      const yearNum = year ? parseInt(year) : new Date().getFullYear();
+
+      const whereClause = fromDate && toDate
+        ? `WHERE receptionMode IS NOT NULL AND receptionMode != '' AND complRegDt >= '${fromDate}' AND complRegDt <= '${toDate}'`
+        : `WHERE receptionMode IS NOT NULL AND receptionMode != '' AND ${yearWhere(yearNum)}`;
 
       const data = await prisma.$queryRawUnsafe<any[]>(`
         SELECT
-          ISNULL(receptionMode, 'Unknown') AS mode,
+          ISNULL(receptionMode,'Unknown') AS mode,
           COUNT(*) AS total,
           SUM(CASE WHEN statusOfComplaint LIKE 'Pending%' OR statusOfComplaint IS NULL OR statusOfComplaint = '' THEN 1 ELSE 0 END) AS pending,
           SUM(CASE WHEN statusOfComplaint LIKE 'Disposed%' THEN 1 ELSE 0 END) AS disposed
-        FROM Complaint
-        ${whereClause}
-        GROUP BY receptionMode
-        ORDER BY total DESC
+        FROM Complaint ${whereClause}
+        GROUP BY receptionMode ORDER BY total DESC
       `);
 
-      return sendSuccess(reply, data.map(r => ({
-        mode: r.mode,
-        total: Number(r.total),
-        count: Number(r.total),
-        pending: Number(r.pending),
-        disposed: Number(r.disposed),
-      })));
-    } catch (e) {
-      console.error('[reports/mode-receipt]', e);
-      return sendError(reply, 'Failed to load mode-of-receipt report');
-    }
+      return sendSuccess(reply, { year: yearNum, rows: data.map((r: any) => ({ mode: r.mode, total: Number(r.total), count: Number(r.total), pending: Number(r.pending), disposed: Number(r.disposed) })) });
+    } catch (e) { return sendError(reply, 'Failed to load mode-of-receipt report'); }
   });
 
-  // ── Nature of Incident ───────────────────────────────────────────────────────
+  // ── Nature of Incident ────────────────────────────────────────────────────
   fastify.get('/reports/nature-incident', {
     preHandler: [authenticate],
   }, async (request, reply) => {
     try {
-      const { year } = request.query as Record<string, string>;
-      const yearNum = year ? parseInt(year) : null;
-      const whereClause = yearNum
-        ? `WHERE classOfIncident IS NOT NULL AND classOfIncident != '' AND complRegDt >= '${yearNum}-01-01' AND complRegDt < '${yearNum + 1}-01-01'`
-        : `WHERE classOfIncident IS NOT NULL AND classOfIncident != ''`;
+      const { year, fromDate, toDate } = request.query as Record<string, string>;
+      const yearNum = year ? parseInt(year) : new Date().getFullYear();
+
+      const whereClause = fromDate && toDate
+        ? `WHERE classOfIncident IS NOT NULL AND classOfIncident != '' AND complRegDt >= '${fromDate}' AND complRegDt <= '${toDate}'`
+        : `WHERE classOfIncident IS NOT NULL AND classOfIncident != '' AND ${yearWhere(yearNum)}`;
 
       const data = await prisma.$queryRawUnsafe<any[]>(`
-        SELECT
-          ISNULL(classOfIncident, 'Unknown') AS natureOfIncident,
+        SELECT ISNULL(classOfIncident,'Unknown') AS natureOfIncident,
           COUNT(*) AS total,
           SUM(CASE WHEN statusOfComplaint LIKE 'Pending%' OR statusOfComplaint IS NULL OR statusOfComplaint = '' THEN 1 ELSE 0 END) AS pending,
           SUM(CASE WHEN statusOfComplaint LIKE 'Disposed%' THEN 1 ELSE 0 END) AS disposed
-        FROM Complaint
-        ${whereClause}
-        GROUP BY classOfIncident
-        ORDER BY total DESC
+        FROM Complaint ${whereClause}
+        GROUP BY classOfIncident ORDER BY total DESC
       `);
 
-      return sendSuccess(reply, data.map(r => ({
-        natureOfIncident: r.natureOfIncident,
-        total: Number(r.total),
-        pending: Number(r.pending),
-        disposed: Number(r.disposed),
-      })));
-    } catch (e) {
-      console.error('[reports/nature-incident]', e);
-      return sendError(reply, 'Failed to load nature-of-incident report');
-    }
+      return sendSuccess(reply, { year: yearNum, rows: data.map((r: any) => ({ natureOfIncident: r.natureOfIncident, total: Number(r.total), pending: Number(r.pending), disposed: Number(r.disposed) })) });
+    } catch (e) { return sendError(reply, 'Failed to load nature-of-incident report'); }
   });
 
-  // ── Type Against (Respondent Categories) ────────────────────────────────────
+  // ── Type Against ──────────────────────────────────────────────────────────
   fastify.get('/reports/type-against', {
     preHandler: [authenticate],
   }, async (request, reply) => {
     try {
-      const { year } = request.query as Record<string, string>;
-      const yearNum = year ? parseInt(year) : null;
-      const whereClause = yearNum
-        ? `WHERE respondentCategories IS NOT NULL AND respondentCategories != '' AND complRegDt >= '${yearNum}-01-01' AND complRegDt < '${yearNum + 1}-01-01'`
-        : `WHERE respondentCategories IS NOT NULL AND respondentCategories != ''`;
-
+      const { year, fromDate, toDate } = request.query as Record<string, string>;
+      const yearNum = year ? parseInt(year) : new Date().getFullYear();
+      const whereClause = fromDate && toDate
+        ? `WHERE respondentCategories IS NOT NULL AND respondentCategories != '' AND complRegDt >= '${fromDate}' AND complRegDt <= '${toDate}'`
+        : `WHERE respondentCategories IS NOT NULL AND respondentCategories != '' AND ${yearWhere(yearNum)}`;
       const data = await prisma.$queryRawUnsafe<any[]>(`
-        SELECT
-          ISNULL(respondentCategories, 'Unknown') AS typeAgainst,
-          COUNT(*) AS total,
+        SELECT ISNULL(respondentCategories,'Unknown') AS typeAgainst, COUNT(*) AS total,
           SUM(CASE WHEN statusOfComplaint LIKE 'Pending%' OR statusOfComplaint IS NULL OR statusOfComplaint = '' THEN 1 ELSE 0 END) AS pending,
           SUM(CASE WHEN statusOfComplaint LIKE 'Disposed%' THEN 1 ELSE 0 END) AS disposed
-        FROM Complaint
-        ${whereClause}
-        GROUP BY respondentCategories
-        ORDER BY total DESC
+        FROM Complaint ${whereClause} GROUP BY respondentCategories ORDER BY total DESC
       `);
-
-      return sendSuccess(reply, data.map(r => ({
-        typeAgainst: r.typeAgainst,
-        total: Number(r.total),
-        pending: Number(r.pending),
-        disposed: Number(r.disposed),
-      })));
-    } catch (e) {
-      console.error('[reports/type-against]', e);
-      return sendError(reply, 'Failed to load type-against report');
-    }
+      return sendSuccess(reply, { year: yearNum, rows: data.map((r: any) => ({ typeAgainst: r.typeAgainst, total: Number(r.total), pending: Number(r.pending), disposed: Number(r.disposed) })) });
+    } catch (e) { return sendError(reply, 'Failed to load type-against report'); }
   });
 
-  // ── Status Breakdown ─────────────────────────────────────────────────────────
+  // ── Status ────────────────────────────────────────────────────────────────
   fastify.get('/reports/status', {
     preHandler: [authenticate],
   }, async (request, reply) => {
     try {
-      const { year } = request.query as Record<string, string>;
-      const yearNum = year ? parseInt(year) : null;
-      const whereClause = yearNum
-        ? `WHERE statusOfComplaint IS NOT NULL AND statusOfComplaint != '' AND complRegDt >= '${yearNum}-01-01' AND complRegDt < '${yearNum + 1}-01-01'`
-        : `WHERE statusOfComplaint IS NOT NULL AND statusOfComplaint != ''`;
-
+      const { year, fromDate, toDate } = request.query as Record<string, string>;
+      const yearNum = year ? parseInt(year) : new Date().getFullYear();
+      const whereClause = fromDate && toDate
+        ? `WHERE statusOfComplaint IS NOT NULL AND statusOfComplaint != '' AND complRegDt >= '${fromDate}' AND complRegDt <= '${toDate}'`
+        : `WHERE statusOfComplaint IS NOT NULL AND statusOfComplaint != '' AND ${yearWhere(yearNum)}`;
       const data = await prisma.$queryRawUnsafe<any[]>(`
-        SELECT
-          statusOfComplaint AS status,
-          COUNT(*) AS total
-        FROM Complaint
-        ${whereClause}
-        GROUP BY statusOfComplaint
-        ORDER BY total DESC
+        SELECT statusOfComplaint AS status, COUNT(*) AS total FROM Complaint ${whereClause}
+        GROUP BY statusOfComplaint ORDER BY total DESC
       `);
-
-      return sendSuccess(reply, data.map(r => ({
-        status: r.status,
-        total: Number(r.total),
-        count: Number(r.total),
-        pending: r.status?.startsWith('Pending') ? Number(r.total) : 0,
-        disposed: r.status?.startsWith('Disposed') ? Number(r.total) : 0,
-      })));
-    } catch (e) {
-      console.error('[reports/status]', e);
-      return sendError(reply, 'Failed to load status report');
-    }
+      return sendSuccess(reply, { year: yearNum, rows: data.map((r: any) => ({ status: r.status, total: Number(r.total), count: Number(r.total), pending: r.status?.startsWith('Pending') ? Number(r.total) : 0, disposed: r.status?.startsWith('Disposed') ? Number(r.total) : 0 })) });
+    } catch (e) { return sendError(reply, 'Failed to load status report'); }
   });
 
-  // ── Complaint Source ─────────────────────────────────────────────────────────
+  // ── Complaint Source ──────────────────────────────────────────────────────
   fastify.get('/reports/complaint-source', {
     preHandler: [authenticate],
   }, async (request, reply) => {
     try {
-      const { year } = request.query as Record<string, string>;
-      const yearNum = year ? parseInt(year) : null;
-      const whereClause = yearNum
-        ? `WHERE complaintSource IS NOT NULL AND complaintSource != '' AND complRegDt >= '${yearNum}-01-01' AND complRegDt < '${yearNum + 1}-01-01'`
-        : `WHERE complaintSource IS NOT NULL AND complaintSource != ''`;
-
+      const { year, fromDate, toDate } = request.query as Record<string, string>;
+      const yearNum = year ? parseInt(year) : new Date().getFullYear();
+      const whereClause = fromDate && toDate
+        ? `WHERE complaintSource IS NOT NULL AND complaintSource != '' AND complRegDt >= '${fromDate}' AND complRegDt <= '${toDate}'`
+        : `WHERE complaintSource IS NOT NULL AND complaintSource != '' AND ${yearWhere(yearNum)}`;
       const data = await prisma.$queryRawUnsafe<any[]>(`
-        SELECT
-          ISNULL(complaintSource, 'Unknown') AS complaintSource,
-          COUNT(*) AS total,
+        SELECT ISNULL(complaintSource,'Unknown') AS complaintSource, COUNT(*) AS total,
           SUM(CASE WHEN statusOfComplaint LIKE 'Pending%' OR statusOfComplaint IS NULL OR statusOfComplaint = '' THEN 1 ELSE 0 END) AS pending,
           SUM(CASE WHEN statusOfComplaint LIKE 'Disposed%' THEN 1 ELSE 0 END) AS disposed
-        FROM Complaint
-        ${whereClause}
-        GROUP BY complaintSource
-        ORDER BY total DESC
+        FROM Complaint ${whereClause} GROUP BY complaintSource ORDER BY total DESC
       `);
-
-      return sendSuccess(reply, data.map(r => ({
-        complaintSource: r.complaintSource,
-        total: Number(r.total),
-        pending: Number(r.pending),
-        disposed: Number(r.disposed),
-      })));
-    } catch (e) {
-      console.error('[reports/complaint-source]', e);
-      return sendError(reply, 'Failed to load complaint-source report');
-    }
+      return sendSuccess(reply, { year: yearNum, rows: data.map((r: any) => ({ complaintSource: r.complaintSource, total: Number(r.total), pending: Number(r.pending), disposed: Number(r.disposed) })) });
+    } catch (e) { return sendError(reply, 'Failed to load complaint-source report'); }
   });
 
-  // ── Type of Complaint ────────────────────────────────────────────────────────
+  // ── Type of Complaint ─────────────────────────────────────────────────────
   fastify.get('/reports/type-complaint', {
     preHandler: [authenticate],
   }, async (request, reply) => {
     try {
-      const { year } = request.query as Record<string, string>;
-      const yearNum = year ? parseInt(year) : null;
-      const whereClause = yearNum
-        ? `WHERE typeOfComplaint IS NOT NULL AND typeOfComplaint != '' AND complRegDt >= '${yearNum}-01-01' AND complRegDt < '${yearNum + 1}-01-01'`
-        : `WHERE typeOfComplaint IS NOT NULL AND typeOfComplaint != ''`;
-
+      const { year, fromDate, toDate } = request.query as Record<string, string>;
+      const yearNum = year ? parseInt(year) : new Date().getFullYear();
+      const whereClause = fromDate && toDate
+        ? `WHERE typeOfComplaint IS NOT NULL AND typeOfComplaint != '' AND complRegDt >= '${fromDate}' AND complRegDt <= '${toDate}'`
+        : `WHERE typeOfComplaint IS NOT NULL AND typeOfComplaint != '' AND ${yearWhere(yearNum)}`;
       const data = await prisma.$queryRawUnsafe<any[]>(`
-        SELECT
-          ISNULL(typeOfComplaint, 'Unknown') AS typeOfComplaint,
-          COUNT(*) AS total,
+        SELECT ISNULL(typeOfComplaint,'Unknown') AS typeOfComplaint, COUNT(*) AS total,
           SUM(CASE WHEN statusOfComplaint LIKE 'Pending%' OR statusOfComplaint IS NULL OR statusOfComplaint = '' THEN 1 ELSE 0 END) AS pending,
           SUM(CASE WHEN statusOfComplaint LIKE 'Disposed%' THEN 1 ELSE 0 END) AS disposed
-        FROM Complaint
-        ${whereClause}
-        GROUP BY typeOfComplaint
-        ORDER BY total DESC
+        FROM Complaint ${whereClause} GROUP BY typeOfComplaint ORDER BY total DESC
       `);
-
-      return sendSuccess(reply, data.map(r => ({
-        typeOfComplaint: r.typeOfComplaint,
-        total: Number(r.total),
-        pending: Number(r.pending),
-        disposed: Number(r.disposed),
-      })));
-    } catch (e) {
-      console.error('[reports/type-complaint]', e);
-      return sendError(reply, 'Failed to load type-of-complaint report');
-    }
+      return sendSuccess(reply, { year: yearNum, rows: data.map((r: any) => ({ typeOfComplaint: r.typeOfComplaint, total: Number(r.total), pending: Number(r.pending), disposed: Number(r.disposed) })) });
+    } catch (e) { return sendError(reply, 'Failed to load type-of-complaint report'); }
   });
 
-  // ── Branch-wise ──────────────────────────────────────────────────────────────
+  // ── Branch-wise ───────────────────────────────────────────────────────────
   fastify.get('/reports/branch-wise', {
     preHandler: [authenticate],
   }, async (request, reply) => {
     try {
-      const { year } = request.query as Record<string, string>;
-      const yearNum = year ? parseInt(year) : null;
-      const whereClause = yearNum
-        ? `WHERE branch IS NOT NULL AND branch != '' AND complRegDt >= '${yearNum}-01-01' AND complRegDt < '${yearNum + 1}-01-01'`
-        : `WHERE branch IS NOT NULL AND branch != ''`;
-
+      const { year, fromDate, toDate } = request.query as Record<string, string>;
+      const yearNum = year ? parseInt(year) : new Date().getFullYear();
+      const whereClause = fromDate && toDate
+        ? `WHERE branch IS NOT NULL AND branch != '' AND complRegDt >= '${fromDate}' AND complRegDt <= '${toDate}'`
+        : `WHERE branch IS NOT NULL AND branch != '' AND ${yearWhere(yearNum)}`;
       const data = await prisma.$queryRawUnsafe<any[]>(`
-        SELECT
-          ISNULL(branch, 'Unknown') AS branch,
-          COUNT(*) AS total,
+        SELECT ISNULL(branch,'Unknown') AS branch, COUNT(*) AS total,
           SUM(CASE WHEN statusOfComplaint LIKE 'Pending%' OR statusOfComplaint IS NULL OR statusOfComplaint = '' THEN 1 ELSE 0 END) AS pending,
           SUM(CASE WHEN statusOfComplaint LIKE 'Disposed%' THEN 1 ELSE 0 END) AS disposed
-        FROM Complaint
-        ${whereClause}
-        GROUP BY branch
-        ORDER BY total DESC
+        FROM Complaint ${whereClause} GROUP BY branch ORDER BY total DESC
       `);
-
-      return sendSuccess(reply, data.map(r => ({
-        branch: r.branch,
-        total: Number(r.total),
-        pending: Number(r.pending),
-        disposed: Number(r.disposed),
-      })));
-    } catch (e) {
-      console.error('[reports/branch-wise]', e);
-      return sendError(reply, 'Failed to load branch-wise report');
-    }
+      return sendSuccess(reply, { year: yearNum, rows: data.map((r: any) => ({ branch: r.branch, total: Number(r.total), pending: Number(r.pending), disposed: Number(r.disposed) })) });
+    } catch (e) { return sendError(reply, 'Failed to load branch-wise report'); }
   });
 
-  // ── Highlights (category ranking) ────────────────────────────────────────────
+  // ── Highlights ────────────────────────────────────────────────────────────
   fastify.get('/reports/highlights', {
     preHandler: [authenticate],
   }, async (request, reply) => {
     try {
       const { year } = request.query as Record<string, string>;
-      const yearNum = year ? parseInt(year) : null;
-      const whereClause = yearNum
-        ? `WHERE classOfIncident IS NOT NULL AND classOfIncident != '' AND complRegDt >= '${yearNum}-01-01' AND complRegDt < '${yearNum + 1}-01-01'`
-        : `WHERE classOfIncident IS NOT NULL AND classOfIncident != ''`;
-
+      const yearNum = year ? parseInt(year) : new Date().getFullYear();
       const data = await prisma.$queryRawUnsafe<any[]>(`
-        SELECT
-          ISNULL(classOfIncident, 'Unknown') AS category,
-          COUNT(*) AS count
-        FROM Complaint
-        ${whereClause}
-        GROUP BY classOfIncident
-        ORDER BY count DESC
+        SELECT ISNULL(classOfIncident,'Unknown') AS category, COUNT(*) AS count
+        FROM Complaint WHERE classOfIncident IS NOT NULL AND classOfIncident != '' AND ${yearWhere(yearNum)}
+        GROUP BY classOfIncident ORDER BY count DESC
       `);
-
-      return sendSuccess(reply, data.map(r => ({
-        category: r.category,
-        count: Number(r.count),
-      })));
-    } catch (e) {
-      console.error('[reports/highlights]', e);
-      return sendError(reply, 'Failed to load highlights report');
-    }
+      return sendSuccess(reply, data.map((r: any) => ({ category: r.category, count: Number(r.count) })));
+    } catch (e) { return sendError(reply, 'Failed to load highlights report'); }
   });
 
-  // ── Date-wise ────────────────────────────────────────────────────────────────
+  // ── Date-wise ─────────────────────────────────────────────────────────────
   fastify.get('/reports/date-wise', {
     preHandler: [authenticate],
   }, async (request, reply) => {
     try {
-      const { fromDate, toDate } = request.query as Record<string, string>;
+      const { fromDate, toDate, year } = request.query as Record<string, string>;
+      const yearNum = year ? parseInt(year) : new Date().getFullYear();
 
-      const whereClause = fromDate && toDate
-        ? `WHERE complRegDt >= '${fromDate}' AND complRegDt <= '${toDate}'`
-        : '';
+      let whereParts: string[] = [HARYANA_WHERE_DISTRICT];
+      if (fromDate && toDate) {
+        whereParts.push(`complRegDt >= '${fromDate}' AND complRegDt <= '${toDate}'`);
+      } else {
+        whereParts.push(yearWhere(yearNum));
+      }
 
       const data = await prisma.$queryRawUnsafe<any[]>(`
-        SELECT
-          ISNULL(addressDistrict, 'Unknown') AS district,
-          COUNT(*) AS total,
+        SELECT UPPER(LTRIM(RTRIM(ISNULL(addressDistrict,'Unknown')))) AS district, COUNT(*) AS total,
           SUM(CASE WHEN statusOfComplaint LIKE 'Pending%' OR statusOfComplaint IS NULL OR statusOfComplaint = '' THEN 1 ELSE 0 END) AS pending,
           SUM(CASE WHEN statusOfComplaint LIKE 'Disposed%' THEN 1 ELSE 0 END) AS disposed
-        FROM Complaint
-        ${whereClause}
-        GROUP BY addressDistrict
-        ORDER BY total DESC
+        FROM Complaint WHERE ${whereParts.join(' AND ')}
+        GROUP BY UPPER(LTRIM(RTRIM(addressDistrict))) ORDER BY total DESC
       `);
-
-      return sendSuccess(reply, data.map(r => ({
-        district: r.district,
-        total: Number(r.total),
-        pending: Number(r.pending),
-        disposed: Number(r.disposed),
-      })));
-    } catch (e) {
-      console.error('[reports/date-wise]', e);
-      return sendError(reply, 'Failed to load date-wise report');
-    }
+      return sendSuccess(reply, { year: yearNum, rows: data.map((r: any) => ({ district: r.district, total: Number(r.total), pending: Number(r.pending), disposed: Number(r.disposed) })) });
+    } catch (e) { return sendError(reply, 'Failed to load date-wise report'); }
   });
 
-  // ── Action Taken ─────────────────────────────────────────────────────────────
+  // ── Action Taken ──────────────────────────────────────────────────────────
   fastify.get('/reports/action-taken', {
     preHandler: [authenticate],
   }, async (request, reply) => {
     try {
-      const { year } = request.query as Record<string, string>;
-      const yearNum = year ? parseInt(year) : null;
-      const whereClause = yearNum
-        ? `WHERE actionTaken IS NOT NULL AND actionTaken != '' AND complRegDt >= '${yearNum}-01-01' AND complRegDt < '${yearNum + 1}-01-01'`
-        : `WHERE actionTaken IS NOT NULL AND actionTaken != ''`;
-
+      const { year, fromDate, toDate } = request.query as Record<string, string>;
+      const yearNum = year ? parseInt(year) : new Date().getFullYear();
+      const whereClause = fromDate && toDate
+        ? `WHERE actionTaken IS NOT NULL AND actionTaken != '' AND complRegDt >= '${fromDate}' AND complRegDt <= '${toDate}'`
+        : `WHERE actionTaken IS NOT NULL AND actionTaken != '' AND ${yearWhere(yearNum)}`;
       const data = await prisma.$queryRawUnsafe<any[]>(`
-        SELECT TOP 50
-          ISNULL(actionTaken, 'Unknown') AS actionTaken,
-          COUNT(*) AS total,
+        SELECT TOP 30 ISNULL(actionTaken,'Unknown') AS actionTaken, COUNT(*) AS total,
           SUM(CASE WHEN statusOfComplaint LIKE 'Pending%' OR statusOfComplaint IS NULL OR statusOfComplaint = '' THEN 1 ELSE 0 END) AS pending,
           SUM(CASE WHEN statusOfComplaint LIKE 'Disposed%' THEN 1 ELSE 0 END) AS disposed
-        FROM Complaint
-        ${whereClause}
-        GROUP BY actionTaken
-        ORDER BY total DESC
+        FROM Complaint ${whereClause} GROUP BY actionTaken ORDER BY total DESC
       `);
-
-      return sendSuccess(reply, data.map(r => ({
-        actionTaken: r.actionTaken,
-        total: Number(r.total),
-        pending: Number(r.pending),
-        disposed: Number(r.disposed),
-      })));
-    } catch (e) {
-      console.error('[reports/action-taken]', e);
-      return sendError(reply, 'Failed to load action-taken report');
-    }
+      return sendSuccess(reply, { year: yearNum, rows: data.map((r: any) => ({ actionTaken: r.actionTaken, total: Number(r.total), pending: Number(r.pending), disposed: Number(r.disposed) })) });
+    } catch (e) { return sendError(reply, 'Failed to load action-taken report'); }
   });
 };
