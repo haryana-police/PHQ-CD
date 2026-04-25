@@ -54,13 +54,15 @@ export const governmentRoutes = async (fastify: FastifyInstance) => {
       
       // Save to local database
       for (const district of data.DropDownDTO) {
-        await prisma.$executeRawUnsafe(
-          `IF NOT EXISTS (SELECT 1 FROM District_Master WHERE ID = ${parseInt(district.ID)}) INSERT INTO District_Master (ID, DistrictName) VALUES (${parseInt(district.ID)}, '${district.Name.replace(/'/g, "''")}')`
-        );
+        await prisma.district_Master.upsert({
+          where: { id: parseInt(district.ID) },
+          update: { DistrictName: district.Name },
+          create: { id: parseInt(district.ID), DistrictName: district.Name }
+        });
       }
       
       // Return from local database
-      const districts = await prisma.$queryRaw`SELECT * FROM District_Master ORDER BY DistrictName`;
+      const districts = await prisma.district_Master.findMany({ orderBy: { DistrictName: 'asc' }});
       
       return sendSuccess(reply, districts);
     } catch (error) {
@@ -74,7 +76,7 @@ export const governmentRoutes = async (fastify: FastifyInstance) => {
     preHandler: [authenticate],
   }, async (request, reply) => {
     try {
-      const districts = await prisma.$queryRaw`SELECT * FROM District_Master ORDER BY DistrictName`;
+      const districts = await prisma.district_Master.findMany({ orderBy: { DistrictName: 'asc' }});
       return sendSuccess(reply, districts);
     } catch (error) {
       console.error('Error fetching local districts:', error);
@@ -103,13 +105,18 @@ export const governmentRoutes = async (fastify: FastifyInstance) => {
       
       // Save to local database
       for (const ps of data.DropDownDTO) {
-        await prisma.$executeRawUnsafe(
-          `IF NOT EXISTS (SELECT 1 FROM PoliceStation_Master WHERE ID = ${parseInt(ps.ID)}) INSERT INTO PoliceStation_Master (ID, Name, DistrictID) VALUES (${parseInt(ps.ID)}, '${ps.Name.replace(/'/g, "''")}', ${parseInt(districtId)})`
-        );
+        await prisma.policeStation_Master.upsert({
+          where: { id: parseInt(ps.ID) },
+          update: { Name: ps.Name, DistrictID: parseInt(districtId) },
+          create: { id: parseInt(ps.ID), Name: ps.Name, DistrictID: parseInt(districtId) }
+        });
       }
       
       // Return from local database
-      const stations = await prisma.$queryRawUnsafe(`SELECT * FROM PoliceStation_Master WHERE DistrictID = ${parseInt(districtId)} ORDER BY Name`);
+      const stations = await prisma.policeStation_Master.findMany({
+        where: { DistrictID: parseInt(districtId) },
+        orderBy: { Name: 'asc' }
+      });
       
       return sendSuccess(reply, stations);
     } catch (error) {
@@ -125,13 +132,10 @@ export const governmentRoutes = async (fastify: FastifyInstance) => {
     try {
       const { districtId } = request.query as { districtId?: string };
       
-      let sql = 'SELECT * FROM PoliceStation_Master';
-      if (districtId) {
-        sql += ` WHERE DistrictID = ${parseInt(districtId)}`;
-      }
-      sql += ' ORDER BY Name';
-      
-      const stations = await prisma.$queryRawUnsafe(sql);
+      const stations = await prisma.policeStation_Master.findMany({
+        where: districtId ? { DistrictID: parseInt(districtId) } : undefined,
+        orderBy: { Name: 'asc' }
+      });
       return sendSuccess(reply, stations);
     } catch (error) {
       console.error('Error fetching local police stations:', error);
@@ -154,13 +158,15 @@ export const governmentRoutes = async (fastify: FastifyInstance) => {
       
       // Save to local database
       for (const office of data.DropDownDTO) {
-        await prisma.$executeRawUnsafe(
-          `IF NOT EXISTS (SELECT 1 FROM Offices_Master WHERE ID = ${parseInt(office.ID)}) INSERT INTO Offices_Master (ID, Name) VALUES (${parseInt(office.ID)}, '${office.Name.replace(/'/g, "''")}')`
-        );
+        await prisma.offices_Master.upsert({
+          where: { id: parseInt(office.ID) },
+          update: { Name: office.Name },
+          create: { id: parseInt(office.ID), Name: office.Name }
+        });
       }
       
       // Return from local database
-      const offices = await prisma.$queryRaw`SELECT * FROM Offices_Master ORDER BY Name`;
+      const offices = await prisma.offices_Master.findMany({ orderBy: { Name: 'asc' }});
       
       return sendSuccess(reply, offices);
     } catch (error) {
@@ -174,7 +180,7 @@ export const governmentRoutes = async (fastify: FastifyInstance) => {
     preHandler: [authenticate],
   }, async (request, reply) => {
     try {
-      const offices = await prisma.$queryRaw`SELECT * FROM Offices_Master ORDER BY Name`;
+      const offices = await prisma.offices_Master.findMany({ orderBy: { Name: 'asc' }});
       return sendSuccess(reply, offices);
     } catch (error) {
       console.error('Error fetching local offices:', error);
@@ -195,9 +201,11 @@ export const governmentRoutes = async (fastify: FastifyInstance) => {
         const districtData = await fetchXmlAsJson<{ DropDownDTO: Array<{ ID: string; Name: string }> }>(districtApi);
         
         for (const d of districtData.DropDownDTO || []) {
-          await prisma.$executeRawUnsafe(
-            `IF NOT EXISTS (SELECT 1 FROM District_Master WHERE ID = ${parseInt(d.ID)}) INSERT INTO District_Master (ID, DistrictName) VALUES (${parseInt(d.ID)}, '${d.Name.replace(/'/g, "''")}')`
-          );
+          await prisma.district_Master.upsert({
+            where: { id: parseInt(d.ID) },
+            update: { DistrictName: d.Name },
+            create: { id: parseInt(d.ID), DistrictName: d.Name }
+          });
         }
         results.districts = districtData.DropDownDTO?.length || 0;
       } catch (e) {
@@ -210,9 +218,11 @@ export const governmentRoutes = async (fastify: FastifyInstance) => {
         const officeData = await fetchXmlAsJson<{ DropDownDTO: Array<{ ID: string; Name: string }> }>(officeApi);
         
         for (const o of officeData.DropDownDTO || []) {
-          await prisma.$executeRawUnsafe(
-            `IF NOT EXISTS (SELECT 1 FROM Offices_Master WHERE ID = ${parseInt(o.ID)}) INSERT INTO Offices_Master (ID, Name) VALUES (${parseInt(o.ID)}, '${o.Name.replace(/'/g, "''")}')`
-          );
+          await prisma.offices_Master.upsert({
+            where: { id: parseInt(o.ID) },
+            update: { Name: o.Name },
+            create: { id: parseInt(o.ID), Name: o.Name }
+          });
         }
         results.offices = officeData.DropDownDTO?.length || 0;
       } catch (e) {
