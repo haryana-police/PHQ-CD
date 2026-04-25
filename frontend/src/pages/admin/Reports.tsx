@@ -202,8 +202,8 @@ export const ReportsPage = () => {
     { key: 'total',    label: `Total (${periodLabel})`, sortable: true, align: 'right' },
     { key: 'pending',  label: 'Pending',  sortable: true, align: 'right' },
     { key: 'disposed', label: 'Disposed', sortable: true, align: 'right' },
-    { key: 'pendPct',  label: 'Pend%',   align: 'center' },
-    { key: 'dispPct',  label: 'Disp%',   align: 'center' },
+    { key: 'pendPct',  label: 'Pend%',   sortable: true, align: 'center' },
+    { key: 'dispPct',  label: 'Disp%',   sortable: true, align: 'center' },
     ...(showYoY ? [
       { key: 'prevTotal' as keyof typeof tableData[0], label: `${activeYear - 1} Total`, sortable: true, align: 'right' as const },
       { key: 'change'    as keyof typeof tableData[0], label: 'YoY',  align: 'center' as const },

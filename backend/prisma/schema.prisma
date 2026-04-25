@@ -1,6 +1,7 @@
 datasource db {
-  provider = "sqlserver"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 generator client {
@@ -32,38 +33,38 @@ model Complaint {
   complRegNum         String?    @unique
   districtId          Int?
   district            District?  @relation(fields: [districtId], references: [id])
-  complDesc           String?    @db.NVarChar(Max)
+  complDesc           String?    
   complSrno          String?
   complRegDt         DateTime?
-  firstName           String?    @db.NVarChar(1000)
-  lastName            String?    @db.NVarChar(1000)
+  firstName           String?    
+  lastName            String?    
   mobile              String?
   gender              String?
   age                 Int?
-  addressLine1         String?    @db.NVarChar(Max)
-  addressLine2        String?    @db.NVarChar(Max)
-  addressLine3        String?    @db.NVarChar(Max)
-  village             String?    @db.NVarChar(Max)
-  tehsil              String?    @db.NVarChar(Max)
-  addressDistrict     String?    @db.NVarChar(1000)
-  addressPs          String?    @db.NVarChar(1000)
-  receptionMode      String?    @db.NVarChar(1000)
-  incidentType       String?    @db.NVarChar(1000)
-  incidentPlc       String?    @db.NVarChar(1000)
+  addressLine1         String?    
+  addressLine2        String?    
+  addressLine3        String?    
+  village             String?    
+  tehsil              String?    
+  addressDistrict     String?    
+  addressPs          String?    
+  receptionMode      String?    
+  incidentType       String?    
+  incidentPlc       String?    
   incidentFromDt    DateTime?
   incidentToDt      DateTime?
-  classOfIncident    String?    @db.NVarChar(1000)
-  respondentCategories String?  @db.NVarChar(1000)
-  complaintSource   String?    @db.NVarChar(1000)
-  typeOfComplaint   String?    @db.NVarChar(1000)
-  complainantType   String?    @db.NVarChar(1000)
-  complaintPurpose  String?    @db.NVarChar(1000)
-  statusOfComplaint String?    @db.NVarChar(1000)
+  classOfIncident    String?    
+  respondentCategories String?  
+  complaintSource   String?    
+  typeOfComplaint   String?    
+  complainantType   String?    
+  complaintPurpose  String?    
+  statusOfComplaint String?    
   disposalDate     DateTime?
-  ioDetails        String?    @db.NVarChar(1000)
+  ioDetails        String?    
   branch           String?
   firNumber         String?
-  actionTaken      String?    @db.NVarChar(Max)
+  actionTaken      String?    
   createdAt          DateTime   @default(now())
   updatedAt          DateTime   @updatedAt
 
