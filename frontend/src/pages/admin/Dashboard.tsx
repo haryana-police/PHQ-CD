@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { Layout } from '@/components/layout/Layout';
 import { ChartCard } from '@/components/charts/ChartCard';
-import { getDistrictBarOptions, getDurationLineOptions } from '@/components/charts/Charts';
+import { getDistrictBarOptions, getDurationLineOptions, getStackedBarOptions } from '@/components/charts/Charts';
 
 const StatCard = ({ label, value, subValue, colorClass }: { label: string; value: string | number; subValue?: string; colorClass: string }) => (
   <div className={`stat-card ${colorClass}`}>
@@ -47,10 +47,19 @@ export const DashboardPage = () => {
     },
   });
 
+  const { data: categoryData, isLoading: cl } = useQuery({
+    queryKey: ['dashboard', 'category'],
+    queryFn: async () => {
+      const r = await fetch('/api/dashboard/category-wise', { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
+      return r.json();
+    },
+  });
+
   const s = summaryData?.data;
   const districts = districtData?.data || [];
   const durations = durationData?.data || [];
   const matrix = matrixData?.data || [];
+  const categories = categoryData?.data || [];
 
   return (
     <Layout>
@@ -73,7 +82,7 @@ export const DashboardPage = () => {
           </div>
         )}
 
-        <div className="charts-grid">
+        <div className="charts-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
           <ChartCard
             title="State-wide Trend (Monthly)"
             option={getDurationLineOptions(durations)}
@@ -81,7 +90,12 @@ export const DashboardPage = () => {
           />
           <ChartCard
             title="Top District Pendency"
-            option={getDistrictBarOptions(districts.sort((a: any, b: any) => b.pending - a.pending).slice(0, 10))}
+            option={getDistrictBarOptions(districts.sort((a: any, b: any) => b.pending - a.pending).slice(0, 7))}
+            height="320px"
+          />
+          <ChartCard
+            title="Top Complaint Categories"
+            option={getStackedBarOptions(categories.slice(0, 5))}
             height="320px"
           />
         </div>

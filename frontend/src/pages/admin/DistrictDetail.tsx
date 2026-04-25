@@ -1,6 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Layout } from '@/components/layout/Layout';
+import { ChartCard } from '@/components/charts/ChartCard';
+import { getStackedBarOptions } from '@/components/charts/Charts';
 
 const StatCard = ({ label, value, subValue, colorClass }: { label: string; value: string | number; subValue?: string; colorClass: string }) => (
   <div className={`stat-card ${colorClass}`}>
@@ -26,6 +28,7 @@ export const DistrictDetail = () => {
   });
 
   const policeStations = data?.data?.policeStations || [];
+  const categories = data?.data?.categories || [];
   
   // Calculate aggregates for this district from PS data
   const totalReceived = policeStations.reduce((sum: number, ps: any) => sum + ps.total, 0);
@@ -65,41 +68,49 @@ export const DistrictDetail = () => {
               <StatCard label="Avg. Disposal Time" value={`${avgDisposalTime} Days`} colorClass="purple" />
             </div>
 
-            <div className="bg-slate-800 rounded-lg p-5 border border-slate-700">
-              <h2 className="text-lg font-bold text-slate-100 mb-4">Police Station Breakdown & Ageing</h2>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm text-left">
-                  <thead className="text-xs text-slate-400 uppercase bg-slate-900/50">
-                    <tr>
-                      <th className="px-4 py-3 font-medium">Police Station</th>
-                      <th className="px-4 py-3 font-medium text-center">Total</th>
-                      <th className="px-4 py-3 font-medium text-center">Disposed</th>
-                      <th className="px-4 py-3 font-medium text-center border-l border-slate-700">&lt; 7 Days</th>
-                      <th className="px-4 py-3 font-medium text-center">7 - 15 Days</th>
-                      <th className="px-4 py-3 font-medium text-center">15 - 30 Days</th>
-                      <th className="px-4 py-3 font-medium text-center text-red-400">&gt; 30 Days</th>
-                      <th className="px-4 py-3 font-medium text-center border-l border-slate-700">Avg Disposal</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {policeStations.sort((a: any, b: any) => b.o30 - a.o30 || b.pending - a.pending).map((row: any, i: number) => (
-                      <tr key={i} className="border-b border-slate-700 hover:bg-slate-700/50 transition-colors">
-                        <td className="px-4 py-3 font-medium text-slate-200">{row.ps}</td>
-                        <td className="px-4 py-3 text-center text-blue-400">{row.total}</td>
-                        <td className="px-4 py-3 text-center text-green-400">{row.disposed}</td>
-                        
-                        {/* Pending Breakdowns */}
-                        <td className="px-4 py-3 text-center text-slate-300 border-l border-slate-700/50">{row.u7}</td>
-                        <td className="px-4 py-3 text-center text-yellow-500">{row.u15}</td>
-                        <td className="px-4 py-3 text-center text-orange-400 font-medium">{row.u30}</td>
-                        <td className="px-4 py-3 text-center text-red-500 font-bold bg-red-500/10">{row.o30}</td>
-                        
-                        {/* Avg Disposal */}
-                        <td className="px-4 py-3 text-center text-purple-400 border-l border-slate-700/50">{row.avgDisposalDays}d</td>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <div className="lg:col-span-2 bg-slate-800 rounded-lg p-5 border border-slate-700">
+                <h2 className="text-lg font-bold text-slate-100 mb-4">Police Station Breakdown & Ageing</h2>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm text-left">
+                    <thead className="text-xs text-slate-400 uppercase bg-slate-900/50">
+                      <tr>
+                        <th className="px-4 py-3 font-medium">Police Station</th>
+                        <th className="px-4 py-3 font-medium text-center">Total</th>
+                        <th className="px-4 py-3 font-medium text-center">Disposed</th>
+                        <th className="px-4 py-3 font-medium text-center border-l border-slate-700">&lt; 7 Days</th>
+                        <th className="px-4 py-3 font-medium text-center">7 - 15 Days</th>
+                        <th className="px-4 py-3 font-medium text-center">15 - 30 Days</th>
+                        <th className="px-4 py-3 font-medium text-center text-red-400">&gt; 30 Days</th>
+                        <th className="px-4 py-3 font-medium text-center border-l border-slate-700">Avg Disposal</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {policeStations.sort((a: any, b: any) => b.o30 - a.o30 || b.pending - a.pending).map((row: any, i: number) => (
+                        <tr key={i} className="border-b border-slate-700 hover:bg-slate-700/50 transition-colors">
+                          <td className="px-4 py-3 font-medium text-slate-200">{row.ps}</td>
+                          <td className="px-4 py-3 text-center text-blue-400">{row.total}</td>
+                          <td className="px-4 py-3 text-center text-green-400">{row.disposed}</td>
+                          
+                          <td className="px-4 py-3 text-center text-slate-300 border-l border-slate-700/50">{row.u7}</td>
+                          <td className="px-4 py-3 text-center text-yellow-500">{row.u15}</td>
+                          <td className="px-4 py-3 text-center text-orange-400 font-medium">{row.u30}</td>
+                          <td className="px-4 py-3 text-center text-red-500 font-bold bg-red-500/10">{row.o30}</td>
+                          
+                          <td className="px-4 py-3 text-center text-purple-400 border-l border-slate-700/50">{row.avgDisposalDays}d</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div className="lg:col-span-1">
+                <ChartCard
+                  title="Complaints by Category"
+                  option={getStackedBarOptions(categories.slice(0, 10))}
+                  height="450px"
+                />
               </div>
             </div>
           </>
