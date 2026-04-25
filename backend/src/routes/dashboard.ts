@@ -272,4 +272,67 @@ export const dashboardRoutes = async (fastify: FastifyInstance) => {
 
     return sendSuccess(reply, data);
   });
+
+  fastify.get<{ Params: { district: string } }>('/dashboard/district-analysis/:district', {
+    preHandler: [authenticate],
+  }, async (request, reply) => {
+    const { district } = request.params;
+
+    const complaints = await prisma.complaint.findMany({
+      where: {
+        addressDistrict: district
+      },
+      select: { addressPs: true, statusOfComplaint: true, complRegDt: true, disposalDate: true }
+    });
+
+    const now = new Date().getTime();
+    const psMap = new Map<string, { total: number; pending: number; disposed: number; u7: number; u15: number; u30: number; o30: number; avgDisposalDays: number; totalDisposalDays: number }>();
+
+    for (const comp of complaints) {
+      const ps = comp.addressPs || 'Unknown PS';
+      if (!psMap.has(ps)) {
+        psMap.set(ps, { total: 0, pending: 0, disposed: 0, u7: 0, u15: 0, u30: 0, o30: 0, avgDisposalDays: 0, totalDisposalDays: 0 });
+      }
+      
+      const stats = psMap.get(ps)!;
+      stats.total++;
+      
+      const status = (comp.statusOfComplaint || '').toLowerCase();
+      const isDisposed = status.includes('disposed');
+      const isPending = status === '' || status.includes('pending');
+
+      if (isDisposed) {
+        stats.disposed++;
+        if (comp.complRegDt && comp.disposalDate) {
+          stats.totalDisposalDays += (comp.disposalDate.getTime() - comp.complRegDt.getTime()) / (1000 * 60 * 60 * 24);
+        }
+      } else if (isPending) {
+        stats.pending++;
+        if (comp.complRegDt) {
+          const daysPending = (now - comp.complRegDt.getTime()) / (1000 * 60 * 60 * 24);
+          if (daysPending < 7) stats.u7++;
+          else if (daysPending < 15) stats.u15++;
+          else if (daysPending < 30) stats.u30++;
+          else stats.o30++;
+        }
+      }
+    }
+
+    const data = Array.from(psMap.entries()).map(([ps, stats]) => ({
+      ps,
+      total: stats.total,
+      pending: stats.pending,
+      disposed: stats.disposed,
+      u7: stats.u7,
+      u15: stats.u15,
+      u30: stats.u30,
+      o30: stats.o30,
+      avgDisposalDays: stats.disposed > 0 ? Math.round(stats.totalDisposalDays / stats.disposed) : 0
+    }));
+
+    return sendSuccess(reply, {
+      district,
+      policeStations: data
+    });
+  });
 };

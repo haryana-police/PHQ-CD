@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import { Layout } from '@/components/layout/Layout';
 import { ChartCard } from '@/components/charts/ChartCard';
 import { getDistrictBarOptions, getDurationLineOptions } from '@/components/charts/Charts';
@@ -12,6 +13,8 @@ const StatCard = ({ label, value, subValue, colorClass }: { label: string; value
 );
 
 export const DashboardPage = () => {
+  const navigate = useNavigate();
+
   const { data: summaryData, isLoading: sl } = useQuery({
     queryKey: ['dashboard', 'summary'],
     queryFn: async () => {
@@ -101,7 +104,12 @@ export const DashboardPage = () => {
                 </thead>
                 <tbody>
                   {matrix.sort((a: any, b: any) => b.o30 - a.o30).map((row: any, i: number) => (
-                    <tr key={i} className="border-b border-slate-700 hover:bg-slate-700/50 transition-colors">
+                    <tr 
+                      key={i} 
+                      onClick={() => navigate(`/admin/district/${encodeURIComponent(row.district)}`)}
+                      className="border-b border-slate-700 hover:bg-slate-700/50 transition-colors cursor-pointer"
+                      title={`View Police Station analysis for ${row.district}`}
+                    >
                       <td className="px-4 py-3 font-medium text-slate-200">{row.district}</td>
                       <td className="px-4 py-3 text-center text-slate-300">{row.u7}</td>
                       <td className="px-4 py-3 text-center text-yellow-500">{row.u15}</td>

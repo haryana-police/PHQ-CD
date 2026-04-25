@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import LoginPage from './pages/auth/Login';
 import DashboardPage from './pages/admin/Dashboard';
+import DistrictDetail from './pages/admin/DistrictDetail';
 import HighlightsPage from './pages/admin/Highlights';
 import ReportsPage from './pages/admin/Reports';
 import PendingPage from './pages/admin/Pending';
@@ -40,6 +41,14 @@ const App = () => {
             element={
               <ProtectedRoute>
                 <DashboardPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/district/:district"
+            element={
+              <ProtectedRoute>
+                <DistrictDetail />
               </ProtectedRoute>
             }
           />
