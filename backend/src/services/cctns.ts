@@ -62,13 +62,16 @@ export async function getCctnsToken(): Promise<string> {
     tokenStr = xmlMatch[1].trim();
   } else {
     try {
-      const data = JSON.parse(rawText) as Record<string, unknown>;
-      const token = (
-        data.token || data.Token || data.TokenValue || data.tokenValue ||
-        data.AccessToken || data.access_token || data.Result || data.result ||
-        data.Data || data.data || data.value || data.Value
-      ) as string | undefined;
-      if (token) tokenStr = typeof token === 'string' ? token : JSON.stringify(token);
+      const data = JSON.parse(rawText);
+      if (typeof data === 'string') {
+        tokenStr = data;
+      } else if (data && typeof data === 'object') {
+        const token = (
+          (data as any).token || (data as any).Token || (data as any).TokenValue ||
+          (data as any).AccessToken || (data as any).Result || (data as any).Data
+        );
+        if (token) tokenStr = typeof token === 'string' ? token : JSON.stringify(token);
+      }
     } catch {
       const plain = rawText.trim().replace(/^"|"$/g, '');
       if (plain && !plain.includes('<') && plain.length > 10) tokenStr = plain;

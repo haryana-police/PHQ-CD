@@ -11,6 +11,19 @@ export const cctnsRoutes = async (fastify: FastifyInstance) => {
     return sendSuccess(reply, records);
   });
 
+  fastify.get('/cctns/district', {
+    preHandler: [authenticate],
+  }, async (request, reply) => {
+    const records = await prisma.cCTNSComplaint.findMany();
+    const districtMap = new Map();
+    for (const record of records) {
+      const name = record.compCategory || 'Unknown';
+      districtMap.set(name, (districtMap.get(name) || 0) + 1);
+    }
+    const data = Array.from(districtMap.entries()).map(([district, count]) => ({ district, count }));
+    return sendSuccess(reply, data);
+  });
+
   fastify.get('/cctns/:id', {
     preHandler: [authenticate],
   }, async (request, reply) => {
@@ -46,18 +59,5 @@ export const cctnsRoutes = async (fastify: FastifyInstance) => {
     const { id } = request.params as Record<string, string>;
     await prisma.cCTNSComplaint.delete({ where: { id: parseInt(id) } });
     return sendSuccess(reply, null, 'Record deleted');
-  });
-
-  fastify.get('/cctns/district', {
-    preHandler: [authenticate],
-  }, async (request, reply) => {
-    const records = await prisma.cCTNSComplaint.findMany();
-    const districtMap = new Map();
-    for (const record of records) {
-      const name = record.compCategory || 'Unknown';
-      districtMap.set(name, (districtMap.get(name) || 0) + 1);
-    }
-    const data = Array.from(districtMap.entries()).map(([district, count]) => ({ district, count }));
-    return sendSuccess(reply, data);
   });
 };

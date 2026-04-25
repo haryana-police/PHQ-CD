@@ -32,8 +32,8 @@ async function main() {
   await fastify.register(pendingRoutes, { prefix: '/api' });
   await fastify.register(referenceRoutes, { prefix: '/api' });
   await fastify.register(womenSafetyRoutes, { prefix: '/api' });
-  await fastify.register(cctnsRoutes, { prefix: '/api' });
   await fastify.register(cctnsSyncRoutes, { prefix: '/api' });
+  await fastify.register(cctnsRoutes, { prefix: '/api' });
   await fastify.register(importExportRoutes, { prefix: '/api' });
   await fastify.register(governmentRoutes, { prefix: '/api' });
 
