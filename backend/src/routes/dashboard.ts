@@ -68,16 +68,17 @@ export const dashboardRoutes = async (fastify: FastifyInstance) => {
       `);
 
       return sendSuccess(reply, {
-        totalReceived:        Number(counts.totalReceived  || 0),
-        totalDisposed:        Number(counts.totalDisposed  || 0),
-        totalPending:         Number(counts.totalPending   || 0),
-        pendingOverFifteenDays: Number(counts.pending15    || 0),
-        pendingOverOneMonth:  Number(counts.pendingOver1   || 0),
-        pendingOverTwoMonths: Number(counts.pendingOver2   || 0),
+        totalReceived:          Number(counts.totalreceived  || 0),
+        totalDisposed:          Number(counts.totaldisposed  || 0),
+        totalPending:           Number(counts.totalpending   || 0),
+        pendingOverFifteenDays: Number(counts.pending15      || 0),
+        pendingOverOneMonth:    Number(counts.pendingover1   || 0),
+        pendingOverTwoMonths:   Number(counts.pendingover2   || 0),
       });
     } catch (error) {
-      console.error('[dashboard/summary] error:', error);
-      return sendError(reply, 'Failed to load dashboard summary');
+      const msg = error instanceof Error ? error.message : String(error);
+      console.error('[dashboard/summary] error:', msg);
+      return sendError(reply, `Failed to load dashboard summary: ${msg}`);
     }
   });
 
@@ -129,19 +130,20 @@ export const dashboardRoutes = async (fastify: FastifyInstance) => {
         )
       ]);
 
-      const prevMap = new Map(prevData.map(d => [d.district, Number(d.TotalComplaints)]));
+      const prevMap = new Map(prevData.map((d: any) => [d.district, Number(d.totalcomplaints)]));
 
-      return sendSuccess(reply, data.map(d => ({
+      return sendSuccess(reply, data.map((d: any) => ({
         district: d.district,
         year: yearNum,
-        totalComplaints: Number(d.TotalComplaints),
-        pending: Number(d.Pending),
-        disposed: Number(d.Disposed),
+        totalComplaints: Number(d.totalcomplaints),
+        pending: Number(d.pending),
+        disposed: Number(d.disposed),
         prevYearTotal: prevMap.get(d.district) || 0,
       })));
     } catch (error) {
-      console.error('[dashboard/district-wise] error:', error);
-      return sendError(reply, 'Failed to load district-wise data');
+      const msg = error instanceof Error ? error.message : String(error);
+      console.error('[dashboard/district-wise] error:', msg);
+      return sendError(reply, `Failed to load district-wise data: ${msg}`);
     }
   });
 
@@ -175,16 +177,17 @@ export const dashboardRoutes = async (fastify: FastifyInstance) => {
         ORDER BY TotalComplaints DESC`
       );
 
-      return sendSuccess(reply, data.map(d => ({
+      return sendSuccess(reply, data.map((d: any) => ({
         district: d.district,
         year: yearNum,
-        totalComplaints: Number(d.TotalComplaints),
-        pending: Number(d.Pending),
-        disposed: Number(d.Disposed),
+        totalComplaints: Number(d.totalcomplaints),
+        pending: Number(d.pending),
+        disposed: Number(d.disposed),
       })));
     } catch (error) {
-      console.error('[dashboard/duration-wise] error:', error);
-      return sendError(reply, 'Failed to load duration-wise data');
+      const msg = error instanceof Error ? error.message : String(error);
+      console.error('[dashboard/duration-wise] error:', msg);
+      return sendError(reply, `Failed to load duration-wise data: ${msg}`);
     }
   });
 
@@ -279,8 +282,9 @@ export const dashboardRoutes = async (fastify: FastifyInstance) => {
         )
       ]);
 
-      const currMap = new Map(data.map(d => [Number(d.monthNum), d]));
-      const prevMap = new Map(prevData.map(d => [Number(d.monthNum), Number(d.total)]));
+      // PostgreSQL returns lowercase aliases — use lowercase keys
+      const currMap = new Map(data.map((d: any) => [Number(d.monthnum), d]));
+      const prevMap = new Map(prevData.map((d: any) => [Number(d.monthnum), Number(d.total)]));
 
       const ALL_MONTHS = [
         'January', 'February', 'March', 'April', 'May', 'June',
@@ -303,8 +307,9 @@ export const dashboardRoutes = async (fastify: FastifyInstance) => {
 
       return sendSuccess(reply, fullYearData);
     } catch (error) {
-      console.error('[dashboard/month-wise] error:', error);
-      return sendError(reply, 'Failed to load month-wise data');
+      const msg = error instanceof Error ? error.message : String(error);
+      console.error('[dashboard/month-wise] error:', msg);
+      return sendError(reply, `Failed to load month-wise data: ${msg}`);
     }
   });
 };

@@ -9,7 +9,7 @@ const tabs = [
   { id: '15-30', label: '15-30 Days' },
   { id: '30-60', label: '30-60 Days' },
   { id: 'over-60', label: 'Over 60 Days' },
-  { id: 'branch', label: 'By Branch' },
+  { id: 'branch', label: 'By District' },
 ];
 
 const ep: Record<string, string> = {
@@ -133,7 +133,7 @@ export const PendingPage = () => {
             <>
               <div style={{ width: '1px', height: '20px', background: 'rgba(255,255,255,0.08)', margin: '0 4px' }} />
               <StyledSelect value={branch} onChange={setBranch}>
-                <option value="">Select Branch…</option>
+                <option value="">Select District…</option>
                 {branches.map(b => <option key={b} value={b}>{b}</option>)}
               </StyledSelect>
             </>

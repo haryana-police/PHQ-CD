@@ -83,7 +83,7 @@ export const pendingRoutes = async (fastify: FastifyInstance) => {
     const { branch } = request.params as { branch: string };
 
     const complaints = await prisma.complaint.findMany({
-      where: { branch, OR: PENDING_WHERE },
+      where: { addressDistrict: branch, OR: PENDING_WHERE },
       orderBy: { complRegDt: 'asc' },
     });
     return sendSuccess(reply, complaints);
@@ -99,7 +99,7 @@ export const pendingRoutes = async (fastify: FastifyInstance) => {
 
     const complaints = await prisma.complaint.findMany({
       where: {
-        branch,
+        addressDistrict: branch,
         complRegDt: { lte: fifteenDaysAgo, gt: thirtyDaysAgo },
         OR: PENDING_WHERE,
       },
@@ -118,7 +118,7 @@ export const pendingRoutes = async (fastify: FastifyInstance) => {
 
     const complaints = await prisma.complaint.findMany({
       where: {
-        branch,
+        addressDistrict: branch,
         complRegDt: { lte: thirtyDaysAgo, gt: sixtyDaysAgo },
         OR: PENDING_WHERE,
       },
@@ -135,7 +135,7 @@ export const pendingRoutes = async (fastify: FastifyInstance) => {
 
     const complaints = await prisma.complaint.findMany({
       where: {
-        branch,
+        addressDistrict: branch,
         complRegDt: { lte: sixtyDaysAgo },
         OR: PENDING_WHERE,
       },
@@ -147,12 +147,15 @@ export const pendingRoutes = async (fastify: FastifyInstance) => {
   fastify.get('/pending/branches', {
     preHandler: [authenticate],
   }, async (request, reply) => {
+    // 'branch' field is populated by the old CMS system, not by CCTNS sync.
+    // Use addressDistrict as the grouping dimension instead — it has data.
     const complaints = await prisma.complaint.findMany({
-      where: { branch: { not: '' } },
-      select: { branch: true },
-      distinct: ['branch'],
+      where: { addressDistrict: { not: null } },
+      select: { addressDistrict: true },
+      distinct: ['addressDistrict'],
+      orderBy: { addressDistrict: 'asc' },
     });
-    const branches = complaints.map(c => c.branch).filter(Boolean);
+    const branches = complaints.map(c => c.addressDistrict).filter(Boolean);
     return sendSuccess(reply, branches);
   });
 };

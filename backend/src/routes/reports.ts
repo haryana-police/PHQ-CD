@@ -148,7 +148,7 @@ export const reportRoutes = async (fastify: FastifyInstance) => {
         GROUP BY "classOfIncident" ORDER BY total DESC
       `);
 
-      return sendSuccess(reply, { year: yearNum, rows: data.map((r: any) => ({ natureOfIncident: r.natureOfIncident, total: Number(r.total), pending: Number(r.pending), disposed: Number(r.disposed) })) });
+      return sendSuccess(reply, { year: yearNum, rows: data.map((r: any) => ({ natureOfIncident: r.natureofincident, total: Number(r.total), pending: Number(r.pending), disposed: Number(r.disposed) })) });
     } catch (e) { return sendError(reply, 'Failed to load nature-of-incident report'); }
   });
 
@@ -168,7 +168,7 @@ export const reportRoutes = async (fastify: FastifyInstance) => {
           SUM(CASE WHEN "statusOfComplaint" ILIKE 'Disposed%' THEN 1 ELSE 0 END) AS disposed
         FROM "Complaint" ${whereClause} GROUP BY respondentCategories ORDER BY total DESC
       `);
-      return sendSuccess(reply, { year: yearNum, rows: data.map((r: any) => ({ typeAgainst: r.typeAgainst, total: Number(r.total), pending: Number(r.pending), disposed: Number(r.disposed) })) });
+      return sendSuccess(reply, { year: yearNum, rows: data.map((r: any) => ({ typeAgainst: r.typeagainst, total: Number(r.total), pending: Number(r.pending), disposed: Number(r.disposed) })) });
     } catch (e) { return sendError(reply, 'Failed to load type-against report'); }
   });
 
@@ -206,7 +206,7 @@ export const reportRoutes = async (fastify: FastifyInstance) => {
           SUM(CASE WHEN "statusOfComplaint" ILIKE 'Disposed%' THEN 1 ELSE 0 END) AS disposed
         FROM "Complaint" ${whereClause} GROUP BY complaintSource ORDER BY total DESC
       `);
-      return sendSuccess(reply, { year: yearNum, rows: data.map((r: any) => ({ complaintSource: r.complaintSource, total: Number(r.total), pending: Number(r.pending), disposed: Number(r.disposed) })) });
+      return sendSuccess(reply, { year: yearNum, rows: data.map((r: any) => ({ complaintSource: r.complaintsource, total: Number(r.total), pending: Number(r.pending), disposed: Number(r.disposed) })) });
     } catch (e) { return sendError(reply, 'Failed to load complaint-source report'); }
   });
 
@@ -226,7 +226,7 @@ export const reportRoutes = async (fastify: FastifyInstance) => {
           SUM(CASE WHEN "statusOfComplaint" ILIKE 'Disposed%' THEN 1 ELSE 0 END) AS disposed
         FROM "Complaint" ${whereClause} GROUP BY "typeOfComplaint" ORDER BY total DESC
       `);
-      return sendSuccess(reply, { year: yearNum, rows: data.map((r: any) => ({ "typeOfComplaint": r.typeOfComplaint, total: Number(r.total), pending: Number(r.pending), disposed: Number(r.disposed) })) });
+      return sendSuccess(reply, { year: yearNum, rows: data.map((r: any) => ({ typeOfComplaint: r.typeofcomplaint, total: Number(r.total), pending: Number(r.pending), disposed: Number(r.disposed) })) });
     } catch (e) { return sendError(reply, 'Failed to load type-of-complaint report'); }
   });
 
@@ -308,7 +308,7 @@ export const reportRoutes = async (fastify: FastifyInstance) => {
           SUM(CASE WHEN "statusOfComplaint" ILIKE 'Disposed%' THEN 1 ELSE 0 END) AS disposed
         FROM "Complaint" ${whereClause} GROUP BY actionTaken ORDER BY total DESC LIMIT 30
       `);
-      return sendSuccess(reply, { year: yearNum, rows: data.map((r: any) => ({ actionTaken: r.actionTaken, total: Number(r.total), pending: Number(r.pending), disposed: Number(r.disposed) })) });
+      return sendSuccess(reply, { year: yearNum, rows: data.map((r: any) => ({ actionTaken: r.actiontaken, total: Number(r.total), pending: Number(r.pending), disposed: Number(r.disposed) })) });
     } catch (e) { return sendError(reply, 'Failed to load action-taken report'); }
   });
 };
