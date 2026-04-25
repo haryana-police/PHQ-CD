@@ -15,7 +15,7 @@ const HARYANA_DISTRICTS = [
   'YAMUNA NAGAR','MEWAT','GURGAON',
 ];
 const HARYANA_IN = HARYANA_DISTRICTS.map(d => `'${d}'`).join(', ');
-const HARYANA_FILTER = `UPPER(LTRIM(RTRIM(ISNULL("addressDistrict",'')))) IN (${HARYANA_IN})`;
+const HARYANA_FILTER = `UPPER(LTRIM(RTRIM(COALESCE("addressDistrict",'')))) IN (${HARYANA_IN})`;
 
 export const dashboardRoutes = async (fastify: FastifyInstance) => {
 
@@ -106,26 +106,26 @@ export const dashboardRoutes = async (fastify: FastifyInstance) => {
           Pending: number;
           Disposed: number;
         }>>(
-          `SELECT TOP 22
-            UPPER(LTRIM(RTRIM(ISNULL("addressDistrict", 'UNKNOWN')))) AS district,
+          `SELECT
+            UPPER(LTRIM(RTRIM(COALESCE("addressDistrict", 'UNKNOWN')))) AS district,
             COUNT(*) AS TotalComplaints,
             SUM(CASE WHEN "statusOfComplaint" ILIKE 'Pending%' OR "statusOfComplaint" IS NULL OR "statusOfComplaint" = '' THEN 1 ELSE 0 END) AS Pending,
             SUM(CASE WHEN "statusOfComplaint" ILIKE 'Disposed%' THEN 1 ELSE 0 END) AS Disposed
           FROM "Complaint"
           WHERE "complRegDt" >= '${yearStart}' AND "complRegDt" < '${yearEnd}'
             AND ${HARYANA_FILTER}
-          GROUP BY UPPER(LTRIM(RTRIM(ISNULL("addressDistrict", 'UNKNOWN'))))
-          ORDER BY TotalComplaints DESC`
+          GROUP BY UPPER(LTRIM(RTRIM(COALESCE("addressDistrict", 'UNKNOWN'))))
+          ORDER BY TotalComplaints DESC LIMIT 22`
         ),
         prisma.$queryRawUnsafe<Array<{
           district: string;
           TotalComplaints: number;
         }>>(
-          `SELECT UPPER(LTRIM(RTRIM(ISNULL("addressDistrict", 'UNKNOWN')))) AS district, COUNT(*) AS TotalComplaints
+          `SELECT UPPER(LTRIM(RTRIM(COALESCE("addressDistrict", 'UNKNOWN')))) AS district, COUNT(*) AS TotalComplaints
           FROM "Complaint"
           WHERE "complRegDt" >= '${prevYearStart}' AND "complRegDt" < '${prevYearEnd}'
             AND ${HARYANA_FILTER}
-          GROUP BY UPPER(LTRIM(RTRIM(ISNULL("addressDistrict", 'UNKNOWN'))))`
+          GROUP BY UPPER(LTRIM(RTRIM(COALESCE("addressDistrict", 'UNKNOWN'))))`
         )
       ]);
 
@@ -165,7 +165,7 @@ export const dashboardRoutes = async (fastify: FastifyInstance) => {
         Disposed: number;
       }>>(
         `SELECT
-          ISNULL("addressDistrict", 'Unknown') AS district,
+          COALESCE("addressDistrict", 'Unknown') AS district,
           COUNT(*) AS TotalComplaints,
           SUM(CASE WHEN "statusOfComplaint" ILIKE 'Pending%' OR "statusOfComplaint" IS NULL OR "statusOfComplaint" = '' THEN 1 ELSE 0 END) AS Pending,
           SUM(CASE WHEN "statusOfComplaint" ILIKE 'Disposed%' THEN 1 ELSE 0 END) AS Disposed
@@ -208,7 +208,7 @@ export const dashboardRoutes = async (fastify: FastifyInstance) => {
         Disposed: number;
       }>>(
         `SELECT
-          ISNULL("addressDistrict", 'Unknown') AS district,
+          COALESCE("addressDistrict", 'Unknown') AS district,
           COUNT(*) AS TotalComplaints,
           SUM(CASE WHEN "statusOfComplaint" ILIKE 'Pending%' OR "statusOfComplaint" IS NULL OR "statusOfComplaint" = '' THEN 1 ELSE 0 END) AS Pending,
           SUM(CASE WHEN "statusOfComplaint" ILIKE 'Disposed%' THEN 1 ELSE 0 END) AS Disposed
@@ -256,26 +256,26 @@ export const dashboardRoutes = async (fastify: FastifyInstance) => {
           disposed: number;
         }>>(
           `SELECT
-            DATEPART(MONTH, "complRegDt") AS monthNum,
-            DATENAME(MONTH, "complRegDt") AS monthName,
+            EXTRACT(MONTH FROM "complRegDt") AS monthNum,
+            TO_CHAR("complRegDt", 'Month') AS monthName,
             COUNT(*) AS total,
             SUM(CASE WHEN "statusOfComplaint" ILIKE 'Pending%' OR "statusOfComplaint" IS NULL OR "statusOfComplaint" = '' THEN 1 ELSE 0 END) AS pending,
             SUM(CASE WHEN "statusOfComplaint" ILIKE 'Disposed%' THEN 1 ELSE 0 END) AS disposed
           FROM "Complaint"
           WHERE "complRegDt" >= '${yearStart}' AND "complRegDt" < '${yearEnd}'
             AND ${HARYANA_FILTER}
-          GROUP BY DATEPART(MONTH, "complRegDt"), DATENAME(MONTH, "complRegDt")
+          GROUP BY EXTRACT(MONTH FROM "complRegDt"), TO_CHAR("complRegDt", 'Month')
           ORDER BY monthNum ASC`
         ),
         prisma.$queryRawUnsafe<Array<{
           monthNum: number;
           total: number;
         }>>(
-          `SELECT DATEPART(MONTH, "complRegDt") AS monthNum, COUNT(*) AS total
+          `SELECT EXTRACT(MONTH FROM "complRegDt") AS monthNum, COUNT(*) AS total
           FROM "Complaint"
           WHERE "complRegDt" >= '${prevYearStart}' AND "complRegDt" < '${prevYearEnd}'
             AND ${HARYANA_FILTER}
-          GROUP BY DATEPART(MONTH, "complRegDt")`
+          GROUP BY EXTRACT(MONTH FROM "complRegDt")`
         )
       ]);
 
