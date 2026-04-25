@@ -7,8 +7,44 @@ export const cctnsRoutes = async (fastify: FastifyInstance) => {
   fastify.get('/cctns', {
     preHandler: [authenticate],
   }, async (request, reply) => {
-    const records = await prisma.cCTNSComplaint.findMany({ orderBy: { firDate: 'desc' } });
-    return sendSuccess(reply, records);
+    try {
+      const { page = '1', limit = '100', search = '' } = request.query as Record<string, string>;
+      
+      const pageNum = parseInt(page);
+      const limitNum = parseInt(limit);
+      const skip = (pageNum - 1) * limitNum;
+
+      const where = search.trim() ? {
+        OR: [
+          { complainantName: { contains: search } },
+          { mobileNo: { contains: search } },
+          { firNo: { contains: search } },
+        ],
+      } : {};
+
+      const [records, total] = await prisma.$transaction([
+        prisma.cCTNSComplaint.findMany({
+          where,
+          skip,
+          take: limitNum,
+          orderBy: { firDate: 'desc' },
+        }),
+        prisma.cCTNSComplaint.count({ where }),
+      ]);
+
+      return sendSuccess(reply, {
+        data: records,
+        pagination: {
+          page: pageNum,
+          limit: limitNum,
+          total,
+          totalPages: Math.ceil(total / limitNum),
+        },
+      });
+    } catch (error) {
+      console.error('[cctns list] error:', error);
+      return sendSuccess(reply, { data: [], pagination: { page: 1, limit: 100, total: 0, totalPages: 1 } });
+    }
   });
 
   fastify.get('/cctns/:id', {

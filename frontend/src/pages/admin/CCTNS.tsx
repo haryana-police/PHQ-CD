@@ -3,6 +3,7 @@ import { useRef, useState } from 'react';
 import { Layout } from '@/components/layout/Layout';
 import { Button } from '@/components/common/Button';
 import { DataTable, Column } from '@/components/data/DataTable';
+import { Select } from '@/components/common/Select';
 
 export const CCTNSPage = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -13,11 +14,15 @@ export const CCTNSPage = () => {
 
   const [timeFrom, setTimeFrom] = useState(firstDay);
   const [timeTo, setTimeTo] = useState(today);
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(100);
+  const search = '';
 
   const { data, isLoading } = useQuery({
-    queryKey: ['cctns'],
+    queryKey: ['cctns', page, limit, search],
     queryFn: async () => {
-      const r = await fetch('/api/cctns', { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
+      const params = new URLSearchParams({ page: String(page), limit: String(limit), search });
+      const r = await fetch(`/api/cctns?${params}`, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
       return r.json();
     },
   });
@@ -64,9 +69,10 @@ export const CCTNSPage = () => {
     },
   });
 
-  const records = (data?.data || []) as Record<string, unknown>[];
+  const records = data?.data?.data || [];
+  const pagination = data?.data?.pagination;
 
-  const tableData = records.map(r => ({
+  const tableData = records.map((r: any) => ({
     regNum: r.complRegNum || '-',
     psr: r.psrNumber || '-',
     fir: r.firNumber || '-',
@@ -154,18 +160,43 @@ export const CCTNSPage = () => {
         ) : tableData.length === 0 ? (
           <div className="empty-state"><p>No records found. Try syncing complaints first.</p></div>
         ) : (
-          <DataTable
-            title="CCTNS Synchronization Logs"
-            data={tableData}
-            columns={cols.map(c => ({
-              ...c,
-              render: (row) => {
-                if (c.key === 'regNum') return <span style={{ fontWeight: 500 }}>{String(row.regNum)}</span>;
-                return String(row[c.key as keyof typeof row] ?? '-');
-              },
-            }))}
-            maxHeight="calc(100vh - 220px)"
-          />
+          <>
+            <DataTable
+              title="CCTNS Synchronization Logs"
+              data={tableData}
+              columns={cols.map(c => ({
+                ...c,
+                render: (row) => {
+                  if (c.key === 'regNum') return <span style={{ fontWeight: 500 }}>{String(row.regNum)}</span>;
+                  return String(row[c.key as keyof typeof row] ?? '-');
+                },
+              }))}
+              maxHeight="calc(100vh - 220px)"
+            />
+            {pagination && (
+              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '16px', padding: '10px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Button variant="secondary" size="sm" onClick={() => setPage((p: number) => Math.max(1, p - 1))} disabled={page === 1}>Prev</Button>
+                  <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>Page {pagination.page} of {pagination.totalPages || 1}</span>
+                  <Button variant="secondary" size="sm" onClick={() => setPage((p: number) => p + 1)} disabled={page >= pagination.totalPages}>Next</Button>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>Per page:</span>
+                  <Select
+                    value={limit}
+                    onChange={(v) => { setLimit(Number(v)); setPage(1); }}
+                    options={[
+                      { value: 50, label: '50' },
+                      { value: 100, label: '100' },
+                      { value: 200, label: '200' },
+                      { value: 500, label: '500' },
+                    ]}
+                    width="80px"
+                  />
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
     </Layout>
