@@ -48,7 +48,7 @@ const YearSelect = ({ value, onChange }: { value: number; onChange: (y: number) 
 
 export const DashboardPage = () => {
   const [year, setYear] = useState(DEFAULT_YEAR);
-  const { data: sumData, isLoading: sl } = useDashboardSummary();
+  const { data: sumData, isLoading: sl } = useDashboardSummary(year);
   const { data: distData, isLoading: dl } = useDistrictChart(year);
   const { data: monthData, isLoading: ml } = useMonthWiseData(year);
 
@@ -117,7 +117,7 @@ export const DashboardPage = () => {
           />
           <ChartCard
             title={`Monthly Trend · ${year}`}
-            option={getDurationLineOptions(months)}
+            option={getDurationLineOptions(months, year)}
             isLoading={ml}
             height="320px"
           />

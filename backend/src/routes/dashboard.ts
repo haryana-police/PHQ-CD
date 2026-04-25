@@ -34,6 +34,9 @@ export const dashboardRoutes = async (fastify: FastifyInstance) => {
       const f60 = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000).toISOString();
       const nowIso = now.toISOString();
 
+      const { year } = request.query as any;
+      const yearFilter = year ? `AND YEAR(complRegDt) = ${Number(year)}` : '';
+
       const [counts] = await prisma.$queryRawUnsafe<any[]>(`
         SELECT
           COUNT(*) AS totalReceived,
@@ -61,6 +64,7 @@ export const dashboardRoutes = async (fastify: FastifyInstance) => {
             THEN 1 ELSE 0 END) AS pendingOver2
 
         FROM Complaint
+        WHERE ${HARYANA_FILTER} ${yearFilter}
       `);
 
       return sendSuccess(reply, {
@@ -92,23 +96,40 @@ export const dashboardRoutes = async (fastify: FastifyInstance) => {
       const yearStart = `${yearNum}-01-01T00:00:00.000Z`;
       const yearEnd   = `${yearNum + 1}-01-01T00:00:00.000Z`;
 
-      const data = await prisma.$queryRawUnsafe<Array<{
-        district: string;
-        TotalComplaints: number;
-        Pending: number;
-        Disposed: number;
-      }>>(
-        `SELECT TOP 22
-          UPPER(LTRIM(RTRIM(ISNULL(addressDistrict, 'UNKNOWN')))) AS district,
-          COUNT(*) AS TotalComplaints,
-          SUM(CASE WHEN statusOfComplaint LIKE 'Pending%' OR statusOfComplaint IS NULL OR statusOfComplaint = '' THEN 1 ELSE 0 END) AS Pending,
-          SUM(CASE WHEN statusOfComplaint LIKE 'Disposed%' THEN 1 ELSE 0 END) AS Disposed
-        FROM Complaint
-        WHERE complRegDt >= '${yearStart}' AND complRegDt < '${yearEnd}'
-          AND ${HARYANA_FILTER}
-        GROUP BY UPPER(LTRIM(RTRIM(ISNULL(addressDistrict, 'UNKNOWN'))))
-        ORDER BY TotalComplaints DESC`
-      );
+      const prevYearStart = `${yearNum - 1}-01-01T00:00:00.000Z`;
+      const prevYearEnd   = `${yearNum}-01-01T00:00:00.000Z`;
+
+      const [data, prevData] = await Promise.all([
+        prisma.$queryRawUnsafe<Array<{
+          district: string;
+          TotalComplaints: number;
+          Pending: number;
+          Disposed: number;
+        }>>(
+          `SELECT TOP 22
+            UPPER(LTRIM(RTRIM(ISNULL(addressDistrict, 'UNKNOWN')))) AS district,
+            COUNT(*) AS TotalComplaints,
+            SUM(CASE WHEN statusOfComplaint LIKE 'Pending%' OR statusOfComplaint IS NULL OR statusOfComplaint = '' THEN 1 ELSE 0 END) AS Pending,
+            SUM(CASE WHEN statusOfComplaint LIKE 'Disposed%' THEN 1 ELSE 0 END) AS Disposed
+          FROM Complaint
+          WHERE complRegDt >= '${yearStart}' AND complRegDt < '${yearEnd}'
+            AND ${HARYANA_FILTER}
+          GROUP BY UPPER(LTRIM(RTRIM(ISNULL(addressDistrict, 'UNKNOWN'))))
+          ORDER BY TotalComplaints DESC`
+        ),
+        prisma.$queryRawUnsafe<Array<{
+          district: string;
+          TotalComplaints: number;
+        }>>(
+          `SELECT UPPER(LTRIM(RTRIM(ISNULL(addressDistrict, 'UNKNOWN')))) AS district, COUNT(*) AS TotalComplaints
+          FROM Complaint
+          WHERE complRegDt >= '${prevYearStart}' AND complRegDt < '${prevYearEnd}'
+            AND ${HARYANA_FILTER}
+          GROUP BY UPPER(LTRIM(RTRIM(ISNULL(addressDistrict, 'UNKNOWN'))))`
+        )
+      ]);
+
+      const prevMap = new Map(prevData.map(d => [d.district, Number(d.TotalComplaints)]));
 
       return sendSuccess(reply, data.map(d => ({
         district: d.district,
@@ -116,6 +137,7 @@ export const dashboardRoutes = async (fastify: FastifyInstance) => {
         totalComplaints: Number(d.TotalComplaints),
         pending: Number(d.Pending),
         disposed: Number(d.Disposed),
+        prevYearTotal: prevMap.get(d.district) || 0,
       })));
     } catch (error) {
       console.error('[dashboard/district-wise] error:', error);
@@ -222,33 +244,64 @@ export const dashboardRoutes = async (fastify: FastifyInstance) => {
       const yearStart = `${yearNum}-01-01T00:00:00.000Z`;
       const yearEnd   = `${yearNum + 1}-01-01T00:00:00.000Z`;
 
-      const data = await prisma.$queryRawUnsafe<Array<{
-        monthNum: number;
-        monthName: string;
-        total: number;
-        pending: number;
-        disposed: number;
-      }>>(
-        `SELECT
-          DATEPART(MONTH, complRegDt) AS monthNum,
-          DATENAME(MONTH, complRegDt) AS monthName,
-          COUNT(*) AS total,
-          SUM(CASE WHEN statusOfComplaint LIKE 'Pending%' OR statusOfComplaint IS NULL OR statusOfComplaint = '' THEN 1 ELSE 0 END) AS pending,
-          SUM(CASE WHEN statusOfComplaint LIKE 'Disposed%' THEN 1 ELSE 0 END) AS disposed
-        FROM Complaint
-        WHERE complRegDt >= '${yearStart}' AND complRegDt < '${yearEnd}'
-        GROUP BY DATEPART(MONTH, complRegDt), DATENAME(MONTH, complRegDt)
-        ORDER BY monthNum ASC`
-      );
+      const prevYearStart = `${yearNum - 1}-01-01T00:00:00.000Z`;
+      const prevYearEnd   = `${yearNum}-01-01T00:00:00.000Z`;
 
-      return sendSuccess(reply, data.map(d => ({
-        month:    d.monthName,
-        monthNum: Number(d.monthNum),
-        year:     yearNum,
-        total:    Number(d.total),
-        pending:  Number(d.pending),
-        disposed: Number(d.disposed),
-      })));
+      const [data, prevData] = await Promise.all([
+        prisma.$queryRawUnsafe<Array<{
+          monthNum: number;
+          monthName: string;
+          total: number;
+          pending: number;
+          disposed: number;
+        }>>(
+          `SELECT
+            DATEPART(MONTH, complRegDt) AS monthNum,
+            DATENAME(MONTH, complRegDt) AS monthName,
+            COUNT(*) AS total,
+            SUM(CASE WHEN statusOfComplaint LIKE 'Pending%' OR statusOfComplaint IS NULL OR statusOfComplaint = '' THEN 1 ELSE 0 END) AS pending,
+            SUM(CASE WHEN statusOfComplaint LIKE 'Disposed%' THEN 1 ELSE 0 END) AS disposed
+          FROM Complaint
+          WHERE complRegDt >= '${yearStart}' AND complRegDt < '${yearEnd}'
+            AND ${HARYANA_FILTER}
+          GROUP BY DATEPART(MONTH, complRegDt), DATENAME(MONTH, complRegDt)
+          ORDER BY monthNum ASC`
+        ),
+        prisma.$queryRawUnsafe<Array<{
+          monthNum: number;
+          total: number;
+        }>>(
+          `SELECT DATEPART(MONTH, complRegDt) AS monthNum, COUNT(*) AS total
+          FROM Complaint
+          WHERE complRegDt >= '${prevYearStart}' AND complRegDt < '${prevYearEnd}'
+            AND ${HARYANA_FILTER}
+          GROUP BY DATEPART(MONTH, complRegDt)`
+        )
+      ]);
+
+      const currMap = new Map(data.map(d => [Number(d.monthNum), d]));
+      const prevMap = new Map(prevData.map(d => [Number(d.monthNum), Number(d.total)]));
+
+      const ALL_MONTHS = [
+        'January', 'February', 'March', 'April', 'May', 'June',
+        'July', 'August', 'September', 'October', 'November', 'December'
+      ];
+
+      const fullYearData = ALL_MONTHS.map((monthName, idx) => {
+        const mNum = idx + 1;
+        const curr = currMap.get(mNum);
+        return {
+          month: monthName,
+          monthNum: mNum,
+          year: yearNum,
+          total: curr ? Number(curr.total) : 0,
+          pending: curr ? Number(curr.pending) : 0,
+          disposed: curr ? Number(curr.disposed) : 0,
+          prevTotal: prevMap.get(mNum) || 0,
+        };
+      });
+
+      return sendSuccess(reply, fullYearData);
     } catch (error) {
       console.error('[dashboard/month-wise] error:', error);
       return sendError(reply, 'Failed to load month-wise data');

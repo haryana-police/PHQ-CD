@@ -80,15 +80,11 @@ export const Layout = ({ children }: LayoutProps) => {
             </svg>
           </button>
           <div style={{
-            width: '34px', height: '34px', borderRadius: '8px',
-            background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
+            width: '38px', height: '38px',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            boxShadow: '0 0 16px rgba(99,102,241,0.4)',
             flexShrink: 0,
           }}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
-              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-            </svg>
+            <img src="/PHQlogo.png" alt="Haryana Police" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
           </div>
           <div>
             <div style={{ fontSize: '13.5px', fontWeight: 700, color: '#f1f5f9', lineHeight: 1.2 }}>

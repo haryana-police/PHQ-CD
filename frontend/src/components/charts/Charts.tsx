@@ -136,16 +136,32 @@ export const getYoYBarOptions = (
 
 // ── 3. Line / Area trend ──────────────────────────────────────────────────────
 export const getDurationLineOptions = (
-  data: { month: string; total: number; pending: number; disposed: number }[]
+  data: { month: string; total: number; pending: number; disposed: number; prevTotal?: number }[],
+  year: number
 ): EChartsOption => ({
-  tooltip: { ...tooltip(), trigger: 'axis' },
-  legend: legend(['Total', 'Pending', 'Disposed']),
+  tooltip: {
+    ...tooltip(),
+    trigger: 'axis',
+    formatter: (params: any) => {
+      let out = `<b>${params[0].axisValue}</b><br/>`;
+      params.forEach((p: any) => {
+        out += `${p.marker} ${p.seriesName}: <b>${p.value.toLocaleString()}</b>`;
+        if (p.seriesName === 'Pending' || p.seriesName === 'Disposed') {
+          const t = params.find((x:any) => x.seriesName === `Total ${year}`)?.value || 1;
+          out += ` (${((p.value / t) * 100).toFixed(1)}%)`;
+        }
+        out += '<br/>';
+      });
+      return out;
+    }
+  },
+  legend: legend([`Total ${year}`, `Total ${year-1}`, 'Pending', 'Disposed']),
   grid: { left: '2%', right: '2%', bottom: '14%', top: '4%', containLabel: true },
   xAxis: { type: 'category', data: data.map(d => d.month), axisLabel: { color: COLORS.text, fontSize: 10 }, axisLine: { lineStyle: { color: 'rgba(255,255,255,0.1)' } }, axisTick: { show: false }, boundaryGap: false },
   yAxis: yAxisVal(),
   series: [
     {
-      name: 'Total',
+      name: `Total ${year}`,
       type: 'line',
       data: data.map(d => d.total),
       smooth: 0.4,
@@ -155,6 +171,15 @@ export const getDurationLineOptions = (
       areaStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: 'rgba(99,102,241,0.25)' }, { offset: 1, color: 'rgba(99,102,241,0)' }] } },
     },
     {
+      name: `Total ${year-1}`,
+      type: 'line',
+      data: data.map(d => d.prevTotal || 0),
+      smooth: 0.4,
+      symbol: 'circle', symbolSize: 5,
+      lineStyle: { color: COLORS.compare, width: 2.5, type: 'dashed' },
+      itemStyle: { color: COLORS.compare },
+    },
+    {
       name: 'Pending',
       type: 'line',
       data: data.map(d => d.pending),
@@ -162,7 +187,6 @@ export const getDurationLineOptions = (
       symbol: 'circle', symbolSize: 4,
       lineStyle: { color: COLORS.pending, width: 2 },
       itemStyle: { color: COLORS.pending },
-      areaStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: 'rgba(245,158,11,0.2)' }, { offset: 1, color: 'rgba(245,158,11,0)' }] } },
     },
     {
       name: 'Disposed',
@@ -172,7 +196,6 @@ export const getDurationLineOptions = (
       symbol: 'circle', symbolSize: 4,
       lineStyle: { color: COLORS.disposed, width: 2 },
       itemStyle: { color: COLORS.disposed },
-      areaStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: 'rgba(16,185,129,0.2)' }, { offset: 1, color: 'rgba(16,185,129,0)' }] } },
     },
   ],
 });
@@ -193,8 +216,10 @@ export const getPieOptions = (data: { name: string; value: number }[]): EChartsO
     legend: { orient: 'vertical', right: 8, top: 'center', textStyle: { color: COLORS.text, fontSize: 11 }, itemWidth: 10, itemHeight: 10 },
     color: PALETTE,
     graphic: [
-      { type: 'text', left: 'center', top: '40%', style: { text: total >= 1000 ? `${(total/1000).toFixed(1)}k` : String(total), fill: '#fff', fontSize: 22, fontWeight: 'bold' } },
-      { type: 'text', left: 'center', top: '53%', style: { text: 'Total', fill: COLORS.text, fontSize: 11 } },
+      // @ts-ignore
+      { type: 'text', left: 'center', top: '40%', style: { text: total >= 1000 ? `${(total/1000).toFixed(1)}k` : String(total), fill: '#fff', fontSize: 22, fontWeight: 'bold', textAlign: 'center' } },
+      // @ts-ignore
+      { type: 'text', left: 'center', top: '53%', style: { text: 'Total', fill: COLORS.text, fontSize: 11, textAlign: 'center' } },
     ],
     series: [{
       type: 'pie',

@@ -49,11 +49,12 @@ export const useComplaints = (params?: Record<string, string>) => {
   });
 };
 
-export const useDashboardSummary = () => {
+export const useDashboardSummary = (year?: number) => {
   return useQuery({
-    queryKey: ['dashboard', 'summary'],
+    queryKey: ['dashboard', 'summary', year],
     queryFn: async () => {
-      const response = await fetch('/api/dashboard/summary', {
+      const params = year ? `?year=${year}` : '';
+      const response = await fetch(`/api/dashboard/summary${params}`, {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
       });
       return response.json();
