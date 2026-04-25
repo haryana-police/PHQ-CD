@@ -3,10 +3,11 @@ import { prisma } from '../config/database.js';
 import { sendSuccess } from '../utils/response.js';
 import { authenticate } from '../middleware/auth.js';
 
+// Use startsWith, NOT contains — generates LIKE 'Pending%' (index-safe) instead of LIKE '%Pending%' (full scan)
 const PENDING_WHERE = [
   { statusOfComplaint: null },
   { statusOfComplaint: { equals: '' } },
-  { statusOfComplaint: { contains: 'Pending' } },
+  { statusOfComplaint: { startsWith: 'Pending' } },
 ];
 
 export const pendingRoutes = async (fastify: FastifyInstance) => {

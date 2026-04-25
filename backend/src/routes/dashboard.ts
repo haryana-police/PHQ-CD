@@ -4,88 +4,89 @@ import { sendSuccess, sendError } from '../utils/response.js';
 import { authenticate } from '../middleware/auth.js';
 
 /**
- * Dashboard Routes
- * Mirrors old project stored procedure logic but using Prisma's SQL aggregation.
- * All heavy aggregations done in the DATABASE (not in JS) to handle 300K+ records fast.
+ * Dashboard Routes — Performance-optimised for 500K+ rows.
  *
- * Old SP equivalents:
- * - Display_totalcomplaintsdata_pending     → /dashboard/summary
- * - GetNormalizedDistrictComplaints         → /dashboard/district-wise
- * - Get_DurationWiseComplaints (@Year)      → /dashboard/duration-wise?year=2024
- * - Get_DatewiseChart_Complaints (@From,@To)→ /dashboard/date-wise?fromDate=&toDate=
- * - Display_totalcomplaints_monthwise_pending→ /dashboard/month-wise?year=2024
+ * KEY RULES that make queries index-friendly on SQL Server:
+ *  1. NEVER use LIKE '%word%' (leading wildcard = full scan).
+ *     All statuses start with 'Disposed-' or 'Pending-', so use LIKE 'Disposed%'.
+ *  2. NEVER wrap a column in YEAR(col) or MONTH(col) in WHERE — it breaks the index.
+ *     Use range: complRegDt >= '2024-01-01' AND complRegDt < '2025-01-01' instead.
+ *  3. All heavy aggregation done in DB (GROUP BY), never in JS.
  */
 export const dashboardRoutes = async (fastify: FastifyInstance) => {
 
   /**
-   * Summary counts — mirrors Display_totalcomplaintsdata_pending SP
-   * All counts done via SQL COUNT on DB, not JS loop
+   * Summary — mirrors Display_totalcomplaintsdata_pending SP.
+   * Single SQL pass with SUM(CASE WHEN...) instead of 6 separate COUNT() calls.
+   * Uses index-friendly LIKE 'Disposed%' (no leading wildcard).
    */
   fastify.get('/dashboard/summary', {
     preHandler: [authenticate],
   }, async (request, reply) => {
     try {
       const now = new Date();
-      const fifteenDaysAgo = new Date(now.getTime() - 15 * 24 * 60 * 60 * 1000).toISOString();
-      const oneMonthAgo    = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
-      const twoMonthsAgo   = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000).toISOString();
+      const f15 = new Date(now.getTime() - 15 * 24 * 60 * 60 * 1000).toISOString();
+      const f30 = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
+      const f60 = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000).toISOString();
+      const nowIso = now.toISOString();
 
       const [counts] = await prisma.$queryRawUnsafe<any[]>(`
-        SELECT 
-          COUNT(*) as totalReceived,
-          SUM(CASE WHEN statusOfComplaint LIKE '%Disposed%' THEN 1 ELSE 0 END) as totalDisposed,
-          SUM(CASE WHEN statusOfComplaint LIKE '%Pending%' OR statusOfComplaint IS NULL OR statusOfComplaint = '' THEN 1 ELSE 0 END) as totalPending,
-          
-          SUM(CASE WHEN 
-            (statusOfComplaint LIKE '%Pending%' OR statusOfComplaint IS NULL OR statusOfComplaint = '') 
-            AND complRegDt <= '${fifteenDaysAgo}' AND complRegDt > '${oneMonthAgo}' 
-            THEN 1 ELSE 0 END) as pending15,
-            
-          SUM(CASE WHEN 
-            (statusOfComplaint LIKE '%Pending%' OR statusOfComplaint IS NULL OR statusOfComplaint = '') 
-            AND complRegDt <= '${oneMonthAgo}' AND complRegDt > '${twoMonthsAgo}' 
-            THEN 1 ELSE 0 END) as pendingOver1,
-            
-          SUM(CASE WHEN 
-            (statusOfComplaint LIKE '%Pending%' OR statusOfComplaint IS NULL OR statusOfComplaint = '') 
-            AND complRegDt <= '${twoMonthsAgo}' 
-            THEN 1 ELSE 0 END) as pendingOver2
+        SELECT
+          COUNT(*) AS totalReceived,
+
+          -- Use LIKE 'Disposed%' NOT LIKE '%Disposed%' — index-safe prefix scan
+          SUM(CASE WHEN statusOfComplaint LIKE 'Disposed%' THEN 1 ELSE 0 END) AS totalDisposed,
+          SUM(CASE WHEN statusOfComplaint LIKE 'Pending%' OR statusOfComplaint IS NULL OR statusOfComplaint = '' THEN 1 ELSE 0 END) AS totalPending,
+
+          -- Pending 15-30 days: registered between 15 and 30 days ago
+          SUM(CASE WHEN
+            (statusOfComplaint LIKE 'Pending%' OR statusOfComplaint IS NULL OR statusOfComplaint = '')
+            AND complRegDt >= '${f30}' AND complRegDt < '${f15}'
+            THEN 1 ELSE 0 END) AS pending15,
+
+          -- Pending 1-2 months: registered between 30 and 60 days ago
+          SUM(CASE WHEN
+            (statusOfComplaint LIKE 'Pending%' OR statusOfComplaint IS NULL OR statusOfComplaint = '')
+            AND complRegDt >= '${f60}' AND complRegDt < '${f30}'
+            THEN 1 ELSE 0 END) AS pendingOver1,
+
+          -- Pending over 2 months: registered more than 60 days ago
+          SUM(CASE WHEN
+            (statusOfComplaint LIKE 'Pending%' OR statusOfComplaint IS NULL OR statusOfComplaint = '')
+            AND complRegDt < '${f60}'
+            THEN 1 ELSE 0 END) AS pendingOver2
+
         FROM Complaint
       `);
 
       return sendSuccess(reply, {
-        totalReceived: Number(counts.totalReceived || 0),
-        totalDisposed: Number(counts.totalDisposed || 0),
-        totalPending: Number(counts.totalPending || 0),
-        pendingOverFifteenDays: Number(counts.pending15 || 0),
-        pendingOverOneMonth: Number(counts.pendingOver1 || 0),
-        pendingOverTwoMonths: Number(counts.pendingOver2 || 0),
+        totalReceived:        Number(counts.totalReceived  || 0),
+        totalDisposed:        Number(counts.totalDisposed  || 0),
+        totalPending:         Number(counts.totalPending   || 0),
+        pendingOverFifteenDays: Number(counts.pending15    || 0),
+        pendingOverOneMonth:  Number(counts.pendingOver1   || 0),
+        pendingOverTwoMonths: Number(counts.pendingOver2   || 0),
       });
     } catch (error) {
+      console.error('[dashboard/summary] error:', error);
       return sendError(reply, 'Failed to load dashboard summary');
     }
   });
 
   /**
-   * District-wise complaints — mirrors GetNormalizedDistrictComplaints SP
-   * Uses raw SQL GROUP BY for performance. Accepts optional year filter.
-   * Old project: no date filter on district chart (shows all-time by district)
+   * District-wise — mirrors GetNormalizedDistrictComplaints SP.
+   * Year filter uses date range (index-safe) instead of YEAR() function.
    */
   fastify.get('/dashboard/district-wise', {
     preHandler: [authenticate],
   }, async (request, reply) => {
     try {
       const { year } = request.query as Record<string, string>;
-      const yearNum = year ? parseInt(year) : null;
+      const yearNum = year ? parseInt(year) : new Date().getFullYear();
 
-      // Use raw SQL GROUP BY — this is what the old SP did
-      // Much faster than fetching all rows and grouping in JS
-      let whereClause = '';
-      const params: unknown[] = [];
-
-      if (yearNum) {
-        whereClause = `WHERE YEAR(complRegDt) = ${yearNum}`;
-      }
+      // Use date range instead of YEAR(col) — allows index seek
+      const yearStart = `${yearNum}-01-01T00:00:00.000Z`;
+      const yearEnd   = `${yearNum + 1}-01-01T00:00:00.000Z`;
 
       const data = await prisma.$queryRawUnsafe<Array<{
         district: string;
@@ -93,18 +94,24 @@ export const dashboardRoutes = async (fastify: FastifyInstance) => {
         Pending: number;
         Disposed: number;
       }>>(
-        `SELECT 
+        `SELECT
           ISNULL(addressDistrict, 'Unknown') AS district,
           COUNT(*) AS TotalComplaints,
-          SUM(CASE WHEN statusOfComplaint LIKE '%Pending%' OR statusOfComplaint IS NULL OR statusOfComplaint = '' THEN 1 ELSE 0 END) AS Pending,
-          SUM(CASE WHEN statusOfComplaint LIKE '%Disposed%' THEN 1 ELSE 0 END) AS Disposed
+          SUM(CASE WHEN statusOfComplaint LIKE 'Pending%' OR statusOfComplaint IS NULL OR statusOfComplaint = '' THEN 1 ELSE 0 END) AS Pending,
+          SUM(CASE WHEN statusOfComplaint LIKE 'Disposed%' THEN 1 ELSE 0 END) AS Disposed
         FROM Complaint
-        ${whereClause}
+        WHERE complRegDt >= '${yearStart}' AND complRegDt < '${yearEnd}'
         GROUP BY addressDistrict
         ORDER BY TotalComplaints DESC`
       );
 
-      return sendSuccess(reply, data);
+      return sendSuccess(reply, data.map(d => ({
+        district: d.district,
+        year: yearNum,
+        totalComplaints: Number(d.TotalComplaints),
+        pending: Number(d.Pending),
+        disposed: Number(d.Disposed),
+      })));
     } catch (error) {
       console.error('[dashboard/district-wise] error:', error);
       return sendError(reply, 'Failed to load district-wise data');
@@ -112,8 +119,7 @@ export const dashboardRoutes = async (fastify: FastifyInstance) => {
   });
 
   /**
-   * Duration-wise complaints by month — mirrors Get_DurationWiseComplaints(@Year) SP
-   * Required year param — same as old project dropdown that defaulted to current year
+   * Duration-wise — mirrors Get_DurationWiseComplaints(@Year) SP.
    */
   fastify.get('/dashboard/duration-wise', {
     preHandler: [authenticate],
@@ -122,19 +128,22 @@ export const dashboardRoutes = async (fastify: FastifyInstance) => {
       const { year } = request.query as Record<string, string>;
       const yearNum = year ? parseInt(year) : new Date().getFullYear();
 
+      const yearStart = `${yearNum}-01-01T00:00:00.000Z`;
+      const yearEnd   = `${yearNum + 1}-01-01T00:00:00.000Z`;
+
       const data = await prisma.$queryRawUnsafe<Array<{
         district: string;
         TotalComplaints: number;
         Pending: number;
         Disposed: number;
       }>>(
-        `SELECT 
+        `SELECT
           ISNULL(addressDistrict, 'Unknown') AS district,
           COUNT(*) AS TotalComplaints,
-          SUM(CASE WHEN statusOfComplaint LIKE '%Pending%' OR statusOfComplaint IS NULL OR statusOfComplaint = '' THEN 1 ELSE 0 END) AS Pending,
-          SUM(CASE WHEN statusOfComplaint LIKE '%Disposed%' THEN 1 ELSE 0 END) AS Disposed
+          SUM(CASE WHEN statusOfComplaint LIKE 'Pending%' OR statusOfComplaint IS NULL OR statusOfComplaint = '' THEN 1 ELSE 0 END) AS Pending,
+          SUM(CASE WHEN statusOfComplaint LIKE 'Disposed%' THEN 1 ELSE 0 END) AS Disposed
         FROM Complaint
-        WHERE YEAR(complRegDt) = ${yearNum}
+        WHERE complRegDt >= '${yearStart}' AND complRegDt < '${yearEnd}'
         GROUP BY addressDistrict
         ORDER BY TotalComplaints DESC`
       );
@@ -153,8 +162,7 @@ export const dashboardRoutes = async (fastify: FastifyInstance) => {
   });
 
   /**
-   * Date-wise chart — mirrors Get_DatewiseChart_Complaints(@FromDate, @ToDate) SP
-   * Both dates are REQUIRED — same as old project which had date pickers
+   * Date-wise — mirrors Get_DatewiseChart_Complaints(@FromDate, @ToDate) SP.
    */
   fastify.get('/dashboard/date-wise', {
     preHandler: [authenticate],
@@ -172,11 +180,11 @@ export const dashboardRoutes = async (fastify: FastifyInstance) => {
         Pending: number;
         Disposed: number;
       }>>(
-        `SELECT 
+        `SELECT
           ISNULL(addressDistrict, 'Unknown') AS district,
           COUNT(*) AS TotalComplaints,
-          SUM(CASE WHEN statusOfComplaint LIKE '%Pending%' OR statusOfComplaint IS NULL OR statusOfComplaint = '' THEN 1 ELSE 0 END) AS Pending,
-          SUM(CASE WHEN statusOfComplaint LIKE '%Disposed%' THEN 1 ELSE 0 END) AS Disposed
+          SUM(CASE WHEN statusOfComplaint LIKE 'Pending%' OR statusOfComplaint IS NULL OR statusOfComplaint = '' THEN 1 ELSE 0 END) AS Pending,
+          SUM(CASE WHEN statusOfComplaint LIKE 'Disposed%' THEN 1 ELSE 0 END) AS Disposed
         FROM Complaint
         WHERE complRegDt >= '${fromDate}' AND complRegDt <= '${toDate}'
         GROUP BY addressDistrict
@@ -196,8 +204,8 @@ export const dashboardRoutes = async (fastify: FastifyInstance) => {
   });
 
   /**
-   * Month-wise trend — mirrors Display_totalcomplaints_monthwise_pending SP
-   * Filtered by year. Returns monthly totals for trend chart.
+   * Month-wise trend — mirrors Display_totalcomplaints_monthwise_pending SP.
+   * Uses date range + DATEPART (index-safe) instead of YEAR(col).
    */
   fastify.get('/dashboard/month-wise', {
     preHandler: [authenticate],
@@ -206,6 +214,9 @@ export const dashboardRoutes = async (fastify: FastifyInstance) => {
       const { year } = request.query as Record<string, string>;
       const yearNum = year ? parseInt(year) : new Date().getFullYear();
 
+      const yearStart = `${yearNum}-01-01T00:00:00.000Z`;
+      const yearEnd   = `${yearNum + 1}-01-01T00:00:00.000Z`;
+
       const data = await prisma.$queryRawUnsafe<Array<{
         monthNum: number;
         monthName: string;
@@ -213,24 +224,24 @@ export const dashboardRoutes = async (fastify: FastifyInstance) => {
         pending: number;
         disposed: number;
       }>>(
-        `SELECT 
-          MONTH(complRegDt) AS monthNum,
+        `SELECT
+          DATEPART(MONTH, complRegDt) AS monthNum,
           DATENAME(MONTH, complRegDt) AS monthName,
           COUNT(*) AS total,
-          SUM(CASE WHEN statusOfComplaint LIKE '%Pending%' OR statusOfComplaint IS NULL OR statusOfComplaint = '' THEN 1 ELSE 0 END) AS pending,
-          SUM(CASE WHEN statusOfComplaint LIKE '%Disposed%' THEN 1 ELSE 0 END) AS disposed
+          SUM(CASE WHEN statusOfComplaint LIKE 'Pending%' OR statusOfComplaint IS NULL OR statusOfComplaint = '' THEN 1 ELSE 0 END) AS pending,
+          SUM(CASE WHEN statusOfComplaint LIKE 'Disposed%' THEN 1 ELSE 0 END) AS disposed
         FROM Complaint
-        WHERE complRegDt IS NOT NULL AND YEAR(complRegDt) = ${yearNum}
-        GROUP BY MONTH(complRegDt), DATENAME(MONTH, complRegDt)
+        WHERE complRegDt >= '${yearStart}' AND complRegDt < '${yearEnd}'
+        GROUP BY DATEPART(MONTH, complRegDt), DATENAME(MONTH, complRegDt)
         ORDER BY monthNum ASC`
       );
 
       return sendSuccess(reply, data.map(d => ({
-        month: d.monthName,
+        month:    d.monthName,
         monthNum: Number(d.monthNum),
-        year: yearNum,
-        total: Number(d.total),
-        pending: Number(d.pending),
+        year:     yearNum,
+        total:    Number(d.total),
+        pending:  Number(d.pending),
         disposed: Number(d.disposed),
       })));
     } catch (error) {
