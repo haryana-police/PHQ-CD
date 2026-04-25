@@ -3,6 +3,7 @@ import { Layout } from '@/components/layout/Layout';
 import { ChartCard } from '@/components/charts/ChartCard';
 import { getDistrictBarOptions, getDurationLineOptions, getYoYBarOptions, getPieOptions } from '@/components/charts/Charts';
 import { useDashboardSummary, useDistrictChart, useMonthWiseData } from '@/hooks/useData';
+import { Select } from '@/components/common/Select';
 
 const CY = new Date().getFullYear();
 const DEFAULT_YEAR = CY - 1;
@@ -37,13 +38,12 @@ const KpiCard = ({ label, value, gradient, icon, sub }: KpiProps) => (
 
 // ── Year Selector ─────────────────────────────────────────────────────────
 const YearSelect = ({ value, onChange }: { value: number; onChange: (y: number) => void }) => (
-  <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
-    <select value={value} onChange={e => onChange(Number(e.target.value))}
-      style={{ appearance: 'none', padding: '7px 30px 7px 14px', borderRadius: '8px', background: 'rgba(15,23,42,0.9)', color: '#e2e8f0', border: '1px solid rgba(99,102,241,0.25)', fontSize: '13px', fontWeight: 600, cursor: 'pointer', outline: 'none', boxShadow: '0 2px 8px rgba(0,0,0,0.3)' }}>
-      {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
-    </select>
-    <svg style={{ position: 'absolute', right: '10px', pointerEvents: 'none', color: '#6366f1' }} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="6 9 12 15 18 9"/></svg>
-  </div>
+  <Select
+    value={value}
+    onChange={onChange}
+    options={YEARS.map(y => ({ value: y, label: String(y) }))}
+    width="100px"
+  />
 );
 
 export const DashboardPage = () => {

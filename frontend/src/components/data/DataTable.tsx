@@ -67,7 +67,13 @@ export function DataTable<T extends Record<string, unknown>>({
     return [...filtered].sort((a, b) => {
       const av = a[sortKey], bv = b[sortKey];
       if (av == null) return 1; if (bv == null) return -1;
-      if (typeof av === 'number' && typeof bv === 'number') return sortDir === 'asc' ? av - bv : bv - av;
+      
+      const numA = typeof av === 'number' ? av : (typeof av === 'string' && av.endsWith('%') ? parseFloat(av) : NaN);
+      const numB = typeof bv === 'number' ? bv : (typeof bv === 'string' && bv.endsWith('%') ? parseFloat(bv) : NaN);
+      
+      if (!isNaN(numA) && !isNaN(numB)) {
+        return sortDir === 'asc' ? numA - numB : numB - numA;
+      }
       return sortDir === 'asc' ? String(av).localeCompare(String(bv)) : String(bv).localeCompare(String(av));
     });
   }, [filtered, sortKey, sortDir]);
@@ -88,8 +94,8 @@ export function DataTable<T extends Record<string, unknown>>({
   });
 
   const renderTable = (isFullscreen: boolean) => (
-    <div style={{ overflowY: 'auto', flex: 1, maxHeight: isFullscreen ? '100%' : maxHeight }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+    <div style={{ overflowX: 'auto', overflowY: 'auto', flex: 1, maxHeight: isFullscreen ? '100%' : maxHeight, minHeight: '300px' }}>
+      <table style={{ width: '100%', minWidth: '800px', borderCollapse: 'collapse' }}>
         <thead>
           <tr>
             {columns.map(col => (
@@ -124,7 +130,7 @@ export function DataTable<T extends Record<string, unknown>>({
                 onMouseLeave={e => (e.currentTarget.style.background = i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.01)')}
               >
                 {columns.map(col => (
-                  <td key={col.key} style={{ padding: '10px 14px', textAlign: col.align ?? 'left', fontSize: '13px', color: '#cbd5e1', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <td key={col.key} style={{ padding: '10px 14px', textAlign: col.align ?? 'left', fontSize: '13px', color: '#cbd5e1', wordBreak: 'break-word', whiteSpace: 'normal', minWidth: col.width || 'auto' }}>
                     {col.render ? col.render(row) : String(row[col.key] ?? '—')}
                   </td>
                 ))}

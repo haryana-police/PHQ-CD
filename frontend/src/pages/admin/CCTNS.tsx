@@ -7,8 +7,12 @@ import { DataTable, Column } from '@/components/data/DataTable';
 export const CCTNSPage = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
-  const [timeFrom, setTimeFrom] = useState('01/01/2024');
-  const [timeTo, setTimeTo] = useState('31/12/2024');
+  const now = new Date();
+  const firstDay = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+  const today = now.toISOString().split('T')[0];
+
+  const [timeFrom, setTimeFrom] = useState(firstDay);
+  const [timeTo, setTimeTo] = useState(today);
 
   const { data, isLoading } = useQuery({
     queryKey: ['cctns'],
@@ -90,21 +94,19 @@ export const CCTNSPage = () => {
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
             <label className="form-label" style={{ marginBottom: 0 }}>From:</label>
             <input
-              type="text"
+              type="date"
               value={timeFrom}
               onChange={e => setTimeFrom(e.target.value)}
-              placeholder="DD/MM/YYYY"
               className="form-input"
-              style={{ width: '120px' }}
+              style={{ width: '140px', padding: '6px 10px', colorScheme: 'dark' }}
             />
             <label className="form-label" style={{ marginBottom: 0 }}>To:</label>
             <input
-              type="text"
+              type="date"
               value={timeTo}
               onChange={e => setTimeTo(e.target.value)}
-              placeholder="DD/MM/YYYY"
               className="form-input"
-              style={{ width: '120px' }}
+              style={{ width: '140px', padding: '6px 10px', colorScheme: 'dark' }}
             />
           </div>
           <div style={{ display: 'flex', gap: '8px' }}>

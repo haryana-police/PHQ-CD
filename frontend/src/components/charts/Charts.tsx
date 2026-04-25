@@ -215,12 +215,16 @@ export const getPieOptions = (data: { name: string; value: number }[]): EChartsO
     },
     legend: { orient: 'vertical', right: 8, top: 'center', textStyle: { color: COLORS.text, fontSize: 11 }, itemWidth: 10, itemHeight: 10 },
     color: PALETTE,
-    graphic: [
-      // @ts-ignore
-      { type: 'text', left: 'center', top: '40%', style: { text: total >= 1000 ? `${(total/1000).toFixed(1)}k` : String(total), fill: '#fff', fontSize: 22, fontWeight: 'bold', textAlign: 'center' } },
-      // @ts-ignore
-      { type: 'text', left: 'center', top: '53%', style: { text: 'Total', fill: COLORS.text, fontSize: 11, textAlign: 'center' } },
-    ],
+    title: {
+      text: total >= 1000 ? `${(total/1000).toFixed(1)}k` : String(total),
+      subtext: 'Total',
+      left: '29%',
+      top: '41%',
+      textAlign: 'center',
+      textStyle: { color: '#fff', fontSize: 22, fontWeight: 'bold' },
+      subtextStyle: { color: COLORS.text, fontSize: 11 },
+      itemGap: 4
+    },
     series: [{
       type: 'pie',
       radius: ['40%', '68%'],
