@@ -10,6 +10,7 @@ import WomenSafetyPage from './pages/admin/WomenSafety';
 import WomenSafetyDetail from './pages/admin/WomenSafetyDetail';
 import CCTNSPage from './pages/admin/CCTNS';
 import ComplaintDetail from './pages/admin/ComplaintDetail';
+import ComplaintAdd from './pages/admin/ComplaintAdd';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -87,6 +88,14 @@ const App = () => {
             element={
               <ProtectedRoute>
                 <WomenSafetyDetail />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/complaints/add"
+            element={
+              <ProtectedRoute>
+                <ComplaintAdd />
               </ProtectedRoute>
             }
           />

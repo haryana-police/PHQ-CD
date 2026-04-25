@@ -49,8 +49,13 @@ export const complaintRoutes = async (fastify: FastifyInstance) => {
   }, async (request, reply) => {
     const { id } = request.params as Record<string, string>;
     
+    const complaintId = parseInt(id);
+    if (isNaN(complaintId)) {
+      return sendError(reply, 'Invalid complaint ID', 400);
+    }
+    
     const complaint = await prisma.complaint.findUnique({
-      where: { id: parseInt(id) },
+      where: { id: complaintId },
     });
 
     if (!complaint) {
@@ -78,8 +83,13 @@ export const complaintRoutes = async (fastify: FastifyInstance) => {
     const { id } = request.params as Record<string, string>;
     const data = request.body as Record<string, any>;
 
+    const complaintId = parseInt(id);
+    if (isNaN(complaintId)) {
+      return sendError(reply, 'Invalid complaint ID', 400);
+    }
+
     const existing = await prisma.complaint.findUnique({
-      where: { id: parseInt(id) },
+      where: { id: complaintId },
     });
 
     if (!existing) {
@@ -87,7 +97,7 @@ export const complaintRoutes = async (fastify: FastifyInstance) => {
     }
 
     await prisma.complaint.update({
-      where: { id: parseInt(id) },
+      where: { id: complaintId },
       data,
     });
 
@@ -99,8 +109,13 @@ export const complaintRoutes = async (fastify: FastifyInstance) => {
   }, async (request, reply) => {
     const { id } = request.params as Record<string, string>;
 
+    const complaintId = parseInt(id);
+    if (isNaN(complaintId)) {
+      return sendError(reply, 'Invalid complaint ID', 400);
+    }
+
     const existing = await prisma.complaint.findUnique({
-      where: { id: parseInt(id) },
+      where: { id: complaintId },
     });
 
     if (!existing) {
@@ -108,7 +123,7 @@ export const complaintRoutes = async (fastify: FastifyInstance) => {
     }
 
     await prisma.complaint.delete({
-      where: { id: parseInt(id) },
+      where: { id: complaintId },
     });
 
     return sendSuccess(reply, null, 'Complaint deleted successfully');
