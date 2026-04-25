@@ -18,6 +18,7 @@ interface Props<T> {
   title?: string;
   isLoading?: boolean;
   skeletonRows?: number;
+  showRecordCount?: boolean;
 }
 
 // ── Skeleton row ────────────────────────────────────────────────────────────
@@ -43,7 +44,7 @@ const Skeleton = ({ cols, rows = 6 }: { cols: number; rows?: number }) => (
 
 export function DataTable<T extends Record<string, unknown>>({
   data, columns, maxHeight = 'calc(100vh - 220px)',
-  onRowClick, title = 'Data View', isLoading = false, skeletonRows = 7,
+  onRowClick, title = 'Data View', isLoading = false, skeletonRows = 7, showRecordCount = false
 }: Props<T>) {
   const [sortKey, setSortKey] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<'asc' | 'desc' | null>(null);
@@ -85,7 +86,7 @@ export function DataTable<T extends Record<string, unknown>>({
     color: '#475569',
     textTransform: 'uppercase', letterSpacing: '0.5px',
     borderBottom: '1px solid rgba(255,255,255,0.07)',
-    background: 'rgba(15,23,42,0.8)',
+    background: '#0f172a',
     cursor: col.sortable ? 'pointer' : 'default',
     whiteSpace: 'nowrap',
     position: 'sticky', top: 0, zIndex: 1,
@@ -94,8 +95,8 @@ export function DataTable<T extends Record<string, unknown>>({
   });
 
   const renderTable = (isFullscreen: boolean) => (
-    <div style={{ overflowX: 'auto', overflowY: 'auto', flex: 1, maxHeight: isFullscreen ? '100%' : maxHeight, minHeight: '300px' }}>
-      <table style={{ width: '100%', minWidth: '800px', borderCollapse: 'collapse' }}>
+    <div style={{ overflowX: 'hidden', overflowY: 'auto', flex: 1, maxHeight: isFullscreen ? '100%' : maxHeight, minHeight: '300px' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
         <thead>
           <tr>
             {columns.map(col => (
@@ -174,7 +175,7 @@ export function DataTable<T extends Record<string, unknown>>({
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <div style={{ width: '3px', height: '14px', background: '#6366f1', borderRadius: '2px' }} />
             <span style={{ fontSize: '13px', fontWeight: 600, color: '#e2e8f0' }}>{title}</span>
-            {!isLoading && (
+            {showRecordCount && !isLoading && (
               <span style={{ fontSize: '11px', color: '#334155', background: 'rgba(255,255,255,0.04)', padding: '2px 7px', borderRadius: '4px' }}>
                 {sorted.length} records
               </span>
@@ -205,13 +206,12 @@ export function DataTable<T extends Record<string, unknown>>({
             {/* Expand */}
             <button
               onClick={() => setExpanded(true)}
-              style={{ padding: '5px 10px', borderRadius: '7px', background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.2)', color: '#818cf8', fontSize: '11px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+              style={{ padding: '6px', borderRadius: '7px', background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.2)', color: '#818cf8', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
             >
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/>
                 <line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/>
               </svg>
-              Fullscreen
             </button>
           </div>
         </div>
@@ -235,7 +235,7 @@ export function DataTable<T extends Record<string, unknown>>({
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <div style={{ width: '3px', height: '18px', background: '#6366f1', borderRadius: '2px' }} />
               <span style={{ fontSize: '15px', fontWeight: 700, color: '#f1f5f9' }}>{title}</span>
-              <span style={{ fontSize: '12px', color: '#334155' }}>{sorted.length} records</span>
+              {showRecordCount && <span style={{ fontSize: '12px', color: '#334155' }}>{sorted.length} records</span>}
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <div style={{ position: 'relative' }}>
