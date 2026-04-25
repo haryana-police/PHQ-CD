@@ -18,16 +18,12 @@ import { cctnsRoutes } from './routes/cctns.js';
 import { cctnsSyncRoutes } from './routes/cctns-sync.js';
 import { importExportRoutes } from './routes/import-export.js';
 import { governmentRoutes } from './routes/government.js';
-import { initGovernmentTables } from './config/db.js';
-
 const fastify = Fastify({ logger: true });
 
 async function main() {
   await fastify.register(cors, { origin: true });
   await fastify.register(jwt, { secret: 'phq-dashboard-secret-key-2024' });
   await fastify.register(multipart);
-
-  initGovernmentTables().catch(err => console.error('DB init warning:', err.message));
 
   await fastify.register(authRoutes, { prefix: '/api' });
   await fastify.register(complaintRoutes, { prefix: '/api' });

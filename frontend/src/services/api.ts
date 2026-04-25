@@ -228,6 +228,13 @@ export const cctnsApi = {
     const response = await api.get('/api/cctns/district');
     return response.data;
   },
+  // Live proxy — fetches from Enquiry API directly, no DB required
+  enquiriesLive: async (timeFrom: string, timeTo: string) => {
+    const response = await api.get('/api/cctns/enquiries-live', {
+      params: { timeFrom, timeTo },
+    });
+    return response.data;
+  },
 };
 
 export const importExportApi = {

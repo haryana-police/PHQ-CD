@@ -14,7 +14,6 @@ function decrypt(encryptedData: string, key: string): string {
     const buffer = Buffer.from(encryptedData, 'base64');
     const iv = buffer.slice(0, 16);
     const encrypted = buffer.slice(16);
-    
     const decipher = crypto.createDecipheriv(ALGORITHM, Buffer.from(key.padEnd(32, '0').slice(0, 32)), iv);
     let decrypted = decipher.update(encrypted);
     decrypted = Buffer.concat([decrypted, decipher.final()]);
@@ -28,17 +27,17 @@ function decrypt(encryptedData: string, key: string): string {
 export async function getCctnsToken(): Promise<string> {
   const secretKey = process.env.CCTNS_SECRET_KEY;
   const tokenApi = process.env.CCTNS_TOKEN_API;
-  
+
   if (!secretKey || !tokenApi) {
     throw new Error('CCTNS_SECRET_KEY or CCTNS_TOKEN_API not configured');
   }
-  
+
   if (cachedToken && cachedToken.expiresAt > Date.now()) {
     return cachedToken.token;
   }
-  
+
   const url = `${tokenApi}?SecretKey=${encodeURIComponent(secretKey)}`;
-  
+
   let res: Response;
   try {
     res = await fetch(url, {
@@ -47,11 +46,11 @@ export async function getCctnsToken(): Promise<string> {
   } catch (err) {
     throw new Error(`Cannot reach CCTNS Token API: ${err instanceof Error ? err.message : err}`);
   }
-  
+
   if (!res.ok) {
     throw new Error(`Token API HTTP error: ${res.status} ${res.statusText}`);
   }
-  
+
   const rawText = await res.text();
   console.log('[CCTNS] Raw token API response:', rawText.substring(0, 300));
 
@@ -62,7 +61,6 @@ export async function getCctnsToken(): Promise<string> {
   if (xmlMatch && xmlMatch[1]) {
     tokenStr = xmlMatch[1].trim();
   } else {
-    // Fallback: try JSON
     try {
       const data = JSON.parse(rawText) as Record<string, unknown>;
       const token = (
@@ -72,7 +70,6 @@ export async function getCctnsToken(): Promise<string> {
       ) as string | undefined;
       if (token) tokenStr = typeof token === 'string' ? token : JSON.stringify(token);
     } catch {
-      // Might be a plain string
       const plain = rawText.trim().replace(/^"|"$/g, '');
       if (plain && !plain.includes('<') && plain.length > 10) tokenStr = plain;
     }
@@ -95,11 +92,11 @@ export async function fetchCctnsComplaints(timeFrom: string, timeTo: string): Pr
   const token = await getCctnsToken();
   const apiUrl = process.env.CCTNS_COMPLAINT_API;
   const decryptKey = process.env.CCTNS_DECRYPT_KEY;
-  
+
   if (!apiUrl || !decryptKey) {
     throw new Error('CCTNS_COMPLAINT_API or CCTNS_DECRYPT_KEY not configured');
   }
-  
+
   const url = `${apiUrl}?TimeFrom=${encodeURIComponent(timeFrom)}&TimeTo=${encodeURIComponent(timeTo)}`;
   const res = await fetch(url, {
     headers: {
@@ -107,14 +104,14 @@ export async function fetchCctnsComplaints(timeFrom: string, timeTo: string): Pr
       'Accept': 'application/json',
     },
   });
-  
+
   if (!res.ok) {
     throw new Error(`Complaint API failed: ${res.status} ${res.statusText}`);
   }
-  
+
   const responseData = await res.text();
   const decrypted = decrypt(responseData, decryptKey);
-  
+
   try {
     const parsed = JSON.parse(decrypted);
     return Array.isArray(parsed) ? parsed : parsed.data || parsed.complaints || [];
@@ -123,15 +120,16 @@ export async function fetchCctnsComplaints(timeFrom: string, timeTo: string): Pr
   }
 }
 
+// Enquiry API returns plain JSON (confirmed live 2026-04-25 — NOT encrypted)
+// Fields: COMPL_REG_NUM, office_incharge, Investigation_start_date, ENQ_REMARKS, COMPLAINT_ACTION_TAKEN
 export async function fetchCctnsEnquiries(timeFrom: string, timeTo: string): Promise<Record<string, unknown>[]> {
   const token = await getCctnsToken();
   const apiUrl = process.env.CCTNS_ENQUIRY_API;
-  const decryptKey = process.env.CCTNS_DECRYPT_KEY;
-  
-  if (!apiUrl || !decryptKey) {
-    throw new Error('CCTNS_ENQUIRY_API or CCTNS_DECRYPT_KEY not configured');
+
+  if (!apiUrl) {
+    throw new Error('CCTNS_ENQUIRY_API not configured');
   }
-  
+
   const url = `${apiUrl}?TimeFrom=${encodeURIComponent(timeFrom)}&TimeTo=${encodeURIComponent(timeTo)}`;
   const res = await fetch(url, {
     headers: {
@@ -139,18 +137,29 @@ export async function fetchCctnsEnquiries(timeFrom: string, timeTo: string): Pro
       'Accept': 'application/json',
     },
   });
-  
+
   if (!res.ok) {
     throw new Error(`Enquiry API failed: ${res.status} ${res.statusText}`);
   }
-  
+
   const responseData = await res.text();
-  const decrypted = decrypt(responseData, decryptKey);
-  
+
+  // Try plain JSON first (confirmed working)
   try {
-    const parsed = JSON.parse(decrypted);
+    const parsed = JSON.parse(responseData);
     return Array.isArray(parsed) ? parsed : parsed.data || parsed.enquiries || [];
   } catch {
+    // Fallback: try AES decrypt in case response format changes
+    const decryptKey = process.env.CCTNS_DECRYPT_KEY;
+    if (decryptKey) {
+      const decrypted = decrypt(responseData, decryptKey);
+      try {
+        const parsed = JSON.parse(decrypted);
+        return Array.isArray(parsed) ? parsed : parsed.data || parsed.enquiries || [];
+      } catch {
+        return [];
+      }
+    }
     return [];
   }
 }
