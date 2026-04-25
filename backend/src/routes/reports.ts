@@ -18,7 +18,7 @@ const HARYANA_DISTRICTS = [
 
 /** Build a SQL IN clause for Haryana district names (case-insensitive via UPPER) */
 const HARYANA_IN = HARYANA_DISTRICTS.map(d => `'${d}'`).join(', ');
-const HARYANA_WHERE_DISTRICT = `UPPER(LTRIM(RTRIM(ISNULL("addressDistrict",'')))) IN (${HARYANA_IN})`;
+const HARYANA_WHERE_DISTRICT = `UPPER(LTRIM(RTRIM(COALESCE("addressDistrict",'')))) IN (${HARYANA_IN})`;
 
 /** Build year-range WHERE clause — index-safe (no YEAR() function) */
 function yearWhere(yearNum: number | null): string {
@@ -115,7 +115,7 @@ export const reportRoutes = async (fastify: FastifyInstance) => {
 
       const data = await prisma.$queryRawUnsafe<any[]>(`
         SELECT
-          ISNULL(receptionMode,'Unknown') AS mode,
+          COALESCE(receptionMode,'Unknown') AS mode,
           COUNT(*) AS total,
           SUM(CASE WHEN "statusOfComplaint" ILIKE 'Pending%' OR "statusOfComplaint" IS NULL OR "statusOfComplaint" = '' THEN 1 ELSE 0 END) AS pending,
           SUM(CASE WHEN "statusOfComplaint" ILIKE 'Disposed%' THEN 1 ELSE 0 END) AS disposed
@@ -140,7 +140,7 @@ export const reportRoutes = async (fastify: FastifyInstance) => {
         : `WHERE "classOfIncident" IS NOT NULL AND "classOfIncident" != '' AND ${yearWhere(yearNum)}`;
 
       const data = await prisma.$queryRawUnsafe<any[]>(`
-        SELECT ISNULL("classOfIncident",'Unknown') AS natureOfIncident,
+        SELECT COALESCE("classOfIncident",'Unknown') AS natureOfIncident,
           COUNT(*) AS total,
           SUM(CASE WHEN "statusOfComplaint" ILIKE 'Pending%' OR "statusOfComplaint" IS NULL OR "statusOfComplaint" = '' THEN 1 ELSE 0 END) AS pending,
           SUM(CASE WHEN "statusOfComplaint" ILIKE 'Disposed%' THEN 1 ELSE 0 END) AS disposed
@@ -163,7 +163,7 @@ export const reportRoutes = async (fastify: FastifyInstance) => {
         ? `WHERE respondentCategories IS NOT NULL AND respondentCategories != '' AND "complRegDt" >= '${fromDate}' AND "complRegDt" <= '${toDate}'`
         : `WHERE respondentCategories IS NOT NULL AND respondentCategories != '' AND ${yearWhere(yearNum)}`;
       const data = await prisma.$queryRawUnsafe<any[]>(`
-        SELECT ISNULL(respondentCategories,'Unknown') AS typeAgainst, COUNT(*) AS total,
+        SELECT COALESCE(respondentCategories,'Unknown') AS typeAgainst, COUNT(*) AS total,
           SUM(CASE WHEN "statusOfComplaint" ILIKE 'Pending%' OR "statusOfComplaint" IS NULL OR "statusOfComplaint" = '' THEN 1 ELSE 0 END) AS pending,
           SUM(CASE WHEN "statusOfComplaint" ILIKE 'Disposed%' THEN 1 ELSE 0 END) AS disposed
         FROM "Complaint" ${whereClause} GROUP BY respondentCategories ORDER BY total DESC
@@ -201,7 +201,7 @@ export const reportRoutes = async (fastify: FastifyInstance) => {
         ? `WHERE complaintSource IS NOT NULL AND complaintSource != '' AND "complRegDt" >= '${fromDate}' AND "complRegDt" <= '${toDate}'`
         : `WHERE complaintSource IS NOT NULL AND complaintSource != '' AND ${yearWhere(yearNum)}`;
       const data = await prisma.$queryRawUnsafe<any[]>(`
-        SELECT ISNULL(complaintSource,'Unknown') AS complaintSource, COUNT(*) AS total,
+        SELECT COALESCE(complaintSource,'Unknown') AS complaintSource, COUNT(*) AS total,
           SUM(CASE WHEN "statusOfComplaint" ILIKE 'Pending%' OR "statusOfComplaint" IS NULL OR "statusOfComplaint" = '' THEN 1 ELSE 0 END) AS pending,
           SUM(CASE WHEN "statusOfComplaint" ILIKE 'Disposed%' THEN 1 ELSE 0 END) AS disposed
         FROM "Complaint" ${whereClause} GROUP BY complaintSource ORDER BY total DESC
@@ -221,12 +221,12 @@ export const reportRoutes = async (fastify: FastifyInstance) => {
         ? `WHERE "typeOfComplaint" IS NOT NULL AND "typeOfComplaint" != '' AND "complRegDt" >= '${fromDate}' AND "complRegDt" <= '${toDate}'`
         : `WHERE "typeOfComplaint" IS NOT NULL AND "typeOfComplaint" != '' AND ${yearWhere(yearNum)}`;
       const data = await prisma.$queryRawUnsafe<any[]>(`
-        SELECT ISNULL("typeOfComplaint",'Unknown') AS "typeOfComplaint", COUNT(*) AS total,
+        SELECT COALESCE("typeOfComplaint",'Unknown') AS "typeOfComplaint", COUNT(*) AS total,
           SUM(CASE WHEN "statusOfComplaint" ILIKE 'Pending%' OR "statusOfComplaint" IS NULL OR "statusOfComplaint" = '' THEN 1 ELSE 0 END) AS pending,
           SUM(CASE WHEN "statusOfComplaint" ILIKE 'Disposed%' THEN 1 ELSE 0 END) AS disposed
         FROM "Complaint" ${whereClause} GROUP BY "typeOfComplaint" ORDER BY total DESC
       `);
-      return sendSuccess(reply, { year: yearNum, rows: data.map((r: any) => ({ "typeOfComplaint": r."typeOfComplaint", total: Number(r.total), pending: Number(r.pending), disposed: Number(r.disposed) })) });
+      return sendSuccess(reply, { year: yearNum, rows: data.map((r: any) => ({ "typeOfComplaint": r.typeOfComplaint, total: Number(r.total), pending: Number(r.pending), disposed: Number(r.disposed) })) });
     } catch (e) { return sendError(reply, 'Failed to load type-of-complaint report'); }
   });
 
@@ -241,7 +241,7 @@ export const reportRoutes = async (fastify: FastifyInstance) => {
         ? `WHERE branch IS NOT NULL AND branch != '' AND "complRegDt" >= '${fromDate}' AND "complRegDt" <= '${toDate}'`
         : `WHERE branch IS NOT NULL AND branch != '' AND ${yearWhere(yearNum)}`;
       const data = await prisma.$queryRawUnsafe<any[]>(`
-        SELECT ISNULL(branch,'Unknown') AS branch, COUNT(*) AS total,
+        SELECT COALESCE(branch,'Unknown') AS branch, COUNT(*) AS total,
           SUM(CASE WHEN "statusOfComplaint" ILIKE 'Pending%' OR "statusOfComplaint" IS NULL OR "statusOfComplaint" = '' THEN 1 ELSE 0 END) AS pending,
           SUM(CASE WHEN "statusOfComplaint" ILIKE 'Disposed%' THEN 1 ELSE 0 END) AS disposed
         FROM "Complaint" ${whereClause} GROUP BY branch ORDER BY total DESC
@@ -258,7 +258,7 @@ export const reportRoutes = async (fastify: FastifyInstance) => {
       const { year } = request.query as Record<string, string>;
       const yearNum = year ? parseInt(year) : new Date().getFullYear();
       const data = await prisma.$queryRawUnsafe<any[]>(`
-        SELECT ISNULL("classOfIncident",'Unknown') AS category, COUNT(*) AS count
+        SELECT COALESCE("classOfIncident",'Unknown') AS category, COUNT(*) AS count
         FROM "Complaint" WHERE "classOfIncident" IS NOT NULL AND "classOfIncident" != '' AND ${yearWhere(yearNum)}
         GROUP BY "classOfIncident" ORDER BY count DESC
       `);
@@ -282,7 +282,7 @@ export const reportRoutes = async (fastify: FastifyInstance) => {
       }
 
       const data = await prisma.$queryRawUnsafe<any[]>(`
-        SELECT UPPER(LTRIM(RTRIM(ISNULL("addressDistrict",'Unknown')))) AS district, COUNT(*) AS total,
+        SELECT UPPER(LTRIM(RTRIM(COALESCE("addressDistrict",'Unknown')))) AS district, COUNT(*) AS total,
           SUM(CASE WHEN "statusOfComplaint" ILIKE 'Pending%' OR "statusOfComplaint" IS NULL OR "statusOfComplaint" = '' THEN 1 ELSE 0 END) AS pending,
           SUM(CASE WHEN "statusOfComplaint" ILIKE 'Disposed%' THEN 1 ELSE 0 END) AS disposed
         FROM "Complaint" WHERE ${whereParts.join(' AND ')}
@@ -303,10 +303,10 @@ export const reportRoutes = async (fastify: FastifyInstance) => {
         ? `WHERE actionTaken IS NOT NULL AND actionTaken != '' AND "complRegDt" >= '${fromDate}' AND "complRegDt" <= '${toDate}'`
         : `WHERE actionTaken IS NOT NULL AND actionTaken != '' AND ${yearWhere(yearNum)}`;
       const data = await prisma.$queryRawUnsafe<any[]>(`
-        SELECT TOP 30 ISNULL(actionTaken,'Unknown') AS actionTaken, COUNT(*) AS total,
+        SELECT COALESCE(actionTaken,'Unknown') AS actionTaken, COUNT(*) AS total,
           SUM(CASE WHEN "statusOfComplaint" ILIKE 'Pending%' OR "statusOfComplaint" IS NULL OR "statusOfComplaint" = '' THEN 1 ELSE 0 END) AS pending,
           SUM(CASE WHEN "statusOfComplaint" ILIKE 'Disposed%' THEN 1 ELSE 0 END) AS disposed
-        FROM "Complaint" ${whereClause} GROUP BY actionTaken ORDER BY total DESC
+        FROM "Complaint" ${whereClause} GROUP BY actionTaken ORDER BY total DESC LIMIT 30
       `);
       return sendSuccess(reply, { year: yearNum, rows: data.map((r: any) => ({ actionTaken: r.actionTaken, total: Number(r.total), pending: Number(r.pending), disposed: Number(r.disposed) })) });
     } catch (e) { return sendError(reply, 'Failed to load action-taken report'); }
