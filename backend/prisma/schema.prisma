@@ -125,22 +125,22 @@ model Office {
 }
 
 model District_Master {
-  id             Int       @id
+  id             BigInt    @id
   DistrictName   String    @unique
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 }
 
 model PoliceStation_Master {
-  id             Int       @id
+  id             BigInt    @id
   Name           String
-  DistrictID     Int
+  DistrictID     BigInt
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 }
 
 model Offices_Master {
-  id             Int       @id
+  id             BigInt    @id
   Name           String
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt

@@ -55,9 +55,9 @@ export const governmentRoutes = async (fastify: FastifyInstance) => {
       // Save to local database
       for (const district of data.DropDownDTO) {
         await prisma.district_Master.upsert({
-          where: { id: parseInt(district.ID) },
+          where: { id: BigInt(district.ID) },
           update: { DistrictName: district.Name },
-          create: { id: parseInt(district.ID), DistrictName: district.Name }
+          create: { id: BigInt(district.ID), DistrictName: district.Name }
         });
       }
       
@@ -106,15 +106,15 @@ export const governmentRoutes = async (fastify: FastifyInstance) => {
       // Save to local database
       for (const ps of data.DropDownDTO) {
         await prisma.policeStation_Master.upsert({
-          where: { id: parseInt(ps.ID) },
-          update: { Name: ps.Name, DistrictID: parseInt(districtId) },
-          create: { id: parseInt(ps.ID), Name: ps.Name, DistrictID: parseInt(districtId) }
+          where: { id: BigInt(ps.ID) },
+          update: { Name: ps.Name, DistrictID: BigInt(districtId) },
+          create: { id: BigInt(ps.ID), Name: ps.Name, DistrictID: BigInt(districtId) }
         });
       }
       
       // Return from local database
       const stations = await prisma.policeStation_Master.findMany({
-        where: { DistrictID: parseInt(districtId) },
+        where: { DistrictID: BigInt(districtId) },
         orderBy: { Name: 'asc' }
       });
       
@@ -133,7 +133,7 @@ export const governmentRoutes = async (fastify: FastifyInstance) => {
       const { districtId } = request.query as { districtId?: string };
       
       const stations = await prisma.policeStation_Master.findMany({
-        where: districtId ? { DistrictID: parseInt(districtId) } : undefined,
+        where: districtId ? { DistrictID: BigInt(districtId) } : undefined,
         orderBy: { Name: 'asc' }
       });
       return sendSuccess(reply, stations);
@@ -159,9 +159,9 @@ export const governmentRoutes = async (fastify: FastifyInstance) => {
       // Save to local database
       for (const office of data.DropDownDTO) {
         await prisma.offices_Master.upsert({
-          where: { id: parseInt(office.ID) },
+          where: { id: BigInt(office.ID) },
           update: { Name: office.Name },
-          create: { id: parseInt(office.ID), Name: office.Name }
+          create: { id: BigInt(office.ID), Name: office.Name }
         });
       }
       
@@ -202,9 +202,9 @@ export const governmentRoutes = async (fastify: FastifyInstance) => {
         
         for (const d of districtData.DropDownDTO || []) {
           await prisma.district_Master.upsert({
-            where: { id: parseInt(d.ID) },
+            where: { id: BigInt(d.ID) },
             update: { DistrictName: d.Name },
-            create: { id: parseInt(d.ID), DistrictName: d.Name }
+            create: { id: BigInt(d.ID), DistrictName: d.Name }
           });
         }
         results.districts = districtData.DropDownDTO?.length || 0;
@@ -219,9 +219,9 @@ export const governmentRoutes = async (fastify: FastifyInstance) => {
         
         for (const o of officeData.DropDownDTO || []) {
           await prisma.offices_Master.upsert({
-            where: { id: parseInt(o.ID) },
+            where: { id: BigInt(o.ID) },
             update: { Name: o.Name },
-            create: { id: parseInt(o.ID), Name: o.Name }
+            create: { id: BigInt(o.ID), Name: o.Name }
           });
         }
         results.offices = officeData.DropDownDTO?.length || 0;

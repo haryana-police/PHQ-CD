@@ -1,6 +1,10 @@
 // env reloaded: 2026-04-24
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
+
+(BigInt.prototype as any).toJSON = function () {
+  return this.toString();
+};
 import jwt from '@fastify/jwt';
 import multipart from '@fastify/multipart';
 import { authRoutes } from './routes/auth.js';
