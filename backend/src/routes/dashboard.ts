@@ -15,14 +15,14 @@ const HARYANA_DISTRICTS = [
   'YAMUNA NAGAR','MEWAT','GURGAON',
 ];
 const HARYANA_IN = HARYANA_DISTRICTS.map(d => `'${d}'`).join(', ');
-const HARYANA_FILTER = `UPPER(LTRIM(RTRIM(ISNULL(addressDistrict,'')))) IN (${HARYANA_IN})`;
+const HARYANA_FILTER = `UPPER(LTRIM(RTRIM(ISNULL("addressDistrict",'')))) IN (${HARYANA_IN})`;
 
 export const dashboardRoutes = async (fastify: FastifyInstance) => {
 
   /**
    * Summary — mirrors Display_totalcomplaintsdata_pending SP.
    * Single SQL pass with SUM(CASE WHEN...) instead of 6 separate COUNT() calls.
-   * Uses index-friendly LIKE 'Disposed%' (no leading wildcard).
+   * Uses index-friendly ILIKE 'Disposed%' (no leading wildcard).
    */
   fastify.get('/dashboard/summary', {
     preHandler: [authenticate],
@@ -35,35 +35,35 @@ export const dashboardRoutes = async (fastify: FastifyInstance) => {
       const nowIso = now.toISOString();
 
       const { year } = request.query as any;
-      const yearFilter = year ? `AND YEAR(complRegDt) = ${Number(year)}` : '';
+      const yearFilter = year ? `AND EXTRACT(YEAR FROM "complRegDt") = ${Number(year)}` : '';
 
       const [counts] = await prisma.$queryRawUnsafe<any[]>(`
         SELECT
           COUNT(*) AS totalReceived,
 
-          -- Use LIKE 'Disposed%' NOT LIKE '%Disposed%' — index-safe prefix scan
-          SUM(CASE WHEN statusOfComplaint LIKE 'Disposed%' THEN 1 ELSE 0 END) AS totalDisposed,
-          SUM(CASE WHEN statusOfComplaint LIKE 'Pending%' OR statusOfComplaint IS NULL OR statusOfComplaint = '' THEN 1 ELSE 0 END) AS totalPending,
+          -- Use ILIKE 'Disposed%' NOT ILIKE '%Disposed%' — index-safe prefix scan
+          SUM(CASE WHEN "statusOfComplaint" ILIKE 'Disposed%' THEN 1 ELSE 0 END) AS totalDisposed,
+          SUM(CASE WHEN "statusOfComplaint" ILIKE 'Pending%' OR "statusOfComplaint" IS NULL OR "statusOfComplaint" = '' THEN 1 ELSE 0 END) AS totalPending,
 
           -- Pending 15-30 days: registered between 15 and 30 days ago
           SUM(CASE WHEN
-            (statusOfComplaint LIKE 'Pending%' OR statusOfComplaint IS NULL OR statusOfComplaint = '')
-            AND complRegDt >= '${f30}' AND complRegDt < '${f15}'
+            ("statusOfComplaint" ILIKE 'Pending%' OR "statusOfComplaint" IS NULL OR "statusOfComplaint" = '')
+            AND "complRegDt" >= '${f30}' AND "complRegDt" < '${f15}'
             THEN 1 ELSE 0 END) AS pending15,
 
           -- Pending 1-2 months: registered between 30 and 60 days ago
           SUM(CASE WHEN
-            (statusOfComplaint LIKE 'Pending%' OR statusOfComplaint IS NULL OR statusOfComplaint = '')
-            AND complRegDt >= '${f60}' AND complRegDt < '${f30}'
+            ("statusOfComplaint" ILIKE 'Pending%' OR "statusOfComplaint" IS NULL OR "statusOfComplaint" = '')
+            AND "complRegDt" >= '${f60}' AND "complRegDt" < '${f30}'
             THEN 1 ELSE 0 END) AS pendingOver1,
 
           -- Pending over 2 months: registered more than 60 days ago
           SUM(CASE WHEN
-            (statusOfComplaint LIKE 'Pending%' OR statusOfComplaint IS NULL OR statusOfComplaint = '')
-            AND complRegDt < '${f60}'
+            ("statusOfComplaint" ILIKE 'Pending%' OR "statusOfComplaint" IS NULL OR "statusOfComplaint" = '')
+            AND "complRegDt" < '${f60}'
             THEN 1 ELSE 0 END) AS pendingOver2
 
-        FROM Complaint
+        FROM "Complaint"
         WHERE ${HARYANA_FILTER} ${yearFilter}
       `);
 
@@ -83,7 +83,7 @@ export const dashboardRoutes = async (fastify: FastifyInstance) => {
 
   /**
    * District-wise — mirrors GetNormalizedDistrictComplaints SP.
-   * Normalizes addressDistrict (UPPER + TRIM) to collapse casing/spacing variants.
+   * Normalizes "addressDistrict" (UPPER + TRIM) to collapse casing/spacing variants.
    * Limits to TOP 22 (22 official Haryana districts) to keep charts clean.
    */
   fastify.get('/dashboard/district-wise', {
@@ -107,25 +107,25 @@ export const dashboardRoutes = async (fastify: FastifyInstance) => {
           Disposed: number;
         }>>(
           `SELECT TOP 22
-            UPPER(LTRIM(RTRIM(ISNULL(addressDistrict, 'UNKNOWN')))) AS district,
+            UPPER(LTRIM(RTRIM(ISNULL("addressDistrict", 'UNKNOWN')))) AS district,
             COUNT(*) AS TotalComplaints,
-            SUM(CASE WHEN statusOfComplaint LIKE 'Pending%' OR statusOfComplaint IS NULL OR statusOfComplaint = '' THEN 1 ELSE 0 END) AS Pending,
-            SUM(CASE WHEN statusOfComplaint LIKE 'Disposed%' THEN 1 ELSE 0 END) AS Disposed
-          FROM Complaint
-          WHERE complRegDt >= '${yearStart}' AND complRegDt < '${yearEnd}'
+            SUM(CASE WHEN "statusOfComplaint" ILIKE 'Pending%' OR "statusOfComplaint" IS NULL OR "statusOfComplaint" = '' THEN 1 ELSE 0 END) AS Pending,
+            SUM(CASE WHEN "statusOfComplaint" ILIKE 'Disposed%' THEN 1 ELSE 0 END) AS Disposed
+          FROM "Complaint"
+          WHERE "complRegDt" >= '${yearStart}' AND "complRegDt" < '${yearEnd}'
             AND ${HARYANA_FILTER}
-          GROUP BY UPPER(LTRIM(RTRIM(ISNULL(addressDistrict, 'UNKNOWN'))))
+          GROUP BY UPPER(LTRIM(RTRIM(ISNULL("addressDistrict", 'UNKNOWN'))))
           ORDER BY TotalComplaints DESC`
         ),
         prisma.$queryRawUnsafe<Array<{
           district: string;
           TotalComplaints: number;
         }>>(
-          `SELECT UPPER(LTRIM(RTRIM(ISNULL(addressDistrict, 'UNKNOWN')))) AS district, COUNT(*) AS TotalComplaints
-          FROM Complaint
-          WHERE complRegDt >= '${prevYearStart}' AND complRegDt < '${prevYearEnd}'
+          `SELECT UPPER(LTRIM(RTRIM(ISNULL("addressDistrict", 'UNKNOWN')))) AS district, COUNT(*) AS TotalComplaints
+          FROM "Complaint"
+          WHERE "complRegDt" >= '${prevYearStart}' AND "complRegDt" < '${prevYearEnd}'
             AND ${HARYANA_FILTER}
-          GROUP BY UPPER(LTRIM(RTRIM(ISNULL(addressDistrict, 'UNKNOWN'))))`
+          GROUP BY UPPER(LTRIM(RTRIM(ISNULL("addressDistrict", 'UNKNOWN'))))`
         )
       ]);
 
@@ -165,13 +165,13 @@ export const dashboardRoutes = async (fastify: FastifyInstance) => {
         Disposed: number;
       }>>(
         `SELECT
-          ISNULL(addressDistrict, 'Unknown') AS district,
+          ISNULL("addressDistrict", 'Unknown') AS district,
           COUNT(*) AS TotalComplaints,
-          SUM(CASE WHEN statusOfComplaint LIKE 'Pending%' OR statusOfComplaint IS NULL OR statusOfComplaint = '' THEN 1 ELSE 0 END) AS Pending,
-          SUM(CASE WHEN statusOfComplaint LIKE 'Disposed%' THEN 1 ELSE 0 END) AS Disposed
-        FROM Complaint
-        WHERE complRegDt >= '${yearStart}' AND complRegDt < '${yearEnd}'
-        GROUP BY addressDistrict
+          SUM(CASE WHEN "statusOfComplaint" ILIKE 'Pending%' OR "statusOfComplaint" IS NULL OR "statusOfComplaint" = '' THEN 1 ELSE 0 END) AS Pending,
+          SUM(CASE WHEN "statusOfComplaint" ILIKE 'Disposed%' THEN 1 ELSE 0 END) AS Disposed
+        FROM "Complaint"
+        WHERE "complRegDt" >= '${yearStart}' AND "complRegDt" < '${yearEnd}'
+        GROUP BY "addressDistrict"
         ORDER BY TotalComplaints DESC`
       );
 
@@ -208,13 +208,13 @@ export const dashboardRoutes = async (fastify: FastifyInstance) => {
         Disposed: number;
       }>>(
         `SELECT
-          ISNULL(addressDistrict, 'Unknown') AS district,
+          ISNULL("addressDistrict", 'Unknown') AS district,
           COUNT(*) AS TotalComplaints,
-          SUM(CASE WHEN statusOfComplaint LIKE 'Pending%' OR statusOfComplaint IS NULL OR statusOfComplaint = '' THEN 1 ELSE 0 END) AS Pending,
-          SUM(CASE WHEN statusOfComplaint LIKE 'Disposed%' THEN 1 ELSE 0 END) AS Disposed
-        FROM Complaint
-        WHERE complRegDt >= '${fromDate}' AND complRegDt <= '${toDate}'
-        GROUP BY addressDistrict
+          SUM(CASE WHEN "statusOfComplaint" ILIKE 'Pending%' OR "statusOfComplaint" IS NULL OR "statusOfComplaint" = '' THEN 1 ELSE 0 END) AS Pending,
+          SUM(CASE WHEN "statusOfComplaint" ILIKE 'Disposed%' THEN 1 ELSE 0 END) AS Disposed
+        FROM "Complaint"
+        WHERE "complRegDt" >= '${fromDate}' AND "complRegDt" <= '${toDate}'
+        GROUP BY "addressDistrict"
         ORDER BY TotalComplaints DESC`
       );
 
@@ -232,7 +232,7 @@ export const dashboardRoutes = async (fastify: FastifyInstance) => {
 
   /**
    * Month-wise trend — mirrors Display_totalcomplaints_monthwise_pending SP.
-   * Uses date range + DATEPART (index-safe) instead of YEAR(col).
+   * Uses date range + DATEPART (index-safe) instead of EXTRACT(YEAR FROM "col").
    */
   fastify.get('/dashboard/month-wise', {
     preHandler: [authenticate],
@@ -256,26 +256,26 @@ export const dashboardRoutes = async (fastify: FastifyInstance) => {
           disposed: number;
         }>>(
           `SELECT
-            DATEPART(MONTH, complRegDt) AS monthNum,
-            DATENAME(MONTH, complRegDt) AS monthName,
+            DATEPART(MONTH, "complRegDt") AS monthNum,
+            DATENAME(MONTH, "complRegDt") AS monthName,
             COUNT(*) AS total,
-            SUM(CASE WHEN statusOfComplaint LIKE 'Pending%' OR statusOfComplaint IS NULL OR statusOfComplaint = '' THEN 1 ELSE 0 END) AS pending,
-            SUM(CASE WHEN statusOfComplaint LIKE 'Disposed%' THEN 1 ELSE 0 END) AS disposed
-          FROM Complaint
-          WHERE complRegDt >= '${yearStart}' AND complRegDt < '${yearEnd}'
+            SUM(CASE WHEN "statusOfComplaint" ILIKE 'Pending%' OR "statusOfComplaint" IS NULL OR "statusOfComplaint" = '' THEN 1 ELSE 0 END) AS pending,
+            SUM(CASE WHEN "statusOfComplaint" ILIKE 'Disposed%' THEN 1 ELSE 0 END) AS disposed
+          FROM "Complaint"
+          WHERE "complRegDt" >= '${yearStart}' AND "complRegDt" < '${yearEnd}'
             AND ${HARYANA_FILTER}
-          GROUP BY DATEPART(MONTH, complRegDt), DATENAME(MONTH, complRegDt)
+          GROUP BY DATEPART(MONTH, "complRegDt"), DATENAME(MONTH, "complRegDt")
           ORDER BY monthNum ASC`
         ),
         prisma.$queryRawUnsafe<Array<{
           monthNum: number;
           total: number;
         }>>(
-          `SELECT DATEPART(MONTH, complRegDt) AS monthNum, COUNT(*) AS total
-          FROM Complaint
-          WHERE complRegDt >= '${prevYearStart}' AND complRegDt < '${prevYearEnd}'
+          `SELECT DATEPART(MONTH, "complRegDt") AS monthNum, COUNT(*) AS total
+          FROM "Complaint"
+          WHERE "complRegDt" >= '${prevYearStart}' AND "complRegDt" < '${prevYearEnd}'
             AND ${HARYANA_FILTER}
-          GROUP BY DATEPART(MONTH, complRegDt)`
+          GROUP BY DATEPART(MONTH, "complRegDt")`
         )
       ]);
 

@@ -109,7 +109,11 @@ function chunkDateRange(fromStr: string, toStr: string, maxDays: number = 30): {
   return chunks;
 }
 
-export async function fetchCctnsComplaints(timeFrom: string, timeTo: string): Promise<Record<string, unknown>[]> {
+export async function fetchCctnsComplaints(
+  timeFrom: string, 
+  timeTo: string,
+  onChunk?: (rows: Record<string, unknown>[]) => Promise<void>
+): Promise<Record<string, unknown>[]> {
   const chunks = chunkDateRange(timeFrom, timeTo, 30);
   let allRows: Record<string, unknown>[] = [];
   const complaintApi = process.env.CCTNS_COMPLAINT_API || 'http://api.haryanapolice.gov.in/phqdashboard/api/PHQDashboard/ComplaintData';
@@ -145,7 +149,12 @@ export async function fetchCctnsComplaints(timeFrom: string, timeTo: string): Pr
       const parsed = JSON.parse(responseText);
       const rows = Array.isArray(parsed) ? parsed : (parsed.data || parsed.complaints || []);
       console.log(`[CCTNS] Fetched ${rows.length} records for chunk`);
-      allRows = allRows.concat(rows);
+      
+      if (onChunk) {
+        await onChunk(rows);
+      } else {
+        allRows = allRows.concat(rows);
+      }
     } catch (error) {
       console.error(`[CCTNS] Failed to parse JSON for chunk. Length: ${responseText.length}`);
     }
@@ -160,7 +169,11 @@ export async function fetchCctnsComplaints(timeFrom: string, timeTo: string): Pr
  * Same token, same date format, same JSON array response.
  * These are CM Dashboard enquiry-type complaints (different source from PHQ complaints).
  */
-export async function fetchCctnsEnquiries(timeFrom: string, timeTo: string): Promise<Record<string, unknown>[]> {
+export async function fetchCctnsEnquiries(
+  timeFrom: string, 
+  timeTo: string,
+  onChunk?: (rows: Record<string, unknown>[]) => Promise<void>
+): Promise<Record<string, unknown>[]> {
   const chunks = chunkDateRange(timeFrom, timeTo, 30);
   let allRows: Record<string, unknown>[] = [];
   const enquiryApi = process.env.CCTNS_ENQUIRY_API || 'http://api.haryanapolice.gov.in/cmdashboard/api/HomeDashboard/ComplaintEnquiryData';
@@ -196,7 +209,12 @@ export async function fetchCctnsEnquiries(timeFrom: string, timeTo: string): Pro
       const parsed = JSON.parse(responseText);
       const rows = Array.isArray(parsed) ? parsed : (parsed.data || parsed.complaints || []);
       console.log(`[CCTNS Enquiry] Fetched ${rows.length} records for chunk`);
-      allRows = allRows.concat(rows);
+      
+      if (onChunk) {
+        await onChunk(rows);
+      } else {
+        allRows = allRows.concat(rows);
+      }
     } catch (error) {
       console.error(`[CCTNS Enquiry] Failed to parse JSON for chunk. Length: ${responseText.length}`);
     }

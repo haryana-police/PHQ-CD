@@ -154,85 +154,82 @@ export const cctnsSyncRoutes = async (fastify: FastifyInstance) => {
         return sendError(reply, 'timeFrom and timeTo are required (format: dd/MM/yyyy)');
       }
 
-      const rows = await fetchCctnsComplaints(timeFrom, timeTo) as CctnsRow[];
-
+      let totalFetched = 0;
       let created = 0;
       let updated = 0;
       let skipped = 0;
 
-      // Filter and map all valid rows first
-      const validRows = rows.filter(r => str(r.COMPL_REG_NUM));
-      const mappedRows = validRows.map(row => mapRowToComplaint(row));
-      
-      skipped = rows.length - validRows.length;
-
-      // Process in chunks of 500 to prevent database connection limits
-      const CHUNK_SIZE = 500;
-      for (let i = 0; i < mappedRows.length; i += CHUNK_SIZE) {
-        const chunk = mappedRows.slice(i, i + CHUNK_SIZE);
-        const complRegNums = chunk.map(r => r.complRegNum as string);
-
-        // Find existing records in this chunk (1 fast query)
-        const existingRecords = await prisma.complaint.findMany({
-          where: { complRegNum: { in: complRegNums } },
-          select: { id: true, complRegNum: true },
-        });
-
-        const existingMap = new Map(existingRecords.map(r => [r.complRegNum, r.id]));
+      await fetchCctnsComplaints(timeFrom, timeTo, async (rows) => {
+        totalFetched += rows.length;
+        const validRows = rows.filter(r => str(r.COMPL_REG_NUM));
+        const mappedRows = validRows.map(row => mapRowToComplaint(row));
         
-        const toCreate: any[] = [];
-        const toUpdate: any[] = [];
+        skipped += rows.length - validRows.length;
 
-        for (const mapped of chunk) {
-          if (mapped.complRegNum && existingMap.has(mapped.complRegNum)) {
-            toUpdate.push({
-              id: existingMap.get(mapped.complRegNum),
-              data: {
-                statusOfComplaint: mapped.statusOfComplaint,
-                disposalDate: mapped.disposalDate,
-                ioDetails: mapped.ioDetails,
-              }
-            });
-          } else {
-            toCreate.push(mapped);
+        const CHUNK_SIZE = 500;
+        for (let i = 0; i < mappedRows.length; i += CHUNK_SIZE) {
+          const chunk = mappedRows.slice(i, i + CHUNK_SIZE);
+          const complRegNums = chunk.map(r => r.complRegNum as string);
+
+          const existingRecords = await prisma.complaint.findMany({
+            where: { complRegNum: { in: complRegNums } },
+            select: { id: true, complRegNum: true },
+          });
+
+          const existingMap = new Map(existingRecords.map(r => [r.complRegNum, r.id]));
+          
+          const toCreate: any[] = [];
+          const toUpdate: any[] = [];
+
+          for (const mapped of chunk) {
+            if (mapped.complRegNum && existingMap.has(mapped.complRegNum)) {
+              toUpdate.push({
+                id: existingMap.get(mapped.complRegNum),
+                data: {
+                  statusOfComplaint: mapped.statusOfComplaint,
+                  disposalDate: mapped.disposalDate,
+                  ioDetails: mapped.ioDetails,
+                }
+              });
+            } else {
+              toCreate.push(mapped);
+            }
+          }
+
+          if (toCreate.length > 0) {
+            try {
+              await prisma.complaint.createMany({
+                data: toCreate,
+                skipDuplicates: true,
+              });
+              created += toCreate.length;
+            } catch (e) {
+              console.error('Error in createMany chunk:', e);
+              skipped += toCreate.length;
+            }
+          }
+
+          if (toUpdate.length > 0) {
+            try {
+              await Promise.all(
+                toUpdate.map(u => 
+                  prisma.complaint.update({
+                    where: { id: u.id },
+                    data: u.data
+                  })
+                )
+              );
+              updated += toUpdate.length;
+            } catch (e) {
+              console.error('Error in Promise.all update chunk:', e);
+            }
           }
         }
-
-        // Bulk Create (Very Fast)
-        if (toCreate.length > 0) {
-          try {
-            await prisma.complaint.createMany({
-              data: toCreate,
-              skipDuplicates: true,
-            });
-            created += toCreate.length;
-          } catch (e) {
-            console.error('Error in createMany chunk:', e);
-            skipped += toCreate.length;
-          }
-        }
-
-        // Parallel Updates (Extremely fast compared to sequential)
-        if (toUpdate.length > 0) {
-          try {
-            await Promise.all(
-              toUpdate.map(u => 
-                prisma.complaint.update({
-                  where: { id: u.id },
-                  data: u.data
-                })
-              )
-            );
-            updated += toUpdate.length;
-          } catch (e) {
-            console.error('Error in Promise.all update chunk:', e);
-          }
-        }
-      }
+      });
 
       return sendSuccess(reply, {
-        message: 'CCTNS sync completed (Optimized)',
-        fetched: rows.length,
+        message: 'CCTNS sync completed (Optimized Streaming)',
+        fetched: totalFetched,
         created,
         updated,
         skipped,
@@ -258,80 +255,82 @@ export const cctnsSyncRoutes = async (fastify: FastifyInstance) => {
         return sendError(reply, 'timeFrom and timeTo are required (format: dd/MM/yyyy)');
       }
 
-      const rows = await fetchCctnsEnquiries(timeFrom, timeTo) as CctnsRow[];
-
+      let totalFetched = 0;
       let created = 0;
       let updated = 0;
       let skipped = 0;
 
-      const validRows = rows.filter(r => str(r.COMPL_REG_NUM));
-      const mappedRows = validRows.map(row => mapRowToComplaint(row));
-      
-      skipped = rows.length - validRows.length;
-
-      const CHUNK_SIZE = 500;
-      for (let i = 0; i < mappedRows.length; i += CHUNK_SIZE) {
-        const chunk = mappedRows.slice(i, i + CHUNK_SIZE);
-        const complRegNums = chunk.map(r => r.complRegNum as string);
-
-        const existingRecords = await prisma.complaint.findMany({
-          where: { complRegNum: { in: complRegNums } },
-          select: { id: true, complRegNum: true },
-        });
-
-        const existingMap = new Map(existingRecords.map(r => [r.complRegNum, r.id]));
+      await fetchCctnsEnquiries(timeFrom, timeTo, async (rows) => {
+        totalFetched += rows.length;
+        const validRows = rows.filter(r => str(r.COMPL_REG_NUM));
+        const mappedRows = validRows.map(row => mapRowToComplaint(row));
         
-        const toCreate: any[] = [];
-        const toUpdate: any[] = [];
+        skipped += rows.length - validRows.length;
 
-        for (const mapped of chunk) {
-          if (mapped.complRegNum && existingMap.has(mapped.complRegNum)) {
-            toUpdate.push({
-              id: existingMap.get(mapped.complRegNum),
-              data: {
-                statusOfComplaint: mapped.statusOfComplaint,
-                disposalDate: mapped.disposalDate,
-                ioDetails: mapped.ioDetails,
-              }
-            });
-          } else {
-            toCreate.push(mapped);
+        const CHUNK_SIZE = 500;
+        for (let i = 0; i < mappedRows.length; i += CHUNK_SIZE) {
+          const chunk = mappedRows.slice(i, i + CHUNK_SIZE);
+          const complRegNums = chunk.map(r => r.complRegNum as string);
+
+          const existingRecords = await prisma.complaint.findMany({
+            where: { complRegNum: { in: complRegNums } },
+            select: { id: true, complRegNum: true },
+          });
+
+          const existingMap = new Map(existingRecords.map(r => [r.complRegNum, r.id]));
+          
+          const toCreate: any[] = [];
+          const toUpdate: any[] = [];
+
+          for (const mapped of chunk) {
+            if (mapped.complRegNum && existingMap.has(mapped.complRegNum)) {
+              toUpdate.push({
+                id: existingMap.get(mapped.complRegNum),
+                data: {
+                  statusOfComplaint: mapped.statusOfComplaint,
+                  disposalDate: mapped.disposalDate,
+                  ioDetails: mapped.ioDetails,
+                }
+              });
+            } else {
+              toCreate.push(mapped);
+            }
+          }
+
+          if (toCreate.length > 0) {
+            try {
+              await prisma.complaint.createMany({
+                data: toCreate,
+                skipDuplicates: true,
+              });
+              created += toCreate.length;
+            } catch (e) {
+              console.error('Error in createMany chunk:', e);
+              skipped += toCreate.length;
+            }
+          }
+
+          if (toUpdate.length > 0) {
+            try {
+              await Promise.all(
+                toUpdate.map(u => 
+                  prisma.complaint.update({
+                    where: { id: u.id },
+                    data: u.data
+                  })
+                )
+              );
+              updated += toUpdate.length;
+            } catch (e) {
+              console.error('Error in Promise.all update chunk:', e);
+            }
           }
         }
-
-        if (toCreate.length > 0) {
-          try {
-            await prisma.complaint.createMany({
-              data: toCreate,
-              skipDuplicates: true,
-            });
-            created += toCreate.length;
-          } catch (e) {
-            console.error('Error in createMany chunk:', e);
-            skipped += toCreate.length;
-          }
-        }
-
-        if (toUpdate.length > 0) {
-          try {
-            await Promise.all(
-              toUpdate.map(u => 
-                prisma.complaint.update({
-                  where: { id: u.id },
-                  data: u.data
-                })
-              )
-            );
-            updated += toUpdate.length;
-          } catch (e) {
-            console.error('Error in Promise.all update chunk:', e);
-          }
-        }
-      }
+      });
 
       return sendSuccess(reply, {
-        message: 'CCTNS enquiry sync completed (Optimized)',
-        fetched: rows.length,
+        message: 'CCTNS enquiry sync completed (Optimized Streaming)',
+        fetched: totalFetched,
         created,
         updated,
         skipped,
