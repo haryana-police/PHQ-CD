@@ -146,12 +146,13 @@ export const Layout = ({ children }: LayoutProps) => {
         {/* ── Sidebar ─────────────────────────────────────────────── */}
         <aside style={{
           width: '210px', flexShrink: 0,
-          position: 'fixed', top: '58px', bottom: 0, left: 0,
+          position: 'fixed', top: '58px', bottom: 0, left: sidebarOpen ? 0 : '-210px',
           background: 'rgba(10,17,32,0.97)',
           borderRight: '1px solid rgba(255,255,255,0.05)',
           overflowY: 'auto', zIndex: 100,
           display: 'flex', flexDirection: 'column',
           boxShadow: '4px 0 24px rgba(0,0,0,0.3)',
+          transition: 'left 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
         }}>
           {/* Nav section label */}
           <div style={{ padding: '20px 16px 8px', fontSize: '9.5px', color: '#334155', letterSpacing: '1.2px', textTransform: 'uppercase', fontWeight: 700 }}>

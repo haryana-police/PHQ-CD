@@ -6,7 +6,7 @@ import { ChartCard } from '@/components/charts/ChartCard';
 import { DataTable, Column } from '@/components/data/DataTable';
 import {
   getPieOptions, getStackedBarOptions, getDistrictBarOptions,
-  getYoYBarOptions, getDurationLineOptions,
+  getYoYBarOptions,
 } from '@/components/charts/Charts';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -424,7 +424,7 @@ export const ReportsPage = () => {
               data={tableData}
               columns={columns.map(c => ({
                 ...c,
-                render: (row) => {
+                render: (row: any) => {
                   if (c.key === 'name')      return <span style={{ fontWeight: 500, color: '#e2e8f0' }}>{String(row.name)}</span>;
                   if (c.key === 'total')     return <span style={{ fontWeight: 700 }}>{row.total.toLocaleString()}</span>;
                   if (c.key === 'pending')   return <span style={{ color: '#fbbf24', fontWeight: 600 }}>{row.pending.toLocaleString()}</span>;

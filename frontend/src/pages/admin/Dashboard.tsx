@@ -1,162 +1,122 @@
 import { useState } from 'react';
 import { Layout } from '@/components/layout/Layout';
 import { ChartCard } from '@/components/charts/ChartCard';
-import {
-  getDistrictBarOptions,
-  getDurationLineOptions,
-  getYoYBarOptions,
-  getPieOptions,
-} from '@/components/charts/Charts';
+import { getDistrictBarOptions, getDurationLineOptions, getYoYBarOptions, getPieOptions } from '@/components/charts/Charts';
 import { useDashboardSummary, useDistrictChart, useMonthWiseData } from '@/hooks/useData';
 
 const CY = new Date().getFullYear();
-const DEFAULT_YEAR = CY - 1; // Last complete year as smart default
+const DEFAULT_YEAR = CY - 1;
 const YEARS = Array.from({ length: CY - 2014 + 1 }, (_, i) => CY - i);
 
-// ── Stat Card ──────────────────────────────────────────────────────────────
-const StatCard = ({
-  label, value, colorClass, sub,
-}: { label: string; value: number; colorClass: string; sub?: string }) => (
-  <div className={`stat-card ${colorClass}`}>
-    <div className="stat-card-label">{label}</div>
-    <div className="stat-card-value">{value.toLocaleString()}</div>
-    {sub && <div style={{ fontSize: '10px', opacity: 0.65, marginTop: '2px' }}>{sub}</div>}
+// ── KPI Card ──────────────────────────────────────────────────────────────
+interface KpiProps { label: string; value: number; gradient: string; icon: React.ReactNode; sub?: string; }
+const KpiCard = ({ label, value, gradient, icon, sub }: KpiProps) => (
+  <div style={{
+    borderRadius: '12px', padding: '18px 20px',
+    background: gradient,
+    position: 'relative', overflow: 'hidden',
+    boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
+    border: '1px solid rgba(255,255,255,0.1)',
+    transition: 'transform 0.2s, box-shadow 0.2s',
+    cursor: 'default',
+  }}
+    onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.boxShadow = '0 14px 32px rgba(0,0,0,0.4)'; }}
+    onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.3)'; }}
+  >
+    {/* Background icon watermark */}
+    <div style={{ position: 'absolute', right: '-4px', top: '50%', transform: 'translateY(-50%)', opacity: 0.12, color: '#fff' }}>
+      <div style={{ transform: 'scale(2.8)' }}>{icon}</div>
+    </div>
+    <div style={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.8px', opacity: 0.8, color: '#fff', marginBottom: '8px' }}>{label}</div>
+    <div style={{ fontSize: '26px', fontWeight: 800, color: '#fff', letterSpacing: '-0.5px' }}>{value.toLocaleString()}</div>
+    {sub && <div style={{ fontSize: '11px', opacity: 0.7, color: '#fff', marginTop: '4px' }}>{sub}</div>}
+    {/* Shine overlay */}
+    <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: 'linear-gradient(135deg, rgba(255,255,255,0.15) 0%, transparent 60%)', pointerEvents: 'none' }} />
   </div>
 );
 
-// ── Styled year select ─────────────────────────────────────────────────────
-const YearSelect = ({
-  value, onChange,
-}: { value: number; onChange: (y: number) => void }) => (
+// ── Year Selector ─────────────────────────────────────────────────────────
+const YearSelect = ({ value, onChange }: { value: number; onChange: (y: number) => void }) => (
   <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
-    <select
-      value={value}
-      onChange={e => onChange(Number(e.target.value))}
-      style={{
-        appearance: 'none',
-        WebkitAppearance: 'none',
-        padding: '7px 30px 7px 12px',
-        borderRadius: '8px',
-        background: 'rgba(15,23,42,0.85)',
-        color: '#e2e8f0',
-        border: '1px solid rgba(255,255,255,0.1)',
-        fontSize: '13px',
-        fontWeight: 500,
-        cursor: 'pointer',
-        outline: 'none',
-        boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
-        minWidth: '90px',
-      }}
-    >
-      {YEARS.map(y => (
-        <option key={y} value={y}>{y}</option>
-      ))}
+    <select value={value} onChange={e => onChange(Number(e.target.value))}
+      style={{ appearance: 'none', padding: '7px 30px 7px 14px', borderRadius: '8px', background: 'rgba(15,23,42,0.9)', color: '#e2e8f0', border: '1px solid rgba(99,102,241,0.25)', fontSize: '13px', fontWeight: 600, cursor: 'pointer', outline: 'none', boxShadow: '0 2px 8px rgba(0,0,0,0.3)' }}>
+      {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
     </select>
-    <svg
-      style={{ position: 'absolute', right: '10px', pointerEvents: 'none', color: '#64748b' }}
-      width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
-    >
-      <polyline points="6 9 12 15 18 9" />
-    </svg>
+    <svg style={{ position: 'absolute', right: '10px', pointerEvents: 'none', color: '#6366f1' }} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="6 9 12 15 18 9"/></svg>
   </div>
 );
 
-// ── Main Page ──────────────────────────────────────────────────────────────
 export const DashboardPage = () => {
-  const [selectedYear, setSelectedYear] = useState(DEFAULT_YEAR);
+  const [year, setYear] = useState(DEFAULT_YEAR);
+  const { data: sumData, isLoading: sl } = useDashboardSummary();
+  const { data: distData, isLoading: dl } = useDistrictChart(year);
+  const { data: monthData, isLoading: ml } = useMonthWiseData(year);
 
-  const { data: summaryData, isLoading: sl } = useDashboardSummary();
-  const { data: districtData, isLoading: dl } = useDistrictChart(selectedYear);
-  const { data: monthData,    isLoading: ml } = useMonthWiseData(selectedYear);
+  const s = sumData?.data;
+  const districts = ((distData?.data || []) as { district: string; totalComplaints: number; pending: number; disposed: number }[]);
+  const months    = ((monthData?.data || []) as { month: string; total: number; pending: number; disposed: number }[]);
 
-  const s = summaryData?.data;
-
-  const districts = (districtData?.data || []) as {
-    district: string; totalComplaints: number; pending: number; disposed: number;
-  }[];
-
-  const months = (monthData?.data || []) as {
-    month: string; monthNum: number; total: number; pending: number; disposed: number;
-  }[];
-
-  // Build chart option sets for district chart
-  const districtRows = districts.map(d => ({
-    district: d.district,
-    total:    d.totalComplaints,
-    pending:  d.pending,
-    disposed: d.disposed,
-    prevTotal: 0,
-  }));
-
-  const districtStackedOpt    = getDistrictBarOptions(districtRows);
-  const districtHorizOpt      = getDistrictBarOptions(districtRows, { horizontal: true });
-  const districtYoYOpt        = getYoYBarOptions(districtRows, selectedYear);
-  const districtPieOpt        = getPieOptions(districtRows.map(d => ({ name: d.district, value: d.total })));
+  const distRows = districts.map(d => ({ district: d.district, total: d.totalComplaints, pending: d.pending, disposed: d.disposed, prevTotal: 0 }));
 
   return (
     <Layout>
       <div className="page-content">
-
-        {/* ── Header ──────────────────────────────────────────────────── */}
-        <div style={{
-          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-          marginBottom: '18px', flexWrap: 'wrap', gap: '12px',
-        }}>
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', flexWrap: 'wrap', gap: '10px' }}>
           <div>
-            <h2 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 700, color: '#f1f5f9' }}>
-              Dashboard Overview
-            </h2>
-            <p style={{ margin: '2px 0 0', fontSize: '12px', color: '#475569' }}>
-              Haryana Police Headquarters · Complaint Monitoring
+            <h1 style={{ fontSize: '1.2rem', fontWeight: 800, color: '#f1f5f9', margin: 0, letterSpacing: '-0.3px' }}>Dashboard Overview</h1>
+            <p style={{ margin: '3px 0 0', fontSize: '12px', color: '#475569' }}>
+              Real-time complaint monitoring · Haryana Police
             </p>
           </div>
-
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <span style={{ fontSize: '12px', color: '#64748b' }}>Year:</span>
-            <YearSelect value={selectedYear} onChange={setSelectedYear} />
+            <span style={{ fontSize: '12px', color: '#475569' }}>Filter year:</span>
+            <YearSelect value={year} onChange={setYear} />
           </div>
         </div>
 
-        {/* ── Summary Stats ────────────────────────────────────────────── */}
+        {/* KPI Cards */}
         {sl ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '20px', color: '#475569', fontSize: '13px' }}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2"
-              style={{ animation: 'spin 1s linear infinite' }}>
-              <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
-            </svg>
-            Loading summary…
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(160px,1fr))', gap: '12px', marginBottom: '20px' }}>
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} style={{ height: '90px', borderRadius: '12px', background: 'linear-gradient(90deg, rgba(255,255,255,0.04) 25%, rgba(255,255,255,0.07) 50%, rgba(255,255,255,0.04) 75%)', backgroundSize: '200% 100%', animation: 'shimmer 1.5s infinite' }} />
+            ))}
           </div>
         ) : (
           <>
-            <div className="stats-grid">
-              <StatCard label="Total Received"    value={s?.totalReceived || 0}     colorClass="blue"   />
-              <StatCard label="Disposed"           value={s?.totalDisposed || 0}     colorClass="green"  />
-              <StatCard label="Pending"            value={s?.totalPending || 0}      colorClass="red"    />
-              <StatCard label="Pending 15-30 Days" value={s?.pendingOverFifteenDays || 0} colorClass="yellow" />
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '12px' }}>
+              <KpiCard label="Total Received" value={s?.totalReceived ?? 0} gradient="linear-gradient(135deg,#6a11cb,#2575fc)"
+                icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>} />
+              <KpiCard label="Disposed" value={s?.totalDisposed ?? 0} gradient="linear-gradient(135deg,#11998e,#38ef7d)"
+                sub={s?.totalReceived ? `${((s.totalDisposed/s.totalReceived)*100).toFixed(1)}% disposal rate` : ''}
+                icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><polyline points="20 6 9 17 4 12"/></svg>} />
+              <KpiCard label="Pending" value={s?.totalPending ?? 0} gradient="linear-gradient(135deg,#ff416c,#ff4b2b)"
+                sub={s?.totalReceived ? `${((s.totalPending/s.totalReceived)*100).toFixed(1)}% pending rate` : ''}
+                icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>} />
+              <KpiCard label="Pending 15-30 Days" value={s?.pendingOverFifteenDays ?? 0} gradient="linear-gradient(135deg,#f7971e,#ffd200)"
+                icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/></svg>} />
             </div>
-            <div className="stats-grid-half" style={{ marginTop: '10px' }}>
-              <StatCard label="Pending 1-2 Months"    value={s?.pendingOverOneMonth || 0}  colorClass="purple" />
-              <StatCard label="Pending Over 2 Months" value={s?.pendingOverTwoMonths || 0} colorClass="teal"   />
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px', marginBottom: '20px' }}>
+              <KpiCard label="Pending 1-2 Months" value={s?.pendingOverOneMonth ?? 0} gradient="linear-gradient(135deg,#ee0979,#ff6a00)"
+                icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/></svg>} />
+              <KpiCard label="Pending Over 2 Months" value={s?.pendingOverTwoMonths ?? 0} gradient="linear-gradient(135deg,#283c86,#45a247)"
+                icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>} />
             </div>
           </>
         )}
 
-        {/* ── Charts ───────────────────────────────────────────────────── */}
-        <div className="charts-grid" style={{ marginTop: '18px' }}>
+        {/* Charts */}
+        <div className="charts-grid">
           <ChartCard
-            title={`District-wise Complaints (${selectedYear})`}
-            option={districtStackedOpt}
-            alternativeOptions={{
-              horizontal: districtHorizOpt,
-              grouped:    districtYoYOpt,
-              pie:        districtPieOpt,
-            }}
+            title={`District-wise · ${year}`}
+            option={getDistrictBarOptions(distRows)}
+            alternativeOptions={{ horizontal: getDistrictBarOptions(distRows, { horizontal: true }), grouped: getYoYBarOptions(distRows, year), pie: getPieOptions(distRows.map(d => ({ name: d.district, value: d.total }))) }}
             defaultType="stacked"
             isLoading={dl}
             height="320px"
           />
           <ChartCard
-            title={`Monthly Trend (${selectedYear})`}
+            title={`Monthly Trend · ${year}`}
             option={getDurationLineOptions(months)}
             isLoading={ml}
             height="320px"

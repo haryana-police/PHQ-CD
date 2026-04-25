@@ -186,15 +186,15 @@ export const getPieOptions = (data: { name: string; value: number }[]): EChartsO
       backgroundColor: COLORS.tooltip,
       borderColor: 'rgba(255,255,255,0.08)',
       textStyle: { color: COLORS.textBright, fontSize: 12 },
-      formatter: (p: { name: string; value: number; percent: number }) =>
-        `<b>${p.name}</b><br/>Count: <b>${p.value.toLocaleString()}</b> (${p.percent.toFixed(1)}%)`,
+      formatter: (p: any) =>
+        `<b>${p.name}</b><br/>Count: <b>${p.value.toLocaleString()}</b> (${p.percent?.toFixed(1)}%)`,
       extraCssText: 'box-shadow:0 8px 32px rgba(0,0,0,0.5);border-radius:8px;',
     },
     legend: { orient: 'vertical', right: 8, top: 'center', textStyle: { color: COLORS.text, fontSize: 11 }, itemWidth: 10, itemHeight: 10 },
     color: PALETTE,
     graphic: [
-      { type: 'text', left: '27%', top: '40%', style: { text: total >= 1000 ? `${(total/1000).toFixed(1)}k` : String(total), fill: '#fff', fontSize: 22, fontWeight: 'bold', textAlign: 'center' } },
-      { type: 'text', left: '27%', top: '53%', style: { text: 'Total', fill: COLORS.text, fontSize: 11, textAlign: 'center' } },
+      { type: 'text', left: 'center', top: '40%', style: { text: total >= 1000 ? `${(total/1000).toFixed(1)}k` : String(total), fill: '#fff', fontSize: 22, fontWeight: 'bold' } },
+      { type: 'text', left: 'center', top: '53%', style: { text: 'Total', fill: COLORS.text, fontSize: 11 } },
     ],
     series: [{
       type: 'pie',

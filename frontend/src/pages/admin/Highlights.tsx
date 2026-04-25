@@ -5,30 +5,33 @@ import { ChartCard } from '@/components/charts/ChartCard';
 import { DataTable, Column } from '@/components/data/DataTable';
 import { getPieOptions, getStackedBarOptions } from '@/components/charts/Charts';
 
-const PREVIEW_COUNT = 5;
+const CY = new Date().getFullYear();
+const PREVIEW_COUNT = 8;
 
 export const HighlightsPage = () => {
   const [showAllCategories, setShowAllCategories] = useState(false);
   const [showAllNature, setShowAllNature] = useState(false);
+  const [year, setYear] = useState(CY - 1);
+  const YEARS = Array.from({ length: CY - 2014 + 1 }, (_, i) => CY - i);
 
   const { data: hd, isLoading: hl } = useQuery({
-    queryKey: ['reports', 'highlights'],
+    queryKey: ['reports', 'highlights', year],
     queryFn: async () => {
-      const r = await fetch('/api/reports/highlights', { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
+      const r = await fetch(`/api/reports/highlights?year=${year}`, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
       return r.json();
     },
   });
 
   const { data: nd, isLoading: nl } = useQuery({
-    queryKey: ['reports', 'nature'],
+    queryKey: ['reports', 'nature', year],
     queryFn: async () => {
-      const r = await fetch('/api/reports/nature-incident', { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
+      const r = await fetch(`/api/reports/nature-incident?year=${year}`, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
       return r.json();
     },
   });
 
-  const highlights = (hd?.data || []) as Record<string, unknown>[];
-  const natures = (nd?.data || []) as Record<string, unknown>[];
+  const highlights = (hd?.data?.rows ?? hd?.data ?? []) as Record<string, unknown>[];
+  const natures    = (nd?.data?.rows ?? nd?.data ?? []) as Record<string, unknown>[];
 
   const allTopRows = highlights.map((r, i) => ({
     rank: i + 1,
@@ -71,23 +74,29 @@ export const HighlightsPage = () => {
   return (
     <Layout>
       <div className="page-content">
-        {hl || nl ? (
-          <div className="loading-spinner"><svg width="28" height="28" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg></div>
-        ) : (
-          <>
-            {/* Charts Row */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '24px' }}>
-              <ChartCard
-                title="Top Categories"
-                option={getPieOptions(allTopRows.slice(0, 10).map(r => ({ name: r.name, value: r.count })))}
-                height="260px"
-              />
-              <ChartCard
-                title="Nature of Incidents"
-                option={getStackedBarOptions(allNatureRows.slice(0, 10).map(r => ({ category: r.name, total: r.total, pending: r.pending, disposed: r.disposed })))}
-                height="260px"
-              />
-            </div>
+        {/* Header with year filter */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '18px', flexWrap: 'wrap', gap: '10px' }}>
+          <div>
+            <h1 style={{ fontSize: '1.2rem', fontWeight: 800, color: '#f1f5f9', margin: 0 }}>Highlights</h1>
+            <p style={{ margin: '3px 0 0', fontSize: '12px', color: '#475569' }}>Top categories and incident type breakdown</p>
+          </div>
+          <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
+            <select value={year} onChange={e => setYear(Number(e.target.value))}
+              style={{ appearance: 'none', padding: '7px 30px 7px 14px', borderRadius: '8px', background: 'rgba(15,23,42,0.9)', color: '#e2e8f0', border: '1px solid rgba(99,102,241,0.25)', fontSize: '13px', fontWeight: 600, cursor: 'pointer', outline: 'none' }}>
+              {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
+            </select>
+            <svg style={{ position: 'absolute', right: '10px', pointerEvents: 'none', color: '#6366f1' }} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+          </div>
+        </div>
+          {/* Charts */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '20px' }}>
+          <ChartCard title={`Top Categories · ${year}`} isLoading={hl}
+            option={getPieOptions(allTopRows.slice(0, 10).map(r => ({ name: r.name, value: r.count })))}
+            height="280px" />
+          <ChartCard title={`Nature of Incidents · ${year}`} isLoading={nl}
+            option={getStackedBarOptions(allNatureRows.slice(0, 10).map(r => ({ category: r.name, total: r.total, pending: r.pending, disposed: r.disposed })))}
+            height="280px" />
+        </div>
 
             {/* Side-by-side adaptive table grid */}
             <div className="highlights-tables-grid">
@@ -130,7 +139,7 @@ export const HighlightsPage = () => {
                     data={topRows}
                     columns={catCols.map(c => ({
                       ...c,
-                      render: (row) => {
+                      render: (row: any) => {
                         if (c.key === 'rank') return (
                           <span style={{
                             display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
@@ -199,7 +208,7 @@ export const HighlightsPage = () => {
                     data={natureRows}
                     columns={natureCols.map(c => ({
                       ...c,
-                      render: (row) => {
+                      render: (row: any) => {
                         if (c.key === 'name') return <span style={{ fontWeight: 500, fontSize: '13px' }}>{String(row.name)}</span>;
                         if (c.key === 'total') return <span style={{ fontWeight: 600 }}>{row.total.toLocaleString()}</span>;
                         if (c.key === 'pending') return <span style={{ color: '#fbbf24', fontWeight: 500 }}>{row.pending.toLocaleString()}</span>;
@@ -213,10 +222,8 @@ export const HighlightsPage = () => {
                   />
                 </div>
               </div>
-
             </div>
-          </>
-        )}
+
       </div>
     </Layout>
   );
