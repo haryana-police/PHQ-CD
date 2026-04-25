@@ -60,6 +60,23 @@ export const dashboardRoutes = async (fastify: FastifyInstance) => {
       },
     });
 
+    const disposedComplaints = await prisma.complaint.findMany({
+      where: {
+        statusOfComplaint: { contains: 'Disposed' },
+        complRegDt: { not: null },
+        disposalDate: { not: null }
+      },
+      select: { complRegDt: true, disposalDate: true }
+    });
+
+    let totalDisposalDays = 0;
+    disposedComplaints.forEach(c => {
+      if (c.complRegDt && c.disposalDate) {
+        totalDisposalDays += (c.disposalDate.getTime() - c.complRegDt.getTime()) / (1000 * 60 * 60 * 24);
+      }
+    });
+    const avgDisposalTime = disposedComplaints.length > 0 ? Math.round(totalDisposalDays / disposedComplaints.length) : 0;
+
     return sendSuccess(reply, {
       totalReceived,
       totalDisposed,
@@ -67,6 +84,7 @@ export const dashboardRoutes = async (fastify: FastifyInstance) => {
       pendingOverFifteenDays: pending15,
       pendingOverOneMonth: pendingOver1,
       pendingOverTwoMonths: pendingOver2,
+      avgDisposalTime,
     });
   });
 
@@ -210,6 +228,46 @@ export const dashboardRoutes = async (fastify: FastifyInstance) => {
       monthNum: parseInt(month.split('-')[1]),
       total: stats.total,
       pending: stats.pending,
+    }));
+
+    return sendSuccess(reply, data);
+  });
+
+  fastify.get('/dashboard/ageing-matrix', {
+    preHandler: [authenticate],
+  }, async (request, reply) => {
+    const complaints = await prisma.complaint.findMany({
+      where: {
+        OR: [
+          { statusOfComplaint: null },
+          { statusOfComplaint: { equals: '' } },
+          { statusOfComplaint: { contains: 'Pending' } },
+        ],
+        complRegDt: { not: null }
+      },
+      select: { addressDistrict: true, complRegDt: true }
+    });
+
+    const now = new Date().getTime();
+    const matrixMap = new Map<string, { u7: number; u15: number; u30: number; o30: number }>();
+
+    for (const comp of complaints) {
+      const dist = comp.addressDistrict || 'Unknown';
+      if (!matrixMap.has(dist)) {
+        matrixMap.set(dist, { u7: 0, u15: 0, u30: 0, o30: 0 });
+      }
+      const stats = matrixMap.get(dist)!;
+      const daysPending = (now - comp.complRegDt!.getTime()) / (1000 * 60 * 60 * 24);
+
+      if (daysPending < 7) stats.u7++;
+      else if (daysPending < 15) stats.u15++;
+      else if (daysPending < 30) stats.u30++;
+      else stats.o30++;
+    }
+
+    const data = Array.from(matrixMap.entries()).map(([district, stats]) => ({
+      district,
+      ...stats
     }));
 
     return sendSuccess(reply, data);
