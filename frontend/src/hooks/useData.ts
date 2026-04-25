@@ -148,6 +148,47 @@ export const useReference = (type: string) => {
   });
 };
 
+export const useGovDistricts = () => {
+  return useQuery({
+    queryKey: ['gov', 'districts'],
+    queryFn: async () => {
+      const response = await fetch('/api/gov/districts/local', {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+      });
+      return response.json();
+    },
+    staleTime: 60 * 60 * 1000, // 1 hour cache
+  });
+};
+
+export const useGovPoliceStations = (districtId: string | null) => {
+  return useQuery({
+    queryKey: ['gov', 'police-stations', districtId],
+    queryFn: async () => {
+      if (!districtId) return { data: [] };
+      const response = await fetch(`/api/gov/police-stations/local?districtId=${districtId}`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+      });
+      return response.json();
+    },
+    enabled: !!districtId,
+    staleTime: 60 * 60 * 1000,
+  });
+};
+
+export const useGovOffices = () => {
+  return useQuery({
+    queryKey: ['gov', 'offices'],
+    queryFn: async () => {
+      const response = await fetch('/api/gov/offices/local', {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+      });
+      return response.json();
+    },
+    staleTime: 60 * 60 * 1000,
+  });
+};
+
 export const useWomenSafety = () => {
   return useQuery({
     queryKey: ['women-safety'],

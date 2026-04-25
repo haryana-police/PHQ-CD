@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
 import { Layout } from '@/components/layout/Layout';
 import { Button } from '@/components/common/Button';
+import { useGovDistricts, useGovPoliceStations, useGovOffices } from '@/hooks/useData';
 
 export const ComplaintAdd = () => {
   const navigate = useNavigate();
@@ -19,12 +20,19 @@ export const ComplaintAdd = () => {
     addressLine1: '',
     village: '',
     tehsil: '',
+    districtId: '',
+    policeStationId: '',
+    branch: '',
     incidentType: '',
     incidentPlc: '',
     complDesc: '',
   });
 
   const [error, setError] = useState('');
+
+  const { data: districts } = useGovDistricts();
+  const { data: offices } = useGovOffices();
+  const { data: stations } = useGovPoliceStations(formData.districtId);
 
   const createComplaint = useMutation({
     mutationFn: async (data: typeof formData) => {
@@ -37,6 +45,8 @@ export const ComplaintAdd = () => {
         body: JSON.stringify({
           ...data,
           age: data.age ? parseInt(data.age) : null,
+          districtId: data.districtId ? parseInt(data.districtId) : null,
+          policeStationId: data.policeStationId ? parseInt(data.policeStationId) : null,
           complRegDt: data.complRegDt ? new Date(data.complRegDt).toISOString() : new Date().toISOString(),
         }),
       });
@@ -105,6 +115,16 @@ export const ComplaintAdd = () => {
               </div>
 
               <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-secondary)' }}>Branch / Office</label>
+                <select name="branch" value={formData.branch} onChange={handleChange} className="form-select">
+                  <option value="">Select Branch</option>
+                  {offices?.data?.map((o: any) => (
+                    <option key={o.ID} value={o.Name}>{o.Name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div style={{ marginBottom: '16px' }}>
                 <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-secondary)' }}>Status</label>
                 <select name="statusOfComplaint" value={formData.statusOfComplaint} onChange={handleChange} className="form-select">
                   <option value="Pending">Pending</option>
@@ -151,6 +171,27 @@ export const ComplaintAdd = () => {
             <div className="detail-section">
               <h3 style={{ fontSize: '1.1rem', color: '#a5b4fc', marginBottom: '16px', borderBottom: '1px solid rgba(165, 180, 252, 0.2)', paddingBottom: '8px' }}>Location & Incident</h3>
               
+              <div style={{ display: 'flex', gap: '16px', marginBottom: '16px' }}>
+                <div style={{ flex: 1 }}>
+                  <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-secondary)' }}>District</label>
+                  <select name="districtId" value={formData.districtId} onChange={handleChange} className="form-select">
+                    <option value="">Select District</option>
+                    {districts?.data?.map((d: any) => (
+                      <option key={d.ID} value={d.ID}>{d.DistrictName}</option>
+                    ))}
+                  </select>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-secondary)' }}>Police Station</label>
+                  <select name="policeStationId" value={formData.policeStationId} onChange={handleChange} className="form-select" disabled={!formData.districtId}>
+                    <option value="">Select Police Station</option>
+                    {stations?.data?.map((s: any) => (
+                      <option key={s.ID} value={s.ID}>{s.Name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
               <div style={{ marginBottom: '16px' }}>
                 <label style={{ display: 'block', marginBottom: '8px', color: 'var(--text-secondary)' }}>Address / Location</label>
                 <input type="text" name="addressLine1" value={formData.addressLine1} onChange={handleChange} className="form-input" placeholder="Full Address" />
