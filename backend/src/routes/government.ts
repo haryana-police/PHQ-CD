@@ -1,7 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { sendSuccess, sendError } from '../utils/response.js';
 import { authenticate } from '../middleware/auth.js';
-import { query, queryOne } from '../config/db.js';
+import { prisma } from '../config/database.js';
 
 interface ApiResponse {
   DropDownDTO?: Array<{ ID: string; Name: string }>;
@@ -54,14 +54,13 @@ export const governmentRoutes = async (fastify: FastifyInstance) => {
       
       // Save to local database
       for (const district of data.DropDownDTO) {
-        await query(
-          `IF NOT EXISTS (SELECT 1 FROM District_Master WHERE ID = @id) INSERT INTO District_Master (ID, DistrictName) VALUES (@id, @name)`,
-          [{ name: 'id', value: parseInt(district.ID) }, { name: 'name', value: district.Name }]
+        await prisma.$executeRawUnsafe(
+          `IF NOT EXISTS (SELECT 1 FROM District_Master WHERE ID = ${parseInt(district.ID)}) INSERT INTO District_Master (ID, DistrictName) VALUES (${parseInt(district.ID)}, '${district.Name.replace(/'/g, "''")}')`
         );
       }
       
       // Return from local database
-      const districts = await query('SELECT * FROM District_Master ORDER BY DistrictName');
+      const districts = await prisma.$queryRaw`SELECT * FROM District_Master ORDER BY DistrictName`;
       
       return sendSuccess(reply, districts);
     } catch (error) {
@@ -75,9 +74,10 @@ export const governmentRoutes = async (fastify: FastifyInstance) => {
     preHandler: [authenticate],
   }, async (request, reply) => {
     try {
-      const districts = await query('SELECT * FROM District_Master ORDER BY DistrictName');
+      const districts = await prisma.$queryRaw`SELECT * FROM District_Master ORDER BY DistrictName`;
       return sendSuccess(reply, districts);
     } catch (error) {
+      console.error('Error fetching local districts:', error);
       return sendError(reply, 'Failed to fetch districts');
     }
   });
@@ -103,14 +103,13 @@ export const governmentRoutes = async (fastify: FastifyInstance) => {
       
       // Save to local database
       for (const ps of data.DropDownDTO) {
-        await query(
-          `IF NOT EXISTS (SELECT 1 FROM PoliceStation_Master WHERE ID = @id) INSERT INTO PoliceStation_Master (ID, Name, DistrictID) VALUES (@id, @name, @districtId)`,
-          [{ name: 'id', value: parseInt(ps.ID) }, { name: 'name', value: ps.Name }, { name: 'districtId', value: parseInt(districtId) }]
+        await prisma.$executeRawUnsafe(
+          `IF NOT EXISTS (SELECT 1 FROM PoliceStation_Master WHERE ID = ${parseInt(ps.ID)}) INSERT INTO PoliceStation_Master (ID, Name, DistrictID) VALUES (${parseInt(ps.ID)}, '${ps.Name.replace(/'/g, "''")}', ${parseInt(districtId)})`
         );
       }
       
       // Return from local database
-      const stations = await query('SELECT * FROM PoliceStation_Master WHERE DistrictID = @districtId ORDER BY Name', [{ name: 'districtId', value: parseInt(districtId) }]);
+      const stations = await prisma.$queryRawUnsafe(`SELECT * FROM PoliceStation_Master WHERE DistrictID = ${parseInt(districtId)} ORDER BY Name`);
       
       return sendSuccess(reply, stations);
     } catch (error) {
@@ -127,18 +126,15 @@ export const governmentRoutes = async (fastify: FastifyInstance) => {
       const { districtId } = request.query as { districtId?: string };
       
       let sql = 'SELECT * FROM PoliceStation_Master';
-      let params: any[] = [];
-      
       if (districtId) {
-        sql += ' WHERE DistrictID = @districtId';
-        params = [{ name: 'districtId', value: parseInt(districtId) }];
+        sql += ` WHERE DistrictID = ${parseInt(districtId)}`;
       }
-      
       sql += ' ORDER BY Name';
       
-      const stations = await query(sql, params);
+      const stations = await prisma.$queryRawUnsafe(sql);
       return sendSuccess(reply, stations);
     } catch (error) {
+      console.error('Error fetching local police stations:', error);
       return sendError(reply, 'Failed to fetch police stations');
     }
   });
@@ -158,14 +154,13 @@ export const governmentRoutes = async (fastify: FastifyInstance) => {
       
       // Save to local database
       for (const office of data.DropDownDTO) {
-        await query(
-          `IF NOT EXISTS (SELECT 1 FROM Offices_Master WHERE ID = @id) INSERT INTO Offices_Master (ID, Name) VALUES (@id, @name)`,
-          [{ name: 'id', value: parseInt(office.ID) }, { name: 'name', value: office.Name }]
+        await prisma.$executeRawUnsafe(
+          `IF NOT EXISTS (SELECT 1 FROM Offices_Master WHERE ID = ${parseInt(office.ID)}) INSERT INTO Offices_Master (ID, Name) VALUES (${parseInt(office.ID)}, '${office.Name.replace(/'/g, "''")}')`
         );
       }
       
       // Return from local database
-      const offices = await query('SELECT * FROM Offices_Master ORDER BY Name');
+      const offices = await prisma.$queryRaw`SELECT * FROM Offices_Master ORDER BY Name`;
       
       return sendSuccess(reply, offices);
     } catch (error) {
@@ -179,9 +174,10 @@ export const governmentRoutes = async (fastify: FastifyInstance) => {
     preHandler: [authenticate],
   }, async (request, reply) => {
     try {
-      const offices = await query('SELECT * FROM Offices_Master ORDER BY Name');
+      const offices = await prisma.$queryRaw`SELECT * FROM Offices_Master ORDER BY Name`;
       return sendSuccess(reply, offices);
     } catch (error) {
+      console.error('Error fetching local offices:', error);
       return sendError(reply, 'Failed to fetch offices');
     }
   });
@@ -199,9 +195,8 @@ export const governmentRoutes = async (fastify: FastifyInstance) => {
         const districtData = await fetchXmlAsJson<{ DropDownDTO: Array<{ ID: string; Name: string }> }>(districtApi);
         
         for (const d of districtData.DropDownDTO || []) {
-          await query(
-            `IF NOT EXISTS (SELECT 1 FROM District_Master WHERE ID = @id) INSERT INTO District_Master (ID, DistrictName) VALUES (@id, @name)`,
-            [{ name: 'id', value: parseInt(d.ID) }, { name: 'name', value: d.Name }]
+          await prisma.$executeRawUnsafe(
+            `IF NOT EXISTS (SELECT 1 FROM District_Master WHERE ID = ${parseInt(d.ID)}) INSERT INTO District_Master (ID, DistrictName) VALUES (${parseInt(d.ID)}, '${d.Name.replace(/'/g, "''")}')`
           );
         }
         results.districts = districtData.DropDownDTO?.length || 0;
@@ -215,9 +210,8 @@ export const governmentRoutes = async (fastify: FastifyInstance) => {
         const officeData = await fetchXmlAsJson<{ DropDownDTO: Array<{ ID: string; Name: string }> }>(officeApi);
         
         for (const o of officeData.DropDownDTO || []) {
-          await query(
-            `IF NOT EXISTS (SELECT 1 FROM Offices_Master WHERE ID = @id) INSERT INTO Offices_Master (ID, Name) VALUES (@id, @name)`,
-            [{ name: 'id', value: parseInt(o.ID) }, { name: 'name', value: o.Name }]
+          await prisma.$executeRawUnsafe(
+            `IF NOT EXISTS (SELECT 1 FROM Offices_Master WHERE ID = ${parseInt(o.ID)}) INSERT INTO Offices_Master (ID, Name) VALUES (${parseInt(o.ID)}, '${o.Name.replace(/'/g, "''")}')`
           );
         }
         results.offices = officeData.DropDownDTO?.length || 0;
