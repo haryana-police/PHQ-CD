@@ -160,47 +160,78 @@ export const cctnsSyncRoutes = async (fastify: FastifyInstance) => {
       let updated = 0;
       let skipped = 0;
 
-      for (const row of rows) {
-        const complRegNum = str(row.COMPL_REG_NUM);
+      // Filter and map all valid rows first
+      const validRows = rows.filter(r => str(r.COMPL_REG_NUM));
+      const mappedRows = validRows.map(row => mapRowToComplaint(row));
+      
+      skipped = rows.length - validRows.length;
 
-        if (!complRegNum) {
-          skipped++;
-          continue;
-        }
+      // Process in chunks of 500 to prevent database connection limits
+      const CHUNK_SIZE = 500;
+      for (let i = 0; i < mappedRows.length; i += CHUNK_SIZE) {
+        const chunk = mappedRows.slice(i, i + CHUNK_SIZE);
+        const complRegNums = chunk.map(r => r.complRegNum as string);
 
-        try {
-          const mapped = mapRowToComplaint(row);
+        // Find existing records in this chunk (1 fast query)
+        const existingRecords = await prisma.complaint.findMany({
+          where: { complRegNum: { in: complRegNums } },
+          select: { id: true, complRegNum: true },
+        });
 
-          // Mirror InsertComplaintData stored procedure:
-          // IF EXISTS → UPDATE only status/disposal/IO fields
-          // ELSE → INSERT full record
-          const existing = await prisma.complaint.findUnique({
-            where: { complRegNum },
-            select: { id: true },
-          });
+        const existingMap = new Map(existingRecords.map(r => [r.complRegNum, r.id]));
+        
+        const toCreate: any[] = [];
+        const toUpdate: any[] = [];
 
-          if (existing) {
-            await prisma.complaint.update({
-              where: { id: existing.id },
+        for (const mapped of chunk) {
+          if (mapped.complRegNum && existingMap.has(mapped.complRegNum)) {
+            toUpdate.push({
+              id: existingMap.get(mapped.complRegNum),
               data: {
                 statusOfComplaint: mapped.statusOfComplaint,
                 disposalDate: mapped.disposalDate,
                 ioDetails: mapped.ioDetails,
-              },
+              }
             });
-            updated++;
           } else {
-            await prisma.complaint.create({ data: mapped });
-            created++;
+            toCreate.push(mapped);
           }
-        } catch (e) {
-          console.error('[CCTNS] Error upserting row:', row.COMPL_REG_NUM, e instanceof Error ? e.message : e);
-          skipped++;
+        }
+
+        // Bulk Create (Very Fast)
+        if (toCreate.length > 0) {
+          try {
+            await prisma.complaint.createMany({
+              data: toCreate,
+              skipDuplicates: true,
+            });
+            created += toCreate.length;
+          } catch (e) {
+            console.error('Error in createMany chunk:', e);
+            skipped += toCreate.length;
+          }
+        }
+
+        // Parallel Updates (Extremely fast compared to sequential)
+        if (toUpdate.length > 0) {
+          try {
+            await Promise.all(
+              toUpdate.map(u => 
+                prisma.complaint.update({
+                  where: { id: u.id },
+                  data: u.data
+                })
+              )
+            );
+            updated += toUpdate.length;
+          } catch (e) {
+            console.error('Error in Promise.all update chunk:', e);
+          }
         }
       }
 
       return sendSuccess(reply, {
-        message: 'CCTNS sync completed',
+        message: 'CCTNS sync completed (Optimized)',
         fetched: rows.length,
         created,
         updated,
@@ -233,44 +264,73 @@ export const cctnsSyncRoutes = async (fastify: FastifyInstance) => {
       let updated = 0;
       let skipped = 0;
 
-      for (const row of rows) {
-        const complRegNum = str(row.COMPL_REG_NUM);
+      const validRows = rows.filter(r => str(r.COMPL_REG_NUM));
+      const mappedRows = validRows.map(row => mapRowToComplaint(row));
+      
+      skipped = rows.length - validRows.length;
 
-        if (!complRegNum) {
-          skipped++;
-          continue;
-        }
+      const CHUNK_SIZE = 500;
+      for (let i = 0; i < mappedRows.length; i += CHUNK_SIZE) {
+        const chunk = mappedRows.slice(i, i + CHUNK_SIZE);
+        const complRegNums = chunk.map(r => r.complRegNum as string);
 
-        try {
-          const mapped = mapRowToComplaint(row);
+        const existingRecords = await prisma.complaint.findMany({
+          where: { complRegNum: { in: complRegNums } },
+          select: { id: true, complRegNum: true },
+        });
 
-          const existing = await prisma.complaint.findUnique({
-            where: { complRegNum },
-            select: { id: true },
-          });
+        const existingMap = new Map(existingRecords.map(r => [r.complRegNum, r.id]));
+        
+        const toCreate: any[] = [];
+        const toUpdate: any[] = [];
 
-          if (existing) {
-            await prisma.complaint.update({
-              where: { id: existing.id },
+        for (const mapped of chunk) {
+          if (mapped.complRegNum && existingMap.has(mapped.complRegNum)) {
+            toUpdate.push({
+              id: existingMap.get(mapped.complRegNum),
               data: {
                 statusOfComplaint: mapped.statusOfComplaint,
                 disposalDate: mapped.disposalDate,
                 ioDetails: mapped.ioDetails,
-              },
+              }
             });
-            updated++;
           } else {
-            await prisma.complaint.create({ data: mapped });
-            created++;
+            toCreate.push(mapped);
           }
-        } catch (e) {
-          console.error('[CCTNS Enquiry] Error upserting row:', row.COMPL_REG_NUM, e instanceof Error ? e.message : e);
-          skipped++;
+        }
+
+        if (toCreate.length > 0) {
+          try {
+            await prisma.complaint.createMany({
+              data: toCreate,
+              skipDuplicates: true,
+            });
+            created += toCreate.length;
+          } catch (e) {
+            console.error('Error in createMany chunk:', e);
+            skipped += toCreate.length;
+          }
+        }
+
+        if (toUpdate.length > 0) {
+          try {
+            await Promise.all(
+              toUpdate.map(u => 
+                prisma.complaint.update({
+                  where: { id: u.id },
+                  data: u.data
+                })
+              )
+            );
+            updated += toUpdate.length;
+          } catch (e) {
+            console.error('Error in Promise.all update chunk:', e);
+          }
         }
       }
 
       return sendSuccess(reply, {
-        message: 'CCTNS enquiry sync completed',
+        message: 'CCTNS enquiry sync completed (Optimized)',
         fetched: rows.length,
         created,
         updated,
