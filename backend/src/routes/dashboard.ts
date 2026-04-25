@@ -75,7 +75,8 @@ export const dashboardRoutes = async (fastify: FastifyInstance) => {
 
   /**
    * District-wise — mirrors GetNormalizedDistrictComplaints SP.
-   * Year filter uses date range (index-safe) instead of YEAR() function.
+   * Normalizes addressDistrict (UPPER + TRIM) to collapse casing/spacing variants.
+   * Limits to TOP 22 (22 official Haryana districts) to keep charts clean.
    */
   fastify.get('/dashboard/district-wise', {
     preHandler: [authenticate],
@@ -84,7 +85,6 @@ export const dashboardRoutes = async (fastify: FastifyInstance) => {
       const { year } = request.query as Record<string, string>;
       const yearNum = year ? parseInt(year) : new Date().getFullYear();
 
-      // Use date range instead of YEAR(col) — allows index seek
       const yearStart = `${yearNum}-01-01T00:00:00.000Z`;
       const yearEnd   = `${yearNum + 1}-01-01T00:00:00.000Z`;
 
@@ -94,14 +94,14 @@ export const dashboardRoutes = async (fastify: FastifyInstance) => {
         Pending: number;
         Disposed: number;
       }>>(
-        `SELECT
-          ISNULL(addressDistrict, 'Unknown') AS district,
+        `SELECT TOP 22
+          UPPER(LTRIM(RTRIM(ISNULL(addressDistrict, 'UNKNOWN')))) AS district,
           COUNT(*) AS TotalComplaints,
           SUM(CASE WHEN statusOfComplaint LIKE 'Pending%' OR statusOfComplaint IS NULL OR statusOfComplaint = '' THEN 1 ELSE 0 END) AS Pending,
           SUM(CASE WHEN statusOfComplaint LIKE 'Disposed%' THEN 1 ELSE 0 END) AS Disposed
         FROM Complaint
         WHERE complRegDt >= '${yearStart}' AND complRegDt < '${yearEnd}'
-        GROUP BY addressDistrict
+        GROUP BY UPPER(LTRIM(RTRIM(ISNULL(addressDistrict, 'UNKNOWN'))))
         ORDER BY TotalComplaints DESC`
       );
 

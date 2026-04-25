@@ -1,4 +1,4 @@
-import { ReactNode, useState } from 'react';
+import { useState } from 'react';
 import { BaseChart } from './Charts';
 import type { EChartsOption } from 'echarts';
 
@@ -7,9 +7,10 @@ interface ChartCardProps {
   option: EChartsOption;
   height?: string;
   expandedHeight?: string;
+  isLoading?: boolean;
 }
 
-export const ChartCard = ({ title, option, height = '280px', expandedHeight = 'calc(100vh - 120px)' }: ChartCardProps) => {
+export const ChartCard = ({ title, option, height = '280px', expandedHeight = 'calc(100vh - 120px)', isLoading = false }: ChartCardProps) => {
   const [expanded, setExpanded] = useState(false);
 
   if (expanded) {
@@ -44,7 +45,25 @@ export const ChartCard = ({ title, option, height = '280px', expandedHeight = 'c
         </button>
       </div>
       <div className="chart-card-body">
-        <BaseChart option={option} height={height} />
+        {isLoading ? (
+          <div style={{
+            height,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: 'var(--text-secondary)',
+            fontSize: '0.85rem',
+            gap: '10px',
+          }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+              style={{ animation: 'spin 1s linear infinite' }}>
+              <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+            </svg>
+            Loading chart…
+          </div>
+        ) : (
+          <BaseChart option={option} height={height} />
+        )}
       </div>
     </div>
   );

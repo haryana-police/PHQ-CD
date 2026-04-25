@@ -15,8 +15,10 @@ import ComplaintAdd from './pages/admin/ComplaintAdd';
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 5 * 60 * 1000,
+      staleTime: 10 * 60 * 1000,   // 10 min — chart data served from cache on navigation
+      gcTime:    30 * 60 * 1000,   // 30 min — keep in memory to avoid re-fetch on tab switch
       retry: 1,
+      refetchOnWindowFocus: false, // don't refetch when user switches tabs
     },
   },
 });
