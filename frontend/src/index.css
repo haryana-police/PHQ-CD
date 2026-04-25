@@ -29,7 +29,7 @@
   --shadow-glow: 0 0 20px rgba(99, 102, 241, 0.4);
 
   --header-height: 60px;
-  --sidebar-width: 220px;
+  --sidebar-width: 210px;
 
   --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   --glass-blur: blur(16px);
@@ -450,7 +450,8 @@ body {
 }
 
 .page-content {
-  padding: 16px;
+  padding: 20px 22px;
+  max-width: 1600px;
 }
 
 /* Summary Row */
@@ -1254,6 +1255,11 @@ select:focus {
 @keyframes spin {
   from { transform: rotate(0deg); }
   to   { transform: rotate(360deg); }
+}
+
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
 }
 
 @keyframes fadeIn {
