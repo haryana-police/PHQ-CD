@@ -6,7 +6,7 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://phq-api.onrender.com/api/:path*"
+      "destination": "https://phq-cd.onrender.com/api/:path*"
     },
     {
       "source": "/(.*)",
