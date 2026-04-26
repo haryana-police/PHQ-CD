@@ -1,5 +1,6 @@
 import { ReactNode, useState, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { GlobalFilterBar } from './GlobalFilterBar';
 
 interface LayoutProps {
   children: ReactNode;
@@ -7,7 +8,7 @@ interface LayoutProps {
 
 const menuItems = [
   { path: '/admin/dashboard', label: 'Dashboard' },
-  { path: '/admin/highlights', label: 'Highlights' },
+  { path: '/admin/highlights', label: 'Hotspots' },
   { path: '/admin/reports', label: 'Reports' },
   { path: '/admin/pending', label: 'Pending' },
   { path: '/admin/complaints', label: 'Complaints' },
@@ -70,7 +71,6 @@ export const Layout = ({ children }: LayoutProps) => {
           </button>
         </div>
       </header>
-
       <aside className={`sidebar ${sidebarOpen ? 'open' : ''}`}>
         <nav className="sidebar-nav">
           {menuItems.map((item) => (
@@ -89,6 +89,7 @@ export const Layout = ({ children }: LayoutProps) => {
       <div className={`sidebar-overlay ${sidebarOpen ? '' : 'hidden'}`} onClick={() => setSidebarOpen(false)} />
 
       <main className="main-content">
+        <GlobalFilterBar />
         <ChartContext.Provider value={{ expanded: chartExpanded, setExpanded: setChartExpanded }}>
           {children}
         </ChartContext.Provider>

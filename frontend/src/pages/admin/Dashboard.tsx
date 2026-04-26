@@ -3,6 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { Layout } from '@/components/layout/Layout';
 import { ChartCard } from '@/components/charts/ChartCard';
 import { getDistrictBarOptions, getDurationLineOptions, getStackedBarOptions } from '@/components/charts/Charts';
+import { DataTable, Column } from '@/components/data/DataTable';
+import { dashboardApi } from '@/services/api';
+import { useFilters } from '@/contexts/FilterContext';
 
 const StatCard = ({ label, value, subValue, colorClass }: { label: string; value: string | number; subValue?: string; colorClass: string }) => (
   <div className={`stat-card ${colorClass}`}>
@@ -14,45 +17,34 @@ const StatCard = ({ label, value, subValue, colorClass }: { label: string; value
 
 export const DashboardPage = () => {
   const navigate = useNavigate();
+  const { filters } = useFilters();
+  
+  // Clean empty filters before passing
+  const activeFilters = Object.fromEntries(Object.entries(filters).filter(([_, v]) => v !== ''));
 
   const { data: summaryData, isLoading: sl } = useQuery({
-    queryKey: ['dashboard', 'summary'],
-    queryFn: async () => {
-      const r = await fetch('/api/dashboard/summary', { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
-      return r.json();
-    },
+    queryKey: ['dashboard', 'summary', activeFilters],
+    queryFn: () => dashboardApi.summary(activeFilters),
   });
 
   const { data: districtData, isLoading: dl } = useQuery({
-    queryKey: ['dashboard', 'district'],
-    queryFn: async () => {
-      const r = await fetch('/api/dashboard/district-wise', { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
-      return r.json();
-    },
+    queryKey: ['dashboard', 'district', activeFilters],
+    queryFn: () => dashboardApi.districtWise(activeFilters),
   });
 
   const { data: durationData, isLoading: durl } = useQuery({
-    queryKey: ['dashboard', 'duration'],
-    queryFn: async () => {
-      const r = await fetch('/api/dashboard/duration-wise', { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
-      return r.json();
-    },
+    queryKey: ['dashboard', 'duration', activeFilters],
+    queryFn: () => dashboardApi.durationWise(activeFilters),
   });
 
   const { data: matrixData, isLoading: ml } = useQuery({
-    queryKey: ['dashboard', 'matrix'],
-    queryFn: async () => {
-      const r = await fetch('/api/dashboard/ageing-matrix', { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
-      return r.json();
-    },
+    queryKey: ['dashboard', 'matrix', activeFilters],
+    queryFn: () => dashboardApi.ageingMatrix(activeFilters),
   });
 
   const { data: categoryData, isLoading: cl } = useQuery({
-    queryKey: ['dashboard', 'category'],
-    queryFn: async () => {
-      const r = await fetch('/api/dashboard/category-wise', { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
-      return r.json();
-    },
+    queryKey: ['dashboard', 'category', activeFilters],
+    queryFn: () => dashboardApi.categoryWise(activeFilters),
   });
 
   const s = summaryData?.data;
@@ -61,12 +53,62 @@ export const DashboardPage = () => {
   const matrix = matrixData?.data || [];
   const categories = categoryData?.data || [];
 
+  const matrixWithPct = matrix.map((row: any) => {
+    const total = (row.u7 + row.u15 + row.u30 + row.o30) || 1;
+    return {
+      ...row,
+      pct_u7: Math.round(row.u7 * 100 / total),
+      pct_u15: Math.round(row.u15 * 100 / total),
+      pct_u30: Math.round(row.u30 * 100 / total),
+      pct_o30: Math.round(row.o30 * 100 / total),
+    };
+  });
+
+  const matrixCols: Column<any>[] = [
+    { key: 'district', label: 'District', sortable: true },
+    { key: 'u7', label: '<7 Days', sortable: true, align: 'center' },
+    { key: 'u15', label: '7-15 Days', sortable: true, align: 'center' },
+    { key: 'u30', label: '15-30 Days', sortable: true, align: 'center' },
+    { key: 'o30', label: '>30 Days', sortable: true, align: 'center' },
+  ];
+
+  const renderMatrixDays = (col: any, row: any) => {
+    if (col.key === 'district') return <span style={{ fontWeight: 500, color: 'var(--text-main)' }}>{row.district}</span>;
+    if (col.key === 'u7') return <span style={{ color: 'var(--text-muted)' }}>{row.u7}</span>;
+    if (col.key === 'u15') return <span style={{ color: '#eab308' }}>{row.u15}</span>;
+    if (col.key === 'u30') return <span style={{ color: '#fb923c', fontWeight: 500 }}>{row.u30}</span>;
+    if (col.key === 'o30') return <span style={{ color: '#ef4444', fontWeight: 'bold' }}>{row.o30}</span>;
+    return row[col.key];
+  };
+
+  const matrixPctCols: Column<any>[] = [
+    { key: 'district', label: 'District', sortable: true },
+    { key: 'pct_u7', label: '<7 Days', sortable: true, align: 'center' },
+    { key: 'pct_u15', label: '7-15 Days', sortable: true, align: 'center' },
+    { key: 'pct_u30', label: '15-30 Days', sortable: true, align: 'center' },
+    { key: 'pct_o30', label: '>30 Days', sortable: true, align: 'center' },
+  ];
+
+  const renderMatrixPct = (col: any, row: any) => {
+    if (col.key === 'district') return <span style={{ fontWeight: 500, color: 'var(--text-main)' }}>{row.district}</span>;
+    if (col.key === 'pct_u7') return <span style={{ color: 'var(--text-muted)' }}>{row.pct_u7}%</span>;
+    if (col.key === 'pct_u15') return <span style={{ color: '#eab308' }}>{row.pct_u15}%</span>;
+    if (col.key === 'pct_u30') return <span style={{ color: '#fb923c', fontWeight: 500 }}>{row.pct_u30}%</span>;
+    if (col.key === 'pct_o30') return <span style={{ color: '#ef4444', fontWeight: 'bold' }}>{row.pct_o30}%</span>;
+    return row[col.key];
+  };
+
   return (
     <Layout>
       <div className="page-content space-y-6">
-        <div className="flex justify-between items-center mb-2">
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', marginBottom: '8px' }}>
           <h1 className="text-2xl font-bold text-slate-100">Executive Overview</h1>
-          <button className="bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded text-sm font-medium transition-colors">
+          <button className="btn-primary" style={{ width: 'auto', margin: 0, padding: '8px 16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="7 10 12 15 17 10" />
+              <line x1="12" y1="15" x2="12" y2="3" />
+            </svg>
             Export Report PDF
           </button>
         </div>
@@ -82,59 +124,66 @@ export const DashboardPage = () => {
           </div>
         )}
 
-        <div className="charts-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
+        <div className="dashboard-charts-grid">
           <ChartCard
             title="State-wide Trend (Monthly)"
             option={getDurationLineOptions(durations)}
+            fullOption={getDurationLineOptions(durations)}
             height="320px"
           />
           <ChartCard
             title="Top District Pendency"
             option={getDistrictBarOptions(districts.sort((a: any, b: any) => b.pending - a.pending).slice(0, 7))}
+            fullOption={getDistrictBarOptions(districts)}
             height="320px"
           />
           <ChartCard
             title="Top Complaint Categories"
             option={getStackedBarOptions(categories.slice(0, 5))}
+            fullOption={getStackedBarOptions(categories)}
             height="320px"
           />
         </div>
 
-        <div className="bg-slate-800 rounded-lg p-5 border border-slate-700">
-          <h2 className="text-lg font-bold text-slate-100 mb-4">Pendency Ageing Matrix (Days)</h2>
-          {ml ? (
-            <div className="text-slate-400">Loading matrix...</div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm text-left">
-                <thead className="text-xs text-slate-400 uppercase bg-slate-900/50">
-                  <tr>
-                    <th className="px-4 py-3 font-medium">District</th>
-                    <th className="px-4 py-3 font-medium text-center">&lt; 7 Days</th>
-                    <th className="px-4 py-3 font-medium text-center">7 - 15 Days</th>
-                    <th className="px-4 py-3 font-medium text-center">15 - 30 Days</th>
-                    <th className="px-4 py-3 font-medium text-center text-red-400">&gt; 30 Days</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {matrix.sort((a: any, b: any) => b.o30 - a.o30).map((row: any, i: number) => (
-                    <tr 
-                      key={i} 
-                      onClick={() => navigate(`/admin/district/${encodeURIComponent(row.district)}`)}
-                      className="border-b border-slate-700 hover:bg-slate-700/50 transition-colors cursor-pointer"
-                      title={`View Police Station analysis for ${row.district}`}
-                    >
-                      <td className="px-4 py-3 font-medium text-slate-200">{row.district}</td>
-                      <td className="px-4 py-3 text-center text-slate-300">{row.u7}</td>
-                      <td className="px-4 py-3 text-center text-yellow-500">{row.u15}</td>
-                      <td className="px-4 py-3 text-center text-orange-400 font-medium">{row.u30}</td>
-                      <td className="px-4 py-3 text-center text-red-500 font-bold bg-red-500/10">{row.o30}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+        <div className="dashboard-matrices-grid">
+          <div className="bg-slate-800 rounded-lg p-5 border border-slate-700" style={{ display: 'flex', flexDirection: 'column' }}>
+            <h2 className="text-lg font-bold text-slate-100 mb-4">Pendency Ageing Matrix (Days)</h2>
+            {ml ? (
+              <div className="text-slate-400">Loading matrix...</div>
+            ) : (
+              <div style={{ flex: 1, position: 'relative' }}>
+                <DataTable
+                  title="Pendency Ageing Matrix (Days)"
+                  data={matrix}
+                  columns={matrixCols.map(c => ({
+                    ...c,
+                    render: (row) => renderMatrixDays(c, row),
+                  }))}
+                  onRowClick={(row) => navigate(`/admin/district/${encodeURIComponent(row.district)}`)}
+                  maxHeight="400px"
+                />
+              </div>
+            )}
+          </div>
+          <div className="bg-slate-800 rounded-lg p-5 border border-slate-700" style={{ display: 'flex', flexDirection: 'column' }}>
+            <h2 className="text-lg font-bold text-slate-100 mb-4">Pendency Ageing Matrix (%)</h2>
+            {ml ? (
+              <div className="text-slate-400">Loading matrix...</div>
+            ) : (
+              <div style={{ flex: 1, position: 'relative' }}>
+                <DataTable
+                  title="Pendency Ageing Matrix (%)"
+                  data={matrixWithPct}
+                  columns={matrixPctCols.map(c => ({
+                    ...c,
+                    render: (row) => renderMatrixPct(c, row),
+                  }))}
+                  onRowClick={(row) => navigate(`/admin/district/${encodeURIComponent(row.district)}`)}
+                  maxHeight="400px"
+                />
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </Layout>

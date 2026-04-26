@@ -12,8 +12,10 @@ export const getDistrictBarOptions = (data: { district: string; total: number; p
       backgroundColor: '#1e293b',
       borderColor: '#334155',
       textStyle: { color: '#e2e8f0', fontSize: 12 },
-      formatter: (params: { name: string; seriesName: string; value: number; color: string }) => {
-        return `<div style="font-weight:600;margin-bottom:4px">${params.name}</div><div style="color:${params.color}">${params.seriesName}: <b>${params.value}</b></div>`;
+      formatter: (params: any) => {
+        const item = data[params.dataIndex];
+        const pct = item.total > 0 ? Math.round((params.value / item.total) * 100) : 0;
+        return `<div style="font-weight:600;margin-bottom:4px">${params.name}</div><div style="color:${params.color}">${params.seriesName}: <b>${params.value}</b> (${pct}%)</div>`;
       },
     },
     legend: {
@@ -25,17 +27,17 @@ export const getDistrictBarOptions = (data: { district: string; total: number; p
     },
     grid: { left: '2%', right: '2%', bottom: '12%', top: '2%', containLabel: true },
     xAxis: {
-      type: 'category',
-      data: data.map(d => d.district),
-      axisLabel: { rotate: 25, fontSize: 10, color: '#94a3b8', interval: 0 },
-      axisLine: { lineStyle: { color: '#334155' } },
-      axisTick: { show: false },
-    },
-    yAxis: {
       type: 'value',
       axisLabel: { color: '#94a3b8', fontSize: 10 },
       splitLine: { lineStyle: { color: '#1e293b' } },
       axisLine: { show: false },
+    },
+    yAxis: {
+      type: 'category',
+      data: data.map(d => d.district),
+      axisLabel: { fontSize: 10, color: '#94a3b8', interval: 0, width: 80, overflow: 'truncate' },
+      axisLine: { lineStyle: { color: '#334155' } },
+      axisTick: { show: false },
     },
     series: [
       {
@@ -43,28 +45,37 @@ export const getDistrictBarOptions = (data: { district: string; total: number; p
         type: 'bar',
         stack: 'total',
         data: data.map(d => d.pending),
-        itemStyle: { color: '#fbbf24', borderRadius: [3, 3, 0, 0] },
-        barMaxWidth: 28,
+        itemStyle: { color: '#fbbf24', borderRadius: [0, 3, 3, 0] },
+        barMaxWidth: 20,
       },
       {
         name: 'Disposed',
         type: 'bar',
         stack: 'total',
         data: data.map(d => d.disposed),
-        itemStyle: { color: '#34d399', borderRadius: [3, 3, 0, 0] },
-        barMaxWidth: 28,
+        itemStyle: { color: '#34d399', borderRadius: [0, 3, 3, 0] },
+        barMaxWidth: 20,
       },
     ],
   };
 };
 
-export const getDurationLineOptions = (data: { month: string; total: number; pending: number; disposed: number }[]) => {
+export const getDurationLineOptions = (data: { duration?: string; month?: string; total: number; pending: number; disposed: number }[]) => {
   return {
     tooltip: {
       trigger: 'axis',
       backgroundColor: '#1e293b',
       borderColor: '#334155',
       textStyle: { color: '#e2e8f0', fontSize: 12 },
+      formatter: (params: any[]) => {
+        const item = data[params[0].dataIndex];
+        let res = `<div style="font-weight:600;margin-bottom:4px">${params[0].name}</div>`;
+        params.forEach(p => {
+          const pct = item.total > 0 ? Math.round((p.value / item.total) * 100) : 0;
+          res += `<div style="color:${p.color}">${p.seriesName}: <b>${p.value}</b> (${pct}%)</div>`;
+        });
+        return res;
+      }
     },
     legend: {
       data: ['Pending', 'Disposed'],
@@ -76,7 +87,7 @@ export const getDurationLineOptions = (data: { month: string; total: number; pen
     grid: { left: '2%', right: '2%', bottom: '12%', top: '2%', containLabel: true },
     xAxis: {
       type: 'category',
-      data: data.map(d => d.month),
+      data: data.map(d => d.duration || d.month),
       axisLabel: { color: '#94a3b8', fontSize: 10 },
       axisLine: { lineStyle: { color: '#334155' } },
       axisTick: { show: false },
@@ -156,8 +167,10 @@ export const getStackedBarOptions = (data: { category: string; total: number; pe
       backgroundColor: '#1e293b',
       borderColor: '#334155',
       textStyle: { color: '#e2e8f0', fontSize: 12 },
-      formatter: (params: { name: string; seriesName: string; value: number; color: string }) => {
-        return `<div style="font-weight:600;margin-bottom:4px">${params.name}</div><div style="color:${params.color}">${params.seriesName}: <b>${params.value}</b></div>`;
+      formatter: (params: any) => {
+        const item = data[params.dataIndex];
+        const pct = item.total > 0 ? Math.round((params.value / item.total) * 100) : 0;
+        return `<div style="font-weight:600;margin-bottom:4px">${params.name}</div><div style="color:${params.color}">${params.seriesName}: <b>${params.value}</b> (${pct}%)</div>`;
       },
     },
     legend: {

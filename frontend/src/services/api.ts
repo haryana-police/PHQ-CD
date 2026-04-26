@@ -75,16 +75,16 @@ export const complaintsApi = {
 };
 
 export const dashboardApi = {
-  summary: async () => {
-    const response = await api.get('/api/dashboard/summary');
+  summary: async (params?: Record<string, string>) => {
+    const response = await api.get('/api/dashboard/summary', { params });
     return response.data;
   },
-  districtWise: async () => {
-    const response = await api.get('/api/dashboard/district-wise');
+  districtWise: async (params?: Record<string, string>) => {
+    const response = await api.get('/api/dashboard/district-wise', { params });
     return response.data;
   },
-  durationWise: async (year?: number) => {
-    const response = await api.get('/api/dashboard/duration-wise', { params: { year } });
+  durationWise: async (params?: Record<string, string>) => {
+    const response = await api.get('/api/dashboard/duration-wise', { params });
     return response.data;
   },
   dateWise: async (fromDate: string, toDate: string) => {
@@ -93,10 +93,26 @@ export const dashboardApi = {
     });
     return response.data;
   },
-  monthWise: async () => {
-    const response = await api.get('/api/dashboard/month-wise');
+  monthWise: async (params?: Record<string, string>) => {
+    const response = await api.get('/api/dashboard/month-wise', { params });
     return response.data;
   },
+  ageingMatrix: async (params?: Record<string, string>) => {
+    const response = await api.get('/api/dashboard/ageing-matrix', { params });
+    return response.data;
+  },
+  categoryWise: async (params?: Record<string, string>) => {
+    const response = await api.get('/api/dashboard/category-wise', { params });
+    return response.data;
+  },
+  getDistrictWise: async () => {
+    const response = await api.get('/api/dashboard/district-wise');
+    return response.data;
+  },
+  getCategoryWise: async () => {
+    const response = await api.get('/api/dashboard/category-wise');
+    return response.data;
+  }
 };
 
 export const reportsApi = {

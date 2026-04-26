@@ -29,7 +29,7 @@
   --shadow-glow: 0 0 20px rgba(99, 102, 241, 0.4);
 
   --header-height: 60px;
-  --sidebar-width: 220px;
+  --sidebar-width: 180px;
 
   --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   --glass-blur: blur(16px);
@@ -453,6 +453,37 @@ body {
   padding: 16px;
 }
 
+/* Dashboard Grids */
+.dashboard-charts-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 24px;
+}
+.dashboard-charts-grid > div {
+  min-width: 0;
+}
+@media (min-width: 1024px) {
+  .dashboard-charts-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.dashboard-matrices-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 24px;
+  margin-top: 32px;
+}
+.dashboard-matrices-grid > div {
+  min-width: 0;
+  overflow: hidden;
+}
+@media (min-width: 1024px) {
+  .dashboard-matrices-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
 /* Summary Row */
 .summary-row {
   display: grid;
@@ -774,7 +805,7 @@ body {
 
 .data-table th {
   text-align: left;
-  padding: 14px 20px;
+  padding: 12px 10px;
   font-size: 11px;
   font-weight: 600;
   color: var(--text-muted);
@@ -789,8 +820,8 @@ body {
 }
 
 .data-table td {
-  padding: 14px 20px;
-  font-size: 14px;
+  padding: 12px 10px;
+  font-size: 13px;
   color: var(--text-secondary);
   border-bottom: 1px solid var(--border);
   white-space: nowrap;
@@ -1232,4 +1263,52 @@ body {
   background: rgba(99, 102, 241, 0.12);
   border-color: var(--primary-light);
   color: var(--primary-light);
+}
+.global-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  background: #1e293b;
+  padding: 12px 24px;
+  border-bottom: 1px solid #334155;
+  align-items: flex-end;
+}
+.filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.filter-group label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
+.filter-input {
+  background: #0f172a;
+  border: 1px solid #334155;
+  color: #f1f5f9;
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  outline: none;
+}
+.filter-input:focus {
+  border-color: #3b82f6;
+}
+.filter-actions {
+  margin-left: auto;
+}
+.btn-reset {
+  background: transparent;
+  color: #ef4444;
+  border: 1px solid #ef4444;
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.btn-reset:hover {
+  background: rgba(239, 68, 68, 0.1);
 }

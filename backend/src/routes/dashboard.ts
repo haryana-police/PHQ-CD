@@ -2,26 +2,33 @@ import { FastifyInstance } from 'fastify';
 import { prisma } from '../config/database.js';
 import { sendSuccess, sendError } from '../utils/response.js';
 import { authenticate } from '../middleware/auth.js';
+import { buildPrismaWhereClause } from '../utils/filters.js';
 
 export const dashboardRoutes = async (fastify: FastifyInstance) => {
   fastify.get('/dashboard/summary', {
     preHandler: [authenticate],
   }, async (request, reply) => {
-    const totalReceived = await prisma.complaint.count();
+    const baseWhere = buildPrismaWhereClause(request.query);
+
+    const totalReceived = await prisma.complaint.count({ where: baseWhere });
     
     const totalDisposed = await prisma.complaint.count({
       where: {
+        ...baseWhere,
         statusOfComplaint: { contains: 'Disposed' },
       },
     });
     
+    const PENDING_WHERE = [
+      { statusOfComplaint: null },
+      { statusOfComplaint: { equals: '' } },
+      { statusOfComplaint: { contains: 'Pending' } },
+    ];
+
     const totalPending = await prisma.complaint.count({
       where: {
-        OR: [
-          { statusOfComplaint: null },
-          { statusOfComplaint: { equals: '' } },
-          { statusOfComplaint: { contains: 'Pending' } },
-        ],
+        ...baseWhere,
+        OR: PENDING_WHERE,
       },
     });
 
@@ -30,16 +37,11 @@ export const dashboardRoutes = async (fastify: FastifyInstance) => {
     const oneMonthAgo    = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
     const twoMonthsAgo   = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000);
 
-    const PENDING_WHERE = [
-      { statusOfComplaint: null },
-      { statusOfComplaint: { equals: '' } },
-      { statusOfComplaint: { contains: 'Pending' } },
-    ];
-
     // 15–30 days pending: registered between 15 and 30 days ago
     const pending15 = await prisma.complaint.count({
       where: {
-        complRegDt: { lte: fifteenDaysAgo, gt: oneMonthAgo },
+        ...baseWhere,
+        complRegDt: { ...baseWhere.complRegDt, lte: fifteenDaysAgo, gt: oneMonthAgo },
         OR: PENDING_WHERE,
       },
     });
@@ -47,7 +49,8 @@ export const dashboardRoutes = async (fastify: FastifyInstance) => {
     // 1–2 months pending: registered between 30 and 60 days ago
     const pendingOver1 = await prisma.complaint.count({
       where: {
-        complRegDt: { lte: oneMonthAgo, gt: twoMonthsAgo },
+        ...baseWhere,
+        complRegDt: { ...baseWhere.complRegDt, lte: oneMonthAgo, gt: twoMonthsAgo },
         OR: PENDING_WHERE,
       },
     });
@@ -55,13 +58,15 @@ export const dashboardRoutes = async (fastify: FastifyInstance) => {
     // Over 2 months pending: registered more than 60 days ago
     const pendingOver2 = await prisma.complaint.count({
       where: {
-        complRegDt: { lte: twoMonthsAgo },
+        ...baseWhere,
+        complRegDt: { ...baseWhere.complRegDt, lte: twoMonthsAgo },
         OR: PENDING_WHERE,
       },
     });
 
     const disposedComplaints = await prisma.complaint.findMany({
       where: {
+        ...baseWhere,
         statusOfComplaint: { contains: 'Disposed' },
         complRegDt: { not: null },
         disposalDate: { not: null }
@@ -91,26 +96,32 @@ export const dashboardRoutes = async (fastify: FastifyInstance) => {
   fastify.get('/dashboard/district-wise', {
     preHandler: [authenticate],
   }, async (request, reply) => {
-    const complaints = await prisma.complaint.findMany();
+    const baseWhere = buildPrismaWhereClause(request.query);
+    const complaints = await prisma.complaint.findMany({ where: baseWhere });
 
     const districtMap = new Map();
 
     for (const comp of complaints) {
       const districtName = comp.addressDistrict || 'Unknown';
       const status = (comp.statusOfComplaint || '').toLowerCase();
-      const isPending = status === '' || status.includes('pending');
-      const isDisposed = status.includes('disposed');
-
-      const existing = districtMap.get(districtName) || { total: 0, pending: 0, disposed: 0 };
-      existing.total++;
-      if (isPending) existing.pending++;
-      if (isDisposed) existing.disposed++;
-      districtMap.set(districtName, existing);
+      
+      if (!districtMap.has(districtName)) {
+        districtMap.set(districtName, { total: 0, pending: 0, disposed: 0 });
+      }
+      
+      const stats = districtMap.get(districtName);
+      stats.total++;
+      
+      if (status.includes('disposed')) {
+        stats.disposed++;
+      } else if (status === '' || status.includes('pending')) {
+        stats.pending++;
+      }
     }
 
     const data = Array.from(districtMap.entries()).map(([district, stats]) => ({
       district,
-      totalComplaints: stats.total,
+      total: stats.total,
       pending: stats.pending,
       disposed: stats.disposed,
     }));
@@ -121,41 +132,37 @@ export const dashboardRoutes = async (fastify: FastifyInstance) => {
   fastify.get('/dashboard/duration-wise', {
     preHandler: [authenticate],
   }, async (request, reply) => {
-    const { year } = request.query as Record<string, string>;
-    const yearNum = year ? parseInt(year) : new Date().getFullYear();
+    const baseWhere = buildPrismaWhereClause(request.query);
+    const complaints = await prisma.complaint.findMany({ where: baseWhere });
 
-    const startDate = new Date(yearNum + '-01-01');
-    const endDate = new Date(yearNum + '-12-31');
-
-    const complaints = await prisma.complaint.findMany({
-      where: { complRegDt: { gte: startDate, lte: endDate } },
-    });
-
-    const monthMap = new Map();
+    const durationMap = new Map();
 
     for (const comp of complaints) {
-      const month = comp.complRegDt 
-        ? comp.complRegDt.toLocaleString('default', { month: 'short' })
-        : 'Unknown';
-      
-      const status = (comp.statusOfComplaint || '').toLowerCase();
-      const isPending = status === '' || status.includes('pending');
-      const isDisposed = status.includes('disposed');
+      if (!comp.complRegDt) continue;
 
-      const existing = monthMap.get(month) || { total: 0, pending: 0, disposed: 0 };
-      existing.total++;
-      if (isPending) existing.pending++;
-      if (isDisposed) existing.disposed++;
-      monthMap.set(month, existing);
+      const date = new Date(comp.complRegDt);
+      const monthYear = `${date.toLocaleString('default', { month: 'short' })} ${date.getFullYear()}`;
+      
+      if (!durationMap.has(monthYear)) {
+        durationMap.set(monthYear, { total: 0, pending: 0, disposed: 0, sortKey: date.getTime() });
+      }
+
+      const stats = durationMap.get(monthYear);
+      stats.total++;
+
+      const status = (comp.statusOfComplaint || '').toLowerCase();
+      if (status.includes('disposed')) stats.disposed++;
+      else if (status === '' || status.includes('pending')) stats.pending++;
     }
 
-    const data = Array.from(monthMap.entries()).map(([month, stats]) => ({
-      month,
-      year: yearNum,
-      totalComplaints: stats.total,
-      pending: stats.pending,
-      disposed: stats.disposed,
-    }));
+    const data = Array.from(durationMap.entries())
+      .sort((a, b) => a[1].sortKey - b[1].sortKey)
+      .map(([duration, stats]) => ({
+        duration,
+        total: stats.total,
+        pending: stats.pending,
+        disposed: stats.disposed,
+      }));
 
     return sendSuccess(reply, data);
   });
@@ -236,8 +243,10 @@ export const dashboardRoutes = async (fastify: FastifyInstance) => {
   fastify.get('/dashboard/ageing-matrix', {
     preHandler: [authenticate],
   }, async (request, reply) => {
+    const baseWhere = buildPrismaWhereClause(request.query);
     const complaints = await prisma.complaint.findMany({
       where: {
+        ...baseWhere,
         OR: [
           { statusOfComplaint: null },
           { statusOfComplaint: { equals: '' } },
@@ -277,12 +286,14 @@ export const dashboardRoutes = async (fastify: FastifyInstance) => {
     preHandler: [authenticate],
   }, async (request, reply) => {
     const { district } = request.params;
+    const baseWhere = buildPrismaWhereClause(request.query);
 
     const complaints = await prisma.complaint.findMany({
       where: {
+        ...baseWhere,
         addressDistrict: district
       },
-      select: { addressPs: true, statusOfComplaint: true, complRegDt: true, disposalDate: true }
+      select: { addressPs: true, statusOfComplaint: true, complRegDt: true, disposalDate: true, typeOfComplaint: true }
     });
 
     const now = new Date().getTime();
@@ -358,7 +369,9 @@ export const dashboardRoutes = async (fastify: FastifyInstance) => {
   fastify.get('/dashboard/category-wise', {
     preHandler: [authenticate],
   }, async (request, reply) => {
+    const baseWhere = buildPrismaWhereClause(request.query);
     const complaints = await prisma.complaint.findMany({
+      where: baseWhere,
       select: { typeOfComplaint: true, statusOfComplaint: true }
     });
 

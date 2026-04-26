@@ -5,11 +5,12 @@ import type { EChartsOption } from 'echarts';
 interface ChartCardProps {
   title: string;
   option: EChartsOption;
+  fullOption?: EChartsOption;
   height?: string;
   expandedHeight?: string;
 }
 
-export const ChartCard = ({ title, option, height = '280px', expandedHeight = 'calc(100vh - 120px)' }: ChartCardProps) => {
+export const ChartCard = ({ title, option, fullOption, height = '280px', expandedHeight = 'calc(100vh - 120px)' }: ChartCardProps) => {
   const [expanded, setExpanded] = useState(false);
 
   if (expanded) {
@@ -24,8 +25,8 @@ export const ChartCard = ({ title, option, height = '280px', expandedHeight = 'c
             Close
           </button>
         </div>
-        <div className="chart-overlay-body">
-          <BaseChart option={option} height={expandedHeight} />
+        <div className="chart-overlay-body" style={{ overflowY: 'auto' }}>
+          <BaseChart option={fullOption || option} height={expandedHeight} />
         </div>
       </div>
     );

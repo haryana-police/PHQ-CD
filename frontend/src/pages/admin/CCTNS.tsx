@@ -7,10 +7,8 @@ import { cctnsApi } from '@/services/api';
 
 type Tab = 'enquiries' | 'synced';
 
-// Helper: format DD/MM/YYYY → MM/DD/YYYY required by the API
+// Helper: API expects DD/MM/YYYY natively, no conversion needed
 function toApiDate(ddmmyyyy: string): string {
-  const parts = ddmmyyyy.split('/');
-  if (parts.length === 3) return `${parts[1]}/${parts[0]}/${parts[2]}`;
   return ddmmyyyy;
 }
 

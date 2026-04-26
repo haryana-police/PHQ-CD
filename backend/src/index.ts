@@ -18,6 +18,8 @@ import { cctnsRoutes } from './routes/cctns.js';
 import { cctnsSyncRoutes } from './routes/cctns-sync.js';
 import { importExportRoutes } from './routes/import-export.js';
 import { governmentRoutes } from './routes/government.js';
+import { startCctnsBackgroundSync } from './jobs/cctns-sync-job.js';
+
 const fastify = Fastify({ logger: true });
 
 async function main() {
@@ -42,8 +44,9 @@ async function main() {
   });
 
   try {
-    await fastify.listen({ port: 3000, host: '0.0.0.0' });
-    console.log('✅ Server running on port 3000');
+    startCctnsBackgroundSync(); // Start background sync
+    await fastify.listen({ port: 3001, host: '0.0.0.0' });
+    console.log('✅ Server running on port 3001');
   } catch (err) {
     fastify.log.error(err);
     process.exit(1);
