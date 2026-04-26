@@ -1,7 +1,10 @@
 import axios, { AxiosError } from 'axios';
 import type { ApiResponse, User } from '../types';
 
-export const API_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:3000';
+// In production (Vercel), all /api/* calls are proxied to Render via vercel.json rewrites.
+// baseURL must be empty so axios calls go to /api/... relative to current host.
+// In dev, Vite's server.proxy handles the same thing (target: localhost:3000).
+export const API_URL = '';
 
 const api = axios.create({
   baseURL: API_URL,
