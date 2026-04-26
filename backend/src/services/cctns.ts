@@ -72,49 +72,95 @@ export function clearCctnsToken(): void {
  * Dates must be in dd/MM/yyyy format exactly like old project.
  * Returns raw JSON array matching the Complaints table fields.
  */
-export async function fetchCctnsComplaints(timeFrom: string, timeTo: string): Promise<Record<string, unknown>[]> {
-  const token = await getCctnsToken();
+function parseDDMMYYYY(dateStr: string): Date {
+  const [d, m, y] = dateStr.split('/');
+  return new Date(Number(y), Number(m) - 1, Number(d));
+}
+
+function formatDDMMYYYY(date: Date): string {
+  const d = String(date.getDate()).padStart(2, '0');
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const y = date.getFullYear();
+  return `${d}/${m}/${y}`;
+}
+
+function chunkDateRange(fromStr: string, toStr: string, maxDays: number = 30): {from: string, to: string}[] {
+  const chunks: {from: string, to: string}[] = [];
+  let currentStart = parseDDMMYYYY(fromStr);
+  const end = parseDDMMYYYY(toStr);
+
+  while (currentStart <= end) {
+    let currentEnd = new Date(currentStart);
+    currentEnd.setDate(currentStart.getDate() + maxDays);
+    
+    if (currentEnd > end) {
+      currentEnd = end;
+    }
+
+    chunks.push({
+      from: formatDDMMYYYY(currentStart),
+      to: formatDDMMYYYY(currentEnd)
+    });
+
+    currentStart = new Date(currentEnd);
+    currentStart.setDate(currentStart.getDate() + 1);
+  }
+
+  return chunks;
+}
+
+export async function fetchCctnsComplaints(
+  timeFrom: string, 
+  timeTo: string,
+  onChunk?: (rows: Record<string, unknown>[]) => Promise<void>
+): Promise<Record<string, unknown>[]> {
+  const chunks = chunkDateRange(timeFrom, timeTo, 30);
+  let allRows: Record<string, unknown>[] = [];
   const complaintApi = process.env.CCTNS_COMPLAINT_API || 'http://api.haryanapolice.gov.in/phqdashboard/api/PHQDashboard/ComplaintData';
 
-  const url = `${complaintApi}?TimeFrom=${encodeURIComponent(timeFrom)}&TimeTo=${encodeURIComponent(timeTo)}`;
-  console.log('[CCTNS] Fetching complaints:', url);
+  for (const chunk of chunks) {
+    const token = await getCctnsToken();
+    const url = `${complaintApi}?TimeFrom=${encodeURIComponent(chunk.from)}&TimeTo=${encodeURIComponent(chunk.to)}`;
+    console.log(`[CCTNS] Fetching complaints chunk ${chunk.from} - ${chunk.to}:`, url);
 
-  let res: Response;
-  try {
-    res = await fetch(url, {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Accept': 'application/json',
-      },
-      // No timeout set intentionally — old project used 10-minute HttpClient
-    });
-  } catch (err) {
-    throw new Error(`CCTNS ComplaintData API unreachable: ${err instanceof Error ? err.message : String(err)}`);
-  }
-
-  if (!res.ok) {
-    // Token may have expired — clear cache so next call gets a fresh one
-    if (res.status === 401) {
-      clearCctnsToken();
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json',
+        },
+      });
+    } catch (err) {
+      throw new Error(`CCTNS ComplaintData API unreachable: ${err instanceof Error ? err.message : String(err)}`);
     }
-    throw new Error(`Complaint API failed: ${res.status} ${res.statusText}`);
+
+    if (!res.ok) {
+      if (res.status === 401) clearCctnsToken();
+      throw new Error(`Complaint API failed for chunk ${chunk.from}-${chunk.to}: ${res.status} ${res.statusText}`);
+    }
+
+    const responseText = await res.text();
+    if (!responseText || responseText.trim() === '' || responseText.trim() === '[]') {
+      continue;
+    }
+
+    try {
+      const parsed = JSON.parse(responseText);
+      const rows = Array.isArray(parsed) ? parsed : (parsed.data || parsed.complaints || []);
+      console.log(`[CCTNS] Fetched ${rows.length} records for chunk`);
+      
+      if (onChunk) {
+        await onChunk(rows);
+      } else {
+        allRows = allRows.concat(rows);
+      }
+    } catch (error) {
+      console.error(`[CCTNS] Failed to parse JSON for chunk. Length: ${responseText.length}`);
+    }
   }
 
-  const responseText = await res.text();
-
-  if (!responseText || responseText.trim() === '' || responseText.trim() === '[]') {
-    return [];
-  }
-
-  try {
-    const parsed = JSON.parse(responseText);
-    const rows = Array.isArray(parsed) ? parsed : (parsed.data || parsed.complaints || []);
-    console.log(`[CCTNS] Fetched ${rows.length} records for ${timeFrom} - ${timeTo}`);
-    return rows;
-  } catch (error) {
-    console.error('[CCTNS] Failed to parse complaints JSON. First 200 chars:', responseText.substring(0, 200));
-    return [];
-  }
+  return allRows;
 }
 
 /**
@@ -123,42 +169,58 @@ export async function fetchCctnsComplaints(timeFrom: string, timeTo: string): Pr
  * Same token, same date format, same JSON array response.
  * These are CM Dashboard enquiry-type complaints (different source from PHQ complaints).
  */
-export async function fetchCctnsEnquiries(timeFrom: string, timeTo: string): Promise<Record<string, unknown>[]> {
-  const token = await getCctnsToken();
+export async function fetchCctnsEnquiries(
+  timeFrom: string, 
+  timeTo: string,
+  onChunk?: (rows: Record<string, unknown>[]) => Promise<void>
+): Promise<Record<string, unknown>[]> {
+  const chunks = chunkDateRange(timeFrom, timeTo, 30);
+  let allRows: Record<string, unknown>[] = [];
   const enquiryApi = process.env.CCTNS_ENQUIRY_API || 'http://api.haryanapolice.gov.in/cmdashboard/api/HomeDashboard/ComplaintEnquiryData';
 
-  const url = `${enquiryApi}?TimeFrom=${encodeURIComponent(timeFrom)}&TimeTo=${encodeURIComponent(timeTo)}`;
-  console.log('[CCTNS] Fetching enquiry complaints:', url);
+  for (const chunk of chunks) {
+    const token = await getCctnsToken();
+    const url = `${enquiryApi}?TimeFrom=${encodeURIComponent(chunk.from)}&TimeTo=${encodeURIComponent(chunk.to)}`;
+    console.log(`[CCTNS Enquiry] Fetching chunk ${chunk.from} - ${chunk.to}:`, url);
 
-  let res: Response;
-  try {
-    res = await fetch(url, {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Accept': 'application/json',
-      },
-    });
-  } catch (err) {
-    throw new Error(`CCTNS ComplaintEnquiryData API unreachable: ${err instanceof Error ? err.message : String(err)}`);
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json',
+        },
+      });
+    } catch (err) {
+      throw new Error(`CCTNS Enquiry API unreachable: ${err instanceof Error ? err.message : String(err)}`);
+    }
+
+    if (!res.ok) {
+      if (res.status === 401) clearCctnsToken();
+      throw new Error(`Enquiry API failed for chunk ${chunk.from}-${chunk.to}: ${res.status} ${res.statusText}`);
+    }
+
+    const responseText = await res.text();
+    if (!responseText || responseText.trim() === '' || responseText.trim() === '[]') {
+      continue;
+    }
+
+    try {
+      const parsed = JSON.parse(responseText);
+      const rows = Array.isArray(parsed) ? parsed : (parsed.data || parsed.complaints || []);
+      console.log(`[CCTNS Enquiry] Fetched ${rows.length} records for chunk`);
+      
+      if (onChunk) {
+        await onChunk(rows);
+      } else {
+        allRows = allRows.concat(rows);
+      }
+    } catch (error) {
+      console.error(`[CCTNS Enquiry] Failed to parse JSON for chunk. Length: ${responseText.length}`);
+    }
   }
 
-  if (!res.ok) {
-    if (res.status === 401) clearCctnsToken();
-    throw new Error(`Enquiry API failed: ${res.status} ${res.statusText}`);
-  }
-
-  const responseText = await res.text();
-  if (!responseText || responseText.trim() === '' || responseText.trim() === '[]') return [];
-
-  try {
-    const parsed = JSON.parse(responseText);
-    const rows = Array.isArray(parsed) ? parsed : (parsed.data || parsed.complaints || []);
-    console.log(`[CCTNS] Fetched ${rows.length} enquiry records for ${timeFrom} - ${timeTo}`);
-    return rows;
-  } catch (error) {
-    console.error('[CCTNS] Failed to parse enquiry JSON. First 200 chars:', responseText.substring(0, 200));
-    return [];
-  }
+  return allRows;
 }
 export function parseCctnsDate(dateStr: string | null | undefined): Date | null {
   if (!dateStr || dateStr.trim() === '') return null;

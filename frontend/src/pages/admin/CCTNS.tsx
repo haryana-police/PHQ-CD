@@ -124,8 +124,8 @@ export const CCTNSPage = () => {
                 const dateTo = new Date(timeTo);
                 const diffTime = Math.abs(dateTo.getTime() - dateFrom.getTime());
                 const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
-                if (diffDays > 31) {
-                  alert("Please sync a maximum of 1 month (31 days) at a time. The state-wide API data is too massive to download multiple months in a single request.");
+                if (diffDays > 366) {
+                  alert("Please sync a maximum of 1 year (366 days) at a time. The state-wide API data is too massive to download more than a year in a single request.");
                   return;
                 }
                 const [y1, m1, d1] = timeFrom.split('-');
@@ -143,8 +143,8 @@ export const CCTNSPage = () => {
                 const dateTo = new Date(timeTo);
                 const diffTime = Math.abs(dateTo.getTime() - dateFrom.getTime());
                 const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
-                if (diffDays > 31) {
-                  alert("Please sync a maximum of 1 month (31 days) at a time. The state-wide API data is too massive to download multiple months in a single request.");
+                if (diffDays > 366) {
+                  alert("Please sync a maximum of 1 year (366 days) at a time. The state-wide API data is too massive to download more than a year in a single request.");
                   return;
                 }
                 const [y1, m1, d1] = timeFrom.split('-');

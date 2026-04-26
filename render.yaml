@@ -1,0 +1,48 @@
+# render.yaml — Render Infrastructure as Code
+# Every push to the configured branch auto-deploys.
+# If the health check fails, Render keeps the previous successful deployment live.
+
+services:
+  - type: web
+    name: phq-api
+    runtime: node
+    region: singapore   # closest to India
+    plan: free           # change to 'starter' for always-on (free sleeps after 15 min)
+
+    # Root of your monorepo where the backend lives
+    rootDir: backend
+
+    # Render runs buildCommand, then startCommand
+    buildCommand: |
+      npm install &&
+      npx prisma generate &&
+      npx prisma migrate deploy &&
+      npm run build
+
+    startCommand: node dist/index.js
+
+    # Render uses this to detect a healthy new deploy before killing the old one.
+    # If this endpoint returns non-2xx, the old deployment stays live.
+    healthCheckPath: /api/health
+
+    # Auto-deploy on every push to this branch
+    autoDeploy: true
+
+    envVars:
+      # Set these in the Render dashboard — do NOT put real values here
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false   # must be set manually in Render dashboard
+      - key: DIRECT_URL
+        sync: false   # must be set manually in Render dashboard
+      - key: JWT_SECRET
+        generateValue: true   # Render generates a random value on first deploy
+
+      # Haryana Police external API base (optional — fallback is hardcoded)
+      - key: HARYANA_DISTRICT_API
+        value: https://api.haryanapolice.gov.in/eSaralServices/api/common/district
+      - key: HARYANA_POLICE_STATION_API
+        value: https://api.haryanapolice.gov.in/eSaralServices/api/common/GetPSByDistrict
+      - key: HARYANA_OFFICE_API
+        value: https://api.haryanapolice.gov.in/eSaralServices/api/common/GetAllOffices

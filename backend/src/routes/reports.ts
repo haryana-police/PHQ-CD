@@ -18,12 +18,12 @@ const HARYANA_DISTRICTS = [
 
 /** Build a SQL IN clause for Haryana district names (case-insensitive via UPPER) */
 const HARYANA_IN = HARYANA_DISTRICTS.map(d => `'${d}'`).join(', ');
-const HARYANA_WHERE_DISTRICT = `UPPER(LTRIM(RTRIM(ISNULL(addressDistrict,'')))) IN (${HARYANA_IN})`;
+const HARYANA_WHERE_DISTRICT = `UPPER(LTRIM(RTRIM(COALESCE("addressDistrict",'')))) IN (${HARYANA_IN})`;
 
 /** Build year-range WHERE clause — index-safe (no YEAR() function) */
 function yearWhere(yearNum: number | null): string {
   if (!yearNum) return '';
-  return `complRegDt >= '${yearNum}-01-01' AND complRegDt < '${yearNum + 1}-01-01'`;
+  return `"complRegDt" >= '${yearNum}-01-01' AND "complRegDt" < '${yearNum + 1}-01-01'`;
 }
 
 /** Build WHERE clause combining year + Haryana district filter */
@@ -48,7 +48,7 @@ export const reportRoutes = async (fastify: FastifyInstance) => {
 
       let whereParts: string[] = [HARYANA_WHERE_DISTRICT];
       if (fromDate && toDate) {
-        whereParts.push(`complRegDt >= '${fromDate}' AND complRegDt <= '${toDate}'`);
+        whereParts.push(`"complRegDt" >= '${fromDate}' AND "complRegDt" <= '${toDate}'`);
       } else {
         whereParts.push(yearWhere(yearNum));
       }
@@ -56,13 +56,13 @@ export const reportRoutes = async (fastify: FastifyInstance) => {
       // Fetch current period
       const data = await prisma.$queryRawUnsafe<any[]>(`
         SELECT
-          UPPER(LTRIM(RTRIM(addressDistrict))) AS district,
+          UPPER(LTRIM(RTRIM("addressDistrict"))) AS district,
           COUNT(*) AS total,
-          SUM(CASE WHEN statusOfComplaint LIKE 'Pending%' OR statusOfComplaint IS NULL OR statusOfComplaint = '' THEN 1 ELSE 0 END) AS pending,
-          SUM(CASE WHEN statusOfComplaint LIKE 'Disposed%' THEN 1 ELSE 0 END) AS disposed
-        FROM Complaint
+          SUM(CASE WHEN "statusOfComplaint" ILIKE 'Pending%' OR "statusOfComplaint" IS NULL OR "statusOfComplaint" = '' THEN 1 ELSE 0 END) AS pending,
+          SUM(CASE WHEN "statusOfComplaint" ILIKE 'Disposed%' THEN 1 ELSE 0 END) AS disposed
+        FROM "Complaint"
         WHERE ${whereParts.join(' AND ')}
-        GROUP BY UPPER(LTRIM(RTRIM(addressDistrict)))
+        GROUP BY UPPER(LTRIM(RTRIM("addressDistrict")))
         ORDER BY total DESC
       `);
 
@@ -72,11 +72,11 @@ export const reportRoutes = async (fastify: FastifyInstance) => {
         const prevYear = yearNum - 1;
         prevData = await prisma.$queryRawUnsafe<any[]>(`
           SELECT
-            UPPER(LTRIM(RTRIM(addressDistrict))) AS district,
+            UPPER(LTRIM(RTRIM("addressDistrict"))) AS district,
             COUNT(*) AS total
-          FROM Complaint
-          WHERE ${HARYANA_WHERE_DISTRICT} AND complRegDt >= '${prevYear}-01-01' AND complRegDt < '${prevYear + 1}-01-01'
-          GROUP BY UPPER(LTRIM(RTRIM(addressDistrict)))
+          FROM "Complaint"
+          WHERE ${HARYANA_WHERE_DISTRICT} AND "complRegDt" >= '${prevYear}-01-01' AND "complRegDt" < '${prevYear + 1}-01-01'
+          GROUP BY UPPER(LTRIM(RTRIM("addressDistrict")))
         `);
       }
 
@@ -110,16 +110,16 @@ export const reportRoutes = async (fastify: FastifyInstance) => {
       const yearNum = year ? parseInt(year) : new Date().getFullYear();
 
       const whereClause = fromDate && toDate
-        ? `WHERE receptionMode IS NOT NULL AND receptionMode != '' AND complRegDt >= '${fromDate}' AND complRegDt <= '${toDate}'`
+        ? `WHERE receptionMode IS NOT NULL AND receptionMode != '' AND "complRegDt" >= '${fromDate}' AND "complRegDt" <= '${toDate}'`
         : `WHERE receptionMode IS NOT NULL AND receptionMode != '' AND ${yearWhere(yearNum)}`;
 
       const data = await prisma.$queryRawUnsafe<any[]>(`
         SELECT
-          ISNULL(receptionMode,'Unknown') AS mode,
+          COALESCE(receptionMode,'Unknown') AS mode,
           COUNT(*) AS total,
-          SUM(CASE WHEN statusOfComplaint LIKE 'Pending%' OR statusOfComplaint IS NULL OR statusOfComplaint = '' THEN 1 ELSE 0 END) AS pending,
-          SUM(CASE WHEN statusOfComplaint LIKE 'Disposed%' THEN 1 ELSE 0 END) AS disposed
-        FROM Complaint ${whereClause}
+          SUM(CASE WHEN "statusOfComplaint" ILIKE 'Pending%' OR "statusOfComplaint" IS NULL OR "statusOfComplaint" = '' THEN 1 ELSE 0 END) AS pending,
+          SUM(CASE WHEN "statusOfComplaint" ILIKE 'Disposed%' THEN 1 ELSE 0 END) AS disposed
+        FROM "Complaint" ${whereClause}
         GROUP BY receptionMode ORDER BY total DESC
       `);
 
@@ -136,19 +136,19 @@ export const reportRoutes = async (fastify: FastifyInstance) => {
       const yearNum = year ? parseInt(year) : new Date().getFullYear();
 
       const whereClause = fromDate && toDate
-        ? `WHERE classOfIncident IS NOT NULL AND classOfIncident != '' AND complRegDt >= '${fromDate}' AND complRegDt <= '${toDate}'`
-        : `WHERE classOfIncident IS NOT NULL AND classOfIncident != '' AND ${yearWhere(yearNum)}`;
+        ? `WHERE "classOfIncident" IS NOT NULL AND "classOfIncident" != '' AND "complRegDt" >= '${fromDate}' AND "complRegDt" <= '${toDate}'`
+        : `WHERE "classOfIncident" IS NOT NULL AND "classOfIncident" != '' AND ${yearWhere(yearNum)}`;
 
       const data = await prisma.$queryRawUnsafe<any[]>(`
-        SELECT ISNULL(classOfIncident,'Unknown') AS natureOfIncident,
+        SELECT COALESCE("classOfIncident",'Unknown') AS natureOfIncident,
           COUNT(*) AS total,
-          SUM(CASE WHEN statusOfComplaint LIKE 'Pending%' OR statusOfComplaint IS NULL OR statusOfComplaint = '' THEN 1 ELSE 0 END) AS pending,
-          SUM(CASE WHEN statusOfComplaint LIKE 'Disposed%' THEN 1 ELSE 0 END) AS disposed
-        FROM Complaint ${whereClause}
-        GROUP BY classOfIncident ORDER BY total DESC
+          SUM(CASE WHEN "statusOfComplaint" ILIKE 'Pending%' OR "statusOfComplaint" IS NULL OR "statusOfComplaint" = '' THEN 1 ELSE 0 END) AS pending,
+          SUM(CASE WHEN "statusOfComplaint" ILIKE 'Disposed%' THEN 1 ELSE 0 END) AS disposed
+        FROM "Complaint" ${whereClause}
+        GROUP BY "classOfIncident" ORDER BY total DESC
       `);
 
-      return sendSuccess(reply, { year: yearNum, rows: data.map((r: any) => ({ natureOfIncident: r.natureOfIncident, total: Number(r.total), pending: Number(r.pending), disposed: Number(r.disposed) })) });
+      return sendSuccess(reply, { year: yearNum, rows: data.map((r: any) => ({ natureOfIncident: r.natureofincident, total: Number(r.total), pending: Number(r.pending), disposed: Number(r.disposed) })) });
     } catch (e) { return sendError(reply, 'Failed to load nature-of-incident report'); }
   });
 
@@ -160,15 +160,15 @@ export const reportRoutes = async (fastify: FastifyInstance) => {
       const { year, fromDate, toDate } = request.query as Record<string, string>;
       const yearNum = year ? parseInt(year) : new Date().getFullYear();
       const whereClause = fromDate && toDate
-        ? `WHERE respondentCategories IS NOT NULL AND respondentCategories != '' AND complRegDt >= '${fromDate}' AND complRegDt <= '${toDate}'`
+        ? `WHERE respondentCategories IS NOT NULL AND respondentCategories != '' AND "complRegDt" >= '${fromDate}' AND "complRegDt" <= '${toDate}'`
         : `WHERE respondentCategories IS NOT NULL AND respondentCategories != '' AND ${yearWhere(yearNum)}`;
       const data = await prisma.$queryRawUnsafe<any[]>(`
-        SELECT ISNULL(respondentCategories,'Unknown') AS typeAgainst, COUNT(*) AS total,
-          SUM(CASE WHEN statusOfComplaint LIKE 'Pending%' OR statusOfComplaint IS NULL OR statusOfComplaint = '' THEN 1 ELSE 0 END) AS pending,
-          SUM(CASE WHEN statusOfComplaint LIKE 'Disposed%' THEN 1 ELSE 0 END) AS disposed
-        FROM Complaint ${whereClause} GROUP BY respondentCategories ORDER BY total DESC
+        SELECT COALESCE(respondentCategories,'Unknown') AS typeAgainst, COUNT(*) AS total,
+          SUM(CASE WHEN "statusOfComplaint" ILIKE 'Pending%' OR "statusOfComplaint" IS NULL OR "statusOfComplaint" = '' THEN 1 ELSE 0 END) AS pending,
+          SUM(CASE WHEN "statusOfComplaint" ILIKE 'Disposed%' THEN 1 ELSE 0 END) AS disposed
+        FROM "Complaint" ${whereClause} GROUP BY respondentCategories ORDER BY total DESC
       `);
-      return sendSuccess(reply, { year: yearNum, rows: data.map((r: any) => ({ typeAgainst: r.typeAgainst, total: Number(r.total), pending: Number(r.pending), disposed: Number(r.disposed) })) });
+      return sendSuccess(reply, { year: yearNum, rows: data.map((r: any) => ({ typeAgainst: r.typeagainst, total: Number(r.total), pending: Number(r.pending), disposed: Number(r.disposed) })) });
     } catch (e) { return sendError(reply, 'Failed to load type-against report'); }
   });
 
@@ -180,11 +180,11 @@ export const reportRoutes = async (fastify: FastifyInstance) => {
       const { year, fromDate, toDate } = request.query as Record<string, string>;
       const yearNum = year ? parseInt(year) : new Date().getFullYear();
       const whereClause = fromDate && toDate
-        ? `WHERE statusOfComplaint IS NOT NULL AND statusOfComplaint != '' AND complRegDt >= '${fromDate}' AND complRegDt <= '${toDate}'`
-        : `WHERE statusOfComplaint IS NOT NULL AND statusOfComplaint != '' AND ${yearWhere(yearNum)}`;
+        ? `WHERE "statusOfComplaint" IS NOT NULL AND "statusOfComplaint" != '' AND "complRegDt" >= '${fromDate}' AND "complRegDt" <= '${toDate}'`
+        : `WHERE "statusOfComplaint" IS NOT NULL AND "statusOfComplaint" != '' AND ${yearWhere(yearNum)}`;
       const data = await prisma.$queryRawUnsafe<any[]>(`
-        SELECT statusOfComplaint AS status, COUNT(*) AS total FROM Complaint ${whereClause}
-        GROUP BY statusOfComplaint ORDER BY total DESC
+        SELECT "statusOfComplaint" AS status, COUNT(*) AS total FROM "Complaint" ${whereClause}
+        GROUP BY "statusOfComplaint" ORDER BY total DESC
       `);
       return sendSuccess(reply, { year: yearNum, rows: data.map((r: any) => ({ status: r.status, total: Number(r.total), count: Number(r.total), pending: r.status?.startsWith('Pending') ? Number(r.total) : 0, disposed: r.status?.startsWith('Disposed') ? Number(r.total) : 0 })) });
     } catch (e) { return sendError(reply, 'Failed to load status report'); }
@@ -198,15 +198,15 @@ export const reportRoutes = async (fastify: FastifyInstance) => {
       const { year, fromDate, toDate } = request.query as Record<string, string>;
       const yearNum = year ? parseInt(year) : new Date().getFullYear();
       const whereClause = fromDate && toDate
-        ? `WHERE complaintSource IS NOT NULL AND complaintSource != '' AND complRegDt >= '${fromDate}' AND complRegDt <= '${toDate}'`
+        ? `WHERE complaintSource IS NOT NULL AND complaintSource != '' AND "complRegDt" >= '${fromDate}' AND "complRegDt" <= '${toDate}'`
         : `WHERE complaintSource IS NOT NULL AND complaintSource != '' AND ${yearWhere(yearNum)}`;
       const data = await prisma.$queryRawUnsafe<any[]>(`
-        SELECT ISNULL(complaintSource,'Unknown') AS complaintSource, COUNT(*) AS total,
-          SUM(CASE WHEN statusOfComplaint LIKE 'Pending%' OR statusOfComplaint IS NULL OR statusOfComplaint = '' THEN 1 ELSE 0 END) AS pending,
-          SUM(CASE WHEN statusOfComplaint LIKE 'Disposed%' THEN 1 ELSE 0 END) AS disposed
-        FROM Complaint ${whereClause} GROUP BY complaintSource ORDER BY total DESC
+        SELECT COALESCE(complaintSource,'Unknown') AS complaintSource, COUNT(*) AS total,
+          SUM(CASE WHEN "statusOfComplaint" ILIKE 'Pending%' OR "statusOfComplaint" IS NULL OR "statusOfComplaint" = '' THEN 1 ELSE 0 END) AS pending,
+          SUM(CASE WHEN "statusOfComplaint" ILIKE 'Disposed%' THEN 1 ELSE 0 END) AS disposed
+        FROM "Complaint" ${whereClause} GROUP BY complaintSource ORDER BY total DESC
       `);
-      return sendSuccess(reply, { year: yearNum, rows: data.map((r: any) => ({ complaintSource: r.complaintSource, total: Number(r.total), pending: Number(r.pending), disposed: Number(r.disposed) })) });
+      return sendSuccess(reply, { year: yearNum, rows: data.map((r: any) => ({ complaintSource: r.complaintsource, total: Number(r.total), pending: Number(r.pending), disposed: Number(r.disposed) })) });
     } catch (e) { return sendError(reply, 'Failed to load complaint-source report'); }
   });
 
@@ -218,15 +218,15 @@ export const reportRoutes = async (fastify: FastifyInstance) => {
       const { year, fromDate, toDate } = request.query as Record<string, string>;
       const yearNum = year ? parseInt(year) : new Date().getFullYear();
       const whereClause = fromDate && toDate
-        ? `WHERE typeOfComplaint IS NOT NULL AND typeOfComplaint != '' AND complRegDt >= '${fromDate}' AND complRegDt <= '${toDate}'`
-        : `WHERE typeOfComplaint IS NOT NULL AND typeOfComplaint != '' AND ${yearWhere(yearNum)}`;
+        ? `WHERE "typeOfComplaint" IS NOT NULL AND "typeOfComplaint" != '' AND "complRegDt" >= '${fromDate}' AND "complRegDt" <= '${toDate}'`
+        : `WHERE "typeOfComplaint" IS NOT NULL AND "typeOfComplaint" != '' AND ${yearWhere(yearNum)}`;
       const data = await prisma.$queryRawUnsafe<any[]>(`
-        SELECT ISNULL(typeOfComplaint,'Unknown') AS typeOfComplaint, COUNT(*) AS total,
-          SUM(CASE WHEN statusOfComplaint LIKE 'Pending%' OR statusOfComplaint IS NULL OR statusOfComplaint = '' THEN 1 ELSE 0 END) AS pending,
-          SUM(CASE WHEN statusOfComplaint LIKE 'Disposed%' THEN 1 ELSE 0 END) AS disposed
-        FROM Complaint ${whereClause} GROUP BY typeOfComplaint ORDER BY total DESC
+        SELECT COALESCE("typeOfComplaint",'Unknown') AS "typeOfComplaint", COUNT(*) AS total,
+          SUM(CASE WHEN "statusOfComplaint" ILIKE 'Pending%' OR "statusOfComplaint" IS NULL OR "statusOfComplaint" = '' THEN 1 ELSE 0 END) AS pending,
+          SUM(CASE WHEN "statusOfComplaint" ILIKE 'Disposed%' THEN 1 ELSE 0 END) AS disposed
+        FROM "Complaint" ${whereClause} GROUP BY "typeOfComplaint" ORDER BY total DESC
       `);
-      return sendSuccess(reply, { year: yearNum, rows: data.map((r: any) => ({ typeOfComplaint: r.typeOfComplaint, total: Number(r.total), pending: Number(r.pending), disposed: Number(r.disposed) })) });
+      return sendSuccess(reply, { year: yearNum, rows: data.map((r: any) => ({ typeOfComplaint: r.typeofcomplaint, total: Number(r.total), pending: Number(r.pending), disposed: Number(r.disposed) })) });
     } catch (e) { return sendError(reply, 'Failed to load type-of-complaint report'); }
   });
 
@@ -238,13 +238,13 @@ export const reportRoutes = async (fastify: FastifyInstance) => {
       const { year, fromDate, toDate } = request.query as Record<string, string>;
       const yearNum = year ? parseInt(year) : new Date().getFullYear();
       const whereClause = fromDate && toDate
-        ? `WHERE branch IS NOT NULL AND branch != '' AND complRegDt >= '${fromDate}' AND complRegDt <= '${toDate}'`
+        ? `WHERE branch IS NOT NULL AND branch != '' AND "complRegDt" >= '${fromDate}' AND "complRegDt" <= '${toDate}'`
         : `WHERE branch IS NOT NULL AND branch != '' AND ${yearWhere(yearNum)}`;
       const data = await prisma.$queryRawUnsafe<any[]>(`
-        SELECT ISNULL(branch,'Unknown') AS branch, COUNT(*) AS total,
-          SUM(CASE WHEN statusOfComplaint LIKE 'Pending%' OR statusOfComplaint IS NULL OR statusOfComplaint = '' THEN 1 ELSE 0 END) AS pending,
-          SUM(CASE WHEN statusOfComplaint LIKE 'Disposed%' THEN 1 ELSE 0 END) AS disposed
-        FROM Complaint ${whereClause} GROUP BY branch ORDER BY total DESC
+        SELECT COALESCE(branch,'Unknown') AS branch, COUNT(*) AS total,
+          SUM(CASE WHEN "statusOfComplaint" ILIKE 'Pending%' OR "statusOfComplaint" IS NULL OR "statusOfComplaint" = '' THEN 1 ELSE 0 END) AS pending,
+          SUM(CASE WHEN "statusOfComplaint" ILIKE 'Disposed%' THEN 1 ELSE 0 END) AS disposed
+        FROM "Complaint" ${whereClause} GROUP BY branch ORDER BY total DESC
       `);
       return sendSuccess(reply, { year: yearNum, rows: data.map((r: any) => ({ branch: r.branch, total: Number(r.total), pending: Number(r.pending), disposed: Number(r.disposed) })) });
     } catch (e) { return sendError(reply, 'Failed to load branch-wise report'); }
@@ -258,9 +258,9 @@ export const reportRoutes = async (fastify: FastifyInstance) => {
       const { year } = request.query as Record<string, string>;
       const yearNum = year ? parseInt(year) : new Date().getFullYear();
       const data = await prisma.$queryRawUnsafe<any[]>(`
-        SELECT ISNULL(classOfIncident,'Unknown') AS category, COUNT(*) AS count
-        FROM Complaint WHERE classOfIncident IS NOT NULL AND classOfIncident != '' AND ${yearWhere(yearNum)}
-        GROUP BY classOfIncident ORDER BY count DESC
+        SELECT COALESCE("classOfIncident",'Unknown') AS category, COUNT(*) AS count
+        FROM "Complaint" WHERE "classOfIncident" IS NOT NULL AND "classOfIncident" != '' AND ${yearWhere(yearNum)}
+        GROUP BY "classOfIncident" ORDER BY count DESC
       `);
       return sendSuccess(reply, data.map((r: any) => ({ category: r.category, count: Number(r.count) })));
     } catch (e) { return sendError(reply, 'Failed to load highlights report'); }
@@ -276,17 +276,17 @@ export const reportRoutes = async (fastify: FastifyInstance) => {
 
       let whereParts: string[] = [HARYANA_WHERE_DISTRICT];
       if (fromDate && toDate) {
-        whereParts.push(`complRegDt >= '${fromDate}' AND complRegDt <= '${toDate}'`);
+        whereParts.push(`"complRegDt" >= '${fromDate}' AND "complRegDt" <= '${toDate}'`);
       } else {
         whereParts.push(yearWhere(yearNum));
       }
 
       const data = await prisma.$queryRawUnsafe<any[]>(`
-        SELECT UPPER(LTRIM(RTRIM(ISNULL(addressDistrict,'Unknown')))) AS district, COUNT(*) AS total,
-          SUM(CASE WHEN statusOfComplaint LIKE 'Pending%' OR statusOfComplaint IS NULL OR statusOfComplaint = '' THEN 1 ELSE 0 END) AS pending,
-          SUM(CASE WHEN statusOfComplaint LIKE 'Disposed%' THEN 1 ELSE 0 END) AS disposed
-        FROM Complaint WHERE ${whereParts.join(' AND ')}
-        GROUP BY UPPER(LTRIM(RTRIM(addressDistrict))) ORDER BY total DESC
+        SELECT UPPER(LTRIM(RTRIM(COALESCE("addressDistrict",'Unknown')))) AS district, COUNT(*) AS total,
+          SUM(CASE WHEN "statusOfComplaint" ILIKE 'Pending%' OR "statusOfComplaint" IS NULL OR "statusOfComplaint" = '' THEN 1 ELSE 0 END) AS pending,
+          SUM(CASE WHEN "statusOfComplaint" ILIKE 'Disposed%' THEN 1 ELSE 0 END) AS disposed
+        FROM "Complaint" WHERE ${whereParts.join(' AND ')}
+        GROUP BY UPPER(LTRIM(RTRIM("addressDistrict"))) ORDER BY total DESC
       `);
       return sendSuccess(reply, { year: yearNum, rows: data.map((r: any) => ({ district: r.district, total: Number(r.total), pending: Number(r.pending), disposed: Number(r.disposed) })) });
     } catch (e) { return sendError(reply, 'Failed to load date-wise report'); }
@@ -300,15 +300,15 @@ export const reportRoutes = async (fastify: FastifyInstance) => {
       const { year, fromDate, toDate } = request.query as Record<string, string>;
       const yearNum = year ? parseInt(year) : new Date().getFullYear();
       const whereClause = fromDate && toDate
-        ? `WHERE actionTaken IS NOT NULL AND actionTaken != '' AND complRegDt >= '${fromDate}' AND complRegDt <= '${toDate}'`
+        ? `WHERE actionTaken IS NOT NULL AND actionTaken != '' AND "complRegDt" >= '${fromDate}' AND "complRegDt" <= '${toDate}'`
         : `WHERE actionTaken IS NOT NULL AND actionTaken != '' AND ${yearWhere(yearNum)}`;
       const data = await prisma.$queryRawUnsafe<any[]>(`
-        SELECT TOP 30 ISNULL(actionTaken,'Unknown') AS actionTaken, COUNT(*) AS total,
-          SUM(CASE WHEN statusOfComplaint LIKE 'Pending%' OR statusOfComplaint IS NULL OR statusOfComplaint = '' THEN 1 ELSE 0 END) AS pending,
-          SUM(CASE WHEN statusOfComplaint LIKE 'Disposed%' THEN 1 ELSE 0 END) AS disposed
-        FROM Complaint ${whereClause} GROUP BY actionTaken ORDER BY total DESC
+        SELECT COALESCE(actionTaken,'Unknown') AS actionTaken, COUNT(*) AS total,
+          SUM(CASE WHEN "statusOfComplaint" ILIKE 'Pending%' OR "statusOfComplaint" IS NULL OR "statusOfComplaint" = '' THEN 1 ELSE 0 END) AS pending,
+          SUM(CASE WHEN "statusOfComplaint" ILIKE 'Disposed%' THEN 1 ELSE 0 END) AS disposed
+        FROM "Complaint" ${whereClause} GROUP BY actionTaken ORDER BY total DESC LIMIT 30
       `);
-      return sendSuccess(reply, { year: yearNum, rows: data.map((r: any) => ({ actionTaken: r.actionTaken, total: Number(r.total), pending: Number(r.pending), disposed: Number(r.disposed) })) });
+      return sendSuccess(reply, { year: yearNum, rows: data.map((r: any) => ({ actionTaken: r.actiontaken, total: Number(r.total), pending: Number(r.pending), disposed: Number(r.disposed) })) });
     } catch (e) { return sendError(reply, 'Failed to load action-taken report'); }
   });
 };

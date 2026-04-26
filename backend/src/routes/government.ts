@@ -39,20 +39,44 @@ async function fetchXmlAsJson<T>(url: string): Promise<T> {
 
 export const governmentRoutes = async (fastify: FastifyInstance) => {
   
-  // GET all districts from government API and cache to local DB
+  // GET all districts from local DB (fast — seeded on startup from hardcoded list)
   fastify.get('/gov/districts', {
     preHandler: [authenticate],
   }, async (request, reply) => {
     try {
+      const districts = await prisma.district_Master.findMany({ orderBy: { DistrictName: 'asc' } });
+      return sendSuccess(reply, districts);
+    } catch (error) {
+      console.error('Error fetching districts:', error);
+      return sendError(reply, 'Failed to fetch districts');
+    }
+  });
+
+  // GET all districts from local DB only (alias kept for compatibility)
+  fastify.get('/gov/districts/local', {
+    preHandler: [authenticate],
+  }, async (request, reply) => {
+    try {
+      const districts = await prisma.district_Master.findMany({ orderBy: { DistrictName: 'asc' } });
+      return sendSuccess(reply, districts);
+    } catch (error) {
+      console.error('Error fetching local districts:', error);
+      return sendError(reply, 'Failed to fetch districts');
+    }
+  });
+
+  // SYNC districts from external government API (slow — use manually when needed)
+  fastify.get('/gov/districts/sync', {
+    preHandler: [authenticate],
+  }, async (request, reply) => {
+    try {
       const apiUrl = process.env.HARYANA_DISTRICT_API || 'https://api.haryanapolice.gov.in/eSaralServices/api/common/district';
-      
       const data = await fetchXmlAsJson<{ DropDownDTO: Array<{ ID: string; Name: string }> }>(apiUrl);
       
       if (!data.DropDownDTO || data.DropDownDTO.length === 0) {
         return sendError(reply, 'No districts found from API');
       }
       
-      // Save to local database
       for (const district of data.DropDownDTO) {
         await prisma.district_Master.upsert({
           where: { id: BigInt(district.ID) },
@@ -61,26 +85,11 @@ export const governmentRoutes = async (fastify: FastifyInstance) => {
         });
       }
       
-      // Return from local database
-      const districts = await prisma.district_Master.findMany({ orderBy: { DistrictName: 'asc' }});
-      
+      const districts = await prisma.district_Master.findMany({ orderBy: { DistrictName: 'asc' } });
       return sendSuccess(reply, districts);
     } catch (error) {
       console.error('District sync error:', error);
-      return sendError(reply, 'Failed to sync districts');
-    }
-  });
-
-  // GET all districts from local DB only (fast)
-  fastify.get('/gov/districts/local', {
-    preHandler: [authenticate],
-  }, async (request, reply) => {
-    try {
-      const districts = await prisma.district_Master.findMany({ orderBy: { DistrictName: 'asc' }});
-      return sendSuccess(reply, districts);
-    } catch (error) {
-      console.error('Error fetching local districts:', error);
-      return sendError(reply, 'Failed to fetch districts');
+      return sendError(reply, 'Failed to sync districts from API');
     }
   });
 

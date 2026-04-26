@@ -11,12 +11,16 @@ export const ComplaintsPage = () => {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(100);
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data, isLoading, refetch } = useQuery({
-    queryKey: ['complaints', page, limit, search],
+    queryKey: ['complaints', page, limit, search, fromDate, toDate],
     queryFn: async () => {
       const params = new URLSearchParams({ page: String(page), limit: String(limit), search });
+      if (fromDate) params.append('fromDate', fromDate);
+      if (toDate) params.append('toDate', toDate);
       const r = await fetch(`/api/complaints?${params}`, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
       return r.json();
     },
@@ -78,8 +82,13 @@ export const ComplaintsPage = () => {
   return (
     <Layout>
       <div className="page-content">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', gap: '12px' }}>
-          <input className="search-input" placeholder="Search..." value={search} onChange={e => setSearch(e.target.value)} style={{ maxWidth: '280px' }} />
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', gap: '12px', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+            <input className="search-input" placeholder="Search..." value={search} onChange={e => setSearch(e.target.value)} style={{ maxWidth: '280px' }} />
+            <input type="date" className="search-input" value={fromDate} onChange={e => setFromDate(e.target.value)} title="From Date" style={{ width: '130px' }} />
+            <span style={{ color: 'var(--text-muted)' }}>to</span>
+            <input type="date" className="search-input" value={toDate} onChange={e => setToDate(e.target.value)} title="To Date" style={{ width: '130px' }} />
+          </div>
           <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
             <input type="file" ref={fileInputRef} onChange={handleImport} accept=".xlsx,.xls" className="hidden" />
             <Button variant="secondary" onClick={() => fileInputRef.current?.click()}>Import</Button>

@@ -83,7 +83,7 @@ export const pendingRoutes = async (fastify: FastifyInstance) => {
     const { branch } = request.params as { branch: string };
 
     const complaints = await prisma.complaint.findMany({
-      where: { branch, OR: PENDING_WHERE },
+      where: { addressDistrict: branch, OR: PENDING_WHERE },
       orderBy: { complRegDt: 'asc' },
     });
     return sendSuccess(reply, complaints);
@@ -99,7 +99,7 @@ export const pendingRoutes = async (fastify: FastifyInstance) => {
 
     const complaints = await prisma.complaint.findMany({
       where: {
-        branch,
+        addressDistrict: branch,
         complRegDt: { lte: fifteenDaysAgo, gt: thirtyDaysAgo },
         OR: PENDING_WHERE,
       },
@@ -118,7 +118,7 @@ export const pendingRoutes = async (fastify: FastifyInstance) => {
 
     const complaints = await prisma.complaint.findMany({
       where: {
-        branch,
+        addressDistrict: branch,
         complRegDt: { lte: thirtyDaysAgo, gt: sixtyDaysAgo },
         OR: PENDING_WHERE,
       },
@@ -135,7 +135,7 @@ export const pendingRoutes = async (fastify: FastifyInstance) => {
 
     const complaints = await prisma.complaint.findMany({
       where: {
-        branch,
+        addressDistrict: branch,
         complRegDt: { lte: sixtyDaysAgo },
         OR: PENDING_WHERE,
       },
@@ -147,12 +147,29 @@ export const pendingRoutes = async (fastify: FastifyInstance) => {
   fastify.get('/pending/branches', {
     preHandler: [authenticate],
   }, async (request, reply) => {
-    const complaints = await prisma.complaint.findMany({
-      where: { branch: { not: '' } },
-      select: { branch: true },
-      distinct: ['branch'],
+    // Return only the 22 official Haryana districts — filtered from DB
+    const HARYANA_DISTRICTS = [
+      'AMBALA', 'BHIWANI', 'CHARKHI DADRI', 'FARIDABAD', 'FATEHABAD',
+      'GURUGRAM', 'HISAR', 'JHAJJAR', 'JIND', 'KAITHAL', 'KARNAL',
+      'KURUKSHETRA', 'MAHENDERGARH', 'NUH', 'PALWAL', 'PANCHKULA',
+      'PANIPAT', 'REWARI', 'ROHTAK', 'SIRSA', 'SONIPAT', 'YAMUNANAGAR',
+    ];
+
+    // Get distinct districts in the DB that are in the Haryana list
+    const rows = await prisma.complaint.findMany({
+      where: {
+        addressDistrict: { in: HARYANA_DISTRICTS },
+        OR: PENDING_WHERE,
+      },
+      select: { addressDistrict: true },
+      distinct: ['addressDistrict'],
+      orderBy: { addressDistrict: 'asc' },
     });
-    const branches = complaints.map(c => c.branch).filter(Boolean);
+
+    // Return all 22 official districts (regardless of whether they have pending data)
+    // so the dropdown is always complete
+    const inDb = new Set(rows.map(r => r.addressDistrict));
+    const branches = HARYANA_DISTRICTS.filter(d => inDb.has(d));
     return sendSuccess(reply, branches);
   });
 };

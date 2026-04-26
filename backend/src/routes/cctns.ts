@@ -16,9 +16,9 @@ export const cctnsRoutes = async (fastify: FastifyInstance) => {
 
       const where = search.trim() ? {
         OR: [
-          { complainantName: { contains: search } },
-          { mobileNo: { contains: search } },
-          { firNo: { contains: search } },
+          { victimName: { contains: search, mode: 'insensitive' as const } },
+          { accusedName: { contains: search, mode: 'insensitive' as const } },
+          { firNumber: { contains: search, mode: 'insensitive' as const } },
         ],
       } : {};
 

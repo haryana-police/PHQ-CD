@@ -8,7 +8,7 @@ export const complaintRoutes = async (fastify: FastifyInstance) => {
     preHandler: [authenticate],
   }, async (request, reply) => {
     try {
-      const { page = '1', limit = '10', search = '' } = request.query as Record<string, string>;
+      const { page = '1', limit = '10', search = '', fromDate, toDate } = request.query as Record<string, string>;
       
       const pageNum = parseInt(page);
       const limitNum = parseInt(limit);
@@ -16,13 +16,25 @@ export const complaintRoutes = async (fastify: FastifyInstance) => {
 
       // Only apply the expensive OR query if there's an actual search term.
       // Otherwise, Prisma might construct a slow query tree.
-      const where = search.trim() ? {
-        OR: [
+      const where: any = {};
+      
+      if (search.trim()) {
+        where.OR = [
           { firstName: { contains: search } },
           { mobile: { contains: search } },
           { complRegNum: { contains: search } },
-        ],
-      } : {};
+        ];
+      }
+
+      if (fromDate || toDate) {
+        where.complRegDt = {};
+        if (fromDate) where.complRegDt.gte = new Date(fromDate);
+        if (toDate) {
+          const end = new Date(toDate);
+          end.setHours(23, 59, 59, 999);
+          where.complRegDt.lte = end;
+        }
+      }
 
       const [complaints, total] = await prisma.$transaction([
         prisma.complaint.findMany({
