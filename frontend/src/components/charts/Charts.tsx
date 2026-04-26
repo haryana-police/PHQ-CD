@@ -5,7 +5,7 @@ export const BaseChart = ({ option, height = '400px', width = '100%' }: { option
   return <ReactECharts option={option} notMerge={true} style={{ height, width }} opts={{ renderer: 'canvas' }} />;
 };
 
-export const getDistrictBarOptions = (data: { district: string; total: number; pending: number; disposed: number }[]) => {
+export const getDistrictBarOptions = (data: { district: string; total: number; pending: number; disposed: number }[]): any => {
   return {
     tooltip: {
       trigger: 'item',
@@ -60,7 +60,7 @@ export const getDistrictBarOptions = (data: { district: string; total: number; p
   };
 };
 
-export const getDurationLineOptions = (data: { duration?: string; month?: string; total: number; pending: number; disposed: number }[]) => {
+export const getDurationLineOptions = (data: { duration?: string; month?: string; total: number; pending: number; disposed: number }[]): any => {
   return {
     tooltip: {
       trigger: 'axis',
@@ -126,18 +126,18 @@ export const getDurationLineOptions = (data: { duration?: string; month?: string
   };
 };
 
-export const getPieOptions = (data: { name: string; value: number }[]) => {
+export const getPieOptions = (data: { name: string; value: number }[]): any => {
   const total = data.reduce((s, d) => s + d.value, 0);
   return {
     tooltip: {
-      trigger: 'item',
+      trigger: 'item' as const,
       backgroundColor: '#1e293b',
       borderColor: '#334155',
       textStyle: { color: '#e2e8f0', fontSize: 12 },
-      formatter: (p: { name: string; value: number; percent: number }) => `<b>${p.name}</b><br/>Count: ${p.value} (${p.percent.toFixed(1)}%)`,
+      formatter: (p: any) => `<b>${p.name}</b><br/>Count: ${p.value} (${p.percent.toFixed(1)}%)`,
     },
     legend: {
-      orient: 'vertical',
+      orient: 'vertical' as const,
       right: 8,
       top: 'center',
       textStyle: { color: '#94a3b8', fontSize: 11 },
@@ -160,7 +160,7 @@ export const getPieOptions = (data: { name: string; value: number }[]) => {
   };
 };
 
-export const getStackedBarOptions = (data: { category: string; total: number; pending: number; disposed: number }[]) => {
+export const getStackedBarOptions = (data: { category: string; total: number; pending: number; disposed: number }[]): any => {
   return {
     tooltip: {
       trigger: 'item',

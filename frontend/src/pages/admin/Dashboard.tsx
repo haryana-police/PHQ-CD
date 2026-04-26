@@ -27,12 +27,12 @@ export const DashboardPage = () => {
     queryFn: () => dashboardApi.summary(activeFilters),
   });
 
-  const { data: districtData, isLoading: dl } = useQuery({
+  const { data: districtData } = useQuery({
     queryKey: ['dashboard', 'district', activeFilters],
     queryFn: () => dashboardApi.districtWise(activeFilters),
   });
 
-  const { data: durationData, isLoading: durl } = useQuery({
+  const { data: durationData } = useQuery({
     queryKey: ['dashboard', 'duration', activeFilters],
     queryFn: () => dashboardApi.durationWise(activeFilters),
   });
@@ -42,7 +42,7 @@ export const DashboardPage = () => {
     queryFn: () => dashboardApi.ageingMatrix(activeFilters),
   });
 
-  const { data: categoryData, isLoading: cl } = useQuery({
+  const { data: categoryData } = useQuery({
     queryKey: ['dashboard', 'category', activeFilters],
     queryFn: () => dashboardApi.categoryWise(activeFilters),
   });
@@ -159,7 +159,7 @@ export const DashboardPage = () => {
                     ...c,
                     render: (row) => renderMatrixDays(c, row),
                   }))}
-                  onRowClick={(row) => navigate(`/admin/district/${encodeURIComponent(row.district)}`)}
+                  onRowClick={(row) => navigate(`/admin/district/${encodeURIComponent(String(row.district))}`)}
                   maxHeight="400px"
                 />
               </div>
@@ -178,7 +178,7 @@ export const DashboardPage = () => {
                     ...c,
                     render: (row) => renderMatrixPct(c, row),
                   }))}
-                  onRowClick={(row) => navigate(`/admin/district/${encodeURIComponent(row.district)}`)}
+                  onRowClick={(row) => navigate(`/admin/district/${encodeURIComponent(String(row.district))}`)}
                   maxHeight="400px"
                 />
               </div>

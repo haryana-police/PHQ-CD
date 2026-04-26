@@ -12,7 +12,8 @@ const PREVIEW_COUNT = 5;
 export const HotspotsPage = () => {
   const [showAllDistricts, setShowAllDistricts] = useState(false);
   const [showAllCategories, setShowAllCategories] = useState(false);
-  const { activeFilters } = useFilters();
+  const { filters } = useFilters();
+  const activeFilters = Object.fromEntries(Object.entries(filters).filter(([_, v]) => v !== ''));
 
   const { data: dd, isLoading: dl } = useQuery({
     queryKey: ['dashboard', 'district', activeFilters],

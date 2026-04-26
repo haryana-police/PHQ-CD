@@ -143,9 +143,9 @@ export const ReportsPage = () => {
                 ...c,
                 render: (row) => {
                   if (c.key === 'name') return <span style={{ fontWeight: 500 }}>{String(row.name)}</span>;
-                  if (c.key === 'total') return <span style={{ fontWeight: 600 }}>{row.total}</span>;
-                  if (c.key === 'pending') return <span style={{ color: '#fbbf24' }}>{row.pending}</span>;
-                  if (c.key === 'disposed') return <span style={{ color: '#34d399' }}>{row.disposed}</span>;
+                  if (c.key === 'total') return <span style={{ fontWeight: 600 }}>{String(row.total)}</span>;
+                  if (c.key === 'pending') return <span style={{ color: '#fbbf24' }}>{String(row.pending)}</span>;
+                  if (c.key === 'disposed') return <span style={{ color: '#34d399' }}>{String(row.disposed)}</span>;
                   if (c.key === 'pendPct') return <span style={{ color: '#fbbf24' }}>{String(row.pendPct)}</span>;
                   if (c.key === 'dispPct') return <span style={{ color: '#34d399' }}>{String(row.dispPct)}</span>;
                   return String(row[c.key as keyof typeof row] ?? '-');

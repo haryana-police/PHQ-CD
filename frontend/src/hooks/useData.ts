@@ -1,8 +1,6 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
 
 export const useAuth = () => {
-  const queryClient = useQueryClient();
-  
   const login = useMutation({
     mutationFn: async (credentials: { username: string; password: string }) => {
       const { data } = await import('@/services/api').then(m => m.default.post('/api/auth/login', credentials));

@@ -99,7 +99,7 @@ export const CCTNSPage = () => {
   const isConfigured = statusQuery.data?.data?.configured;
 
   // ── Enquiry table columns ──
-  const enquiryCols: Column<EnquiryRecord>[] = [
+  const enquiryCols: Column<any>[] = [
     {
       key: 'complRegNum',
       label: 'Complaint No.',
@@ -155,7 +155,7 @@ export const CCTNSPage = () => {
   ];
 
   // ── Synced table columns ──
-  const syncedCols: Column<SyncedRecord>[] = [
+  const syncedCols: Column<any>[] = [
     { key: 'complRegNum',  label: 'Reg. No.',    sortable: true },
     { key: 'compCategory', label: 'Category',    sortable: true },
     { key: 'accusedName',  label: 'Officer/Name', sortable: true },
@@ -339,8 +339,8 @@ export const CCTNSPage = () => {
                 </div>
                 <DataTable
                   title="CCTNS Live Enquiry Records"
-                  data={enquiryData}
-                  columns={enquiryCols}
+                  data={enquiryData as any}
+                  columns={enquiryCols as any}
                   maxHeight="calc(100vh - 320px)"
                 />
               </>

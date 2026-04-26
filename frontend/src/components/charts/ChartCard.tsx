@@ -1,4 +1,4 @@
-import { ReactNode, useState } from 'react';
+import { useState } from 'react';
 import { BaseChart } from './Charts';
 import type { EChartsOption } from 'echarts';
 
