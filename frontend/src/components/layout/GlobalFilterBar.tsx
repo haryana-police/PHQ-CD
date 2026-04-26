@@ -5,9 +5,8 @@ import { dashboardApi } from '../../services/api';
 
 // Reusable multi-select dropdown component
 const MultiSelectDropdown = ({ 
-  label, isOpen, toggle, allLabel, allChecked, onAllClick, items, selectedItems, onToggleItem 
+  isOpen, toggle, allLabel, allChecked, onAllClick, items, selectedItems, onToggleItem 
 }: {
-  label: string;
   isOpen: boolean;
   toggle: () => void;
   allLabel: string;
@@ -181,7 +180,6 @@ export const GlobalFilterBar = () => {
       <div className="filter-group" ref={districtRef} style={{ position: 'relative' }}>
         <label>District</label>
         <MultiSelectDropdown
-          label="District"
           isOpen={districtDropdownOpen}
           toggle={() => { setDistrictDropdownOpen(!districtDropdownOpen); setCategoryDropdownOpen(false); }}
           allLabel="All Districts"
@@ -197,7 +195,6 @@ export const GlobalFilterBar = () => {
       <div className="filter-group" ref={categoryRef} style={{ position: 'relative' }}>
         <label>Complaint Type</label>
         <MultiSelectDropdown
-          label="Complaint Type"
           isOpen={categoryDropdownOpen}
           toggle={() => { setCategoryDropdownOpen(!categoryDropdownOpen); setDistrictDropdownOpen(false); }}
           allLabel="All Types"
