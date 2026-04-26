@@ -18,4 +18,17 @@ export default defineConfig({
       },
     },
   },
+  build: {
+    // Generate source maps for easier debugging
+    sourcemap: false,
+    rollupOptions: {
+      output: {
+        // Split vendor chunks for better caching
+        manualChunks: {
+          react: ['react', 'react-dom', 'react-router-dom'],
+          charts: ['echarts', 'echarts-for-react'],
+        },
+      },
+    },
+  },
 })
