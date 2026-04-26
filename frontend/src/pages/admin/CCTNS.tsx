@@ -67,30 +67,12 @@ export const CCTNSPage = () => {
   // ── Status ──
   const statusQuery = useQuery({
     queryKey: ['cctns-status'],
-    queryFn: async () => {
-      const r = await fetch('/api/cctns/status', {
-        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
-      });
-      return r.json();
-    },
+    queryFn: () => cctnsApi.status(),
   });
 
   // ── Sync Enquiries to DB mutation ──
   const syncEnquiryMutation = useMutation({
-    mutationFn: async () => {
-      const r = await fetch('/api/cctns/sync-enquiries', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${localStorage.getItem('token')}`,
-        },
-        body: JSON.stringify({
-          timeFrom: toApiDate(timeFrom),
-          timeTo: toApiDate(timeTo),
-        }),
-      });
-      return r.json();
-    },
+    mutationFn: () => cctnsApi.syncEnquiries(toApiDate(timeFrom), toApiDate(timeTo)),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['cctns-synced'] });
     },

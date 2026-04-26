@@ -255,6 +255,14 @@ export const cctnsApi = {
     });
     return response.data;
   },
+  status: async () => {
+    const response = await api.get('/api/cctns/status');
+    return response.data;
+  },
+  syncEnquiries: async (timeFrom: string, timeTo: string) => {
+    const response = await api.post('/api/cctns/sync-enquiries', { timeFrom, timeTo });
+    return response.data;
+  },
 };
 
 export const importExportApi = {
