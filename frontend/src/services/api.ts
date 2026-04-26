@@ -105,6 +105,10 @@ export const dashboardApi = {
     const response = await api.get('/api/dashboard/category-wise', { params });
     return response.data;
   },
+  disposalMatrix: async (params?: Record<string, string>) => {
+    const response = await api.get('/api/dashboard/disposal-matrix', { params });
+    return response.data;
+  },
   getDistrictWise: async () => {
     const response = await api.get('/api/dashboard/district-wise');
     return response.data;

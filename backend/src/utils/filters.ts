@@ -17,12 +17,18 @@ export const buildPrismaWhereClause = (query: any) => {
 
   const districtName = query.district_name || query.districtName;
   if (districtName) {
-    where.addressDistrict = districtName;
+    const districts = (districtName as string).split(',').map(d => d.trim()).filter(Boolean);
+    if (districts.length > 0) {
+      where.addressDistrict = { in: districts };
+    }
   }
 
   const complaintType = query.complaint_type || query.complaintType;
   if (complaintType) {
-    where.typeOfComplaint = complaintType;
+    const types = (complaintType as string).split(',').map(t => t.trim()).filter(Boolean);
+    if (types.length > 0) {
+      where.typeOfComplaint = { in: types };
+    }
   }
 
   const fromDate = query.from_date || query.fromDate;

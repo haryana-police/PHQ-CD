@@ -13,7 +13,7 @@ export const complaintRoutes = async (fastify: FastifyInstance) => {
     const limitNum = parseInt(limit);
     const skip = (pageNum - 1) * limitNum;
 
-    const where = search ? {
+    const where: any = search ? {
       OR: [
         { firstName: { contains: search, mode: 'insensitive' } },
         { lastName: { contains: search, mode: 'insensitive' } },

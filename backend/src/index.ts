@@ -20,37 +20,45 @@ import { importExportRoutes } from './routes/import-export.js';
 import { governmentRoutes } from './routes/government.js';
 import { startCctnsBackgroundSync } from './jobs/cctns-sync-job.js';
 
-const fastify = Fastify({ logger: true });
+export const app = Fastify({ logger: true });
 
-async function main() {
-  await fastify.register(cors, { origin: true });
-  await fastify.register(jwt, { secret: 'phq-dashboard-secret-key-2024' });
-  await fastify.register(multipart);
+let isBuilt = false;
 
-  await fastify.register(authRoutes, { prefix: '/api' });
-  await fastify.register(complaintRoutes, { prefix: '/api' });
-  await fastify.register(dashboardRoutes, { prefix: '/api' });
-  await fastify.register(reportRoutes, { prefix: '/api' });
-  await fastify.register(pendingRoutes, { prefix: '/api' });
-  await fastify.register(referenceRoutes, { prefix: '/api' });
-  await fastify.register(womenSafetyRoutes, { prefix: '/api' });
-  await fastify.register(cctnsSyncRoutes, { prefix: '/api' });
-  await fastify.register(cctnsRoutes, { prefix: '/api' });
-  await fastify.register(importExportRoutes, { prefix: '/api' });
-  await fastify.register(governmentRoutes, { prefix: '/api' });
+export async function buildApp() {
+  if (isBuilt) return app;
+  
+  await app.register(cors, { origin: true });
+  await app.register(jwt, { secret: process.env.JWT_SECRET || 'phq-dashboard-secret-key-2024' });
+  await app.register(multipart);
 
-  fastify.get('/api/health', async () => {
+  await app.register(authRoutes, { prefix: '/api' });
+  await app.register(complaintRoutes, { prefix: '/api' });
+  await app.register(dashboardRoutes, { prefix: '/api' });
+  await app.register(reportRoutes, { prefix: '/api' });
+  await app.register(pendingRoutes, { prefix: '/api' });
+  await app.register(referenceRoutes, { prefix: '/api' });
+  await app.register(womenSafetyRoutes, { prefix: '/api' });
+  await app.register(cctnsSyncRoutes, { prefix: '/api' });
+  await app.register(cctnsRoutes, { prefix: '/api' });
+  await app.register(importExportRoutes, { prefix: '/api' });
+  await app.register(governmentRoutes, { prefix: '/api' });
+
+  app.get('/api/health', async () => {
     return { status: 'ok', timestamp: new Date().toISOString() };
   });
 
-  try {
-    startCctnsBackgroundSync(); // Start background sync
-    await fastify.listen({ port: 3001, host: '0.0.0.0' });
-    console.log('✅ Server running on port 3001');
-  } catch (err) {
-    fastify.log.error(err);
-    process.exit(1);
-  }
+  isBuilt = true;
+  return app;
 }
-
-main();
+if (process.env.NODE_ENV !== 'production' && process.env.VERCEL !== '1') {
+  buildApp().then(async () => {
+    try {
+      startCctnsBackgroundSync(); // Start background sync
+      await app.listen({ port: 3001, host: '0.0.0.0' });
+      console.log('✅ Server running on port 3001');
+    } catch (err) {
+      app.log.error(err);
+      process.exit(1);
+    }
+  });
+}
