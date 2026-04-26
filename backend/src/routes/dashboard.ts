@@ -282,6 +282,44 @@ export const dashboardRoutes = async (fastify: FastifyInstance) => {
     return sendSuccess(reply, data);
   });
 
+  fastify.get('/dashboard/disposal-matrix', {
+    preHandler: [authenticate],
+  }, async (request, reply) => {
+    const baseWhere = buildPrismaWhereClause(request.query);
+    const complaints = await prisma.complaint.findMany({
+      where: {
+        ...baseWhere,
+        statusOfComplaint: { contains: 'Disposed' },
+        complRegDt: { not: null },
+        disposalDate: { not: null },
+      },
+      select: { addressDistrict: true, complRegDt: true, disposalDate: true }
+    });
+
+    const matrixMap = new Map<string, { u7: number; u15: number; u30: number; o30: number }>();
+
+    for (const comp of complaints) {
+      const dist = comp.addressDistrict || 'Unknown';
+      if (!matrixMap.has(dist)) {
+        matrixMap.set(dist, { u7: 0, u15: 0, u30: 0, o30: 0 });
+      }
+      const stats = matrixMap.get(dist)!;
+      const disposalDays = (comp.disposalDate!.getTime() - comp.complRegDt!.getTime()) / (1000 * 60 * 60 * 24);
+
+      if (disposalDays < 7) stats.u7++;
+      else if (disposalDays < 15) stats.u15++;
+      else if (disposalDays < 30) stats.u30++;
+      else stats.o30++;
+    }
+
+    const data = Array.from(matrixMap.entries()).map(([district, stats]) => ({
+      district,
+      ...stats
+    }));
+
+    return sendSuccess(reply, data);
+  });
+
   fastify.get<{ Params: { district: string } }>('/dashboard/district-analysis/:district', {
     preHandler: [authenticate],
   }, async (request, reply) => {
@@ -297,14 +335,14 @@ export const dashboardRoutes = async (fastify: FastifyInstance) => {
     });
 
     const now = new Date().getTime();
-    const psMap = new Map<string, { total: number; pending: number; disposed: number; u7: number; u15: number; u30: number; o30: number; avgDisposalDays: number; totalDisposalDays: number }>();
+    const psMap = new Map<string, { total: number; pending: number; disposed: number; u7: number; u15: number; u30: number; o30: number; du7: number; du15: number; du30: number; do30: number; avgDisposalDays: number; totalDisposalDays: number }>();
     const categoryMap = new Map<string, { total: number; pending: number; disposed: number }>();
 
     for (const comp of complaints) {
       // PS logic
       const ps = comp.addressPs || 'Unknown PS';
       if (!psMap.has(ps)) {
-        psMap.set(ps, { total: 0, pending: 0, disposed: 0, u7: 0, u15: 0, u30: 0, o30: 0, avgDisposalDays: 0, totalDisposalDays: 0 });
+        psMap.set(ps, { total: 0, pending: 0, disposed: 0, u7: 0, u15: 0, u30: 0, o30: 0, du7: 0, du15: 0, du30: 0, do30: 0, avgDisposalDays: 0, totalDisposalDays: 0 });
       }
       const stats = psMap.get(ps)!;
       stats.total++;
@@ -325,7 +363,13 @@ export const dashboardRoutes = async (fastify: FastifyInstance) => {
         stats.disposed++;
         catStats.disposed++;
         if (comp.complRegDt && comp.disposalDate) {
-          stats.totalDisposalDays += (comp.disposalDate.getTime() - comp.complRegDt.getTime()) / (1000 * 60 * 60 * 24);
+          const disposalDays = (comp.disposalDate.getTime() - comp.complRegDt.getTime()) / (1000 * 60 * 60 * 24);
+          stats.totalDisposalDays += disposalDays;
+          // Disposal time buckets
+          if (disposalDays < 7) stats.du7++;
+          else if (disposalDays < 15) stats.du15++;
+          else if (disposalDays < 30) stats.du30++;
+          else stats.do30++;
         }
       } else if (isPending) {
         stats.pending++;
@@ -349,6 +393,10 @@ export const dashboardRoutes = async (fastify: FastifyInstance) => {
       u15: stats.u15,
       u30: stats.u30,
       o30: stats.o30,
+      du7: stats.du7,
+      du15: stats.du15,
+      du30: stats.du30,
+      do30: stats.do30,
       avgDisposalDays: stats.disposed > 0 ? Math.round(stats.totalDisposalDays / stats.disposed) : 0
     }));
 
