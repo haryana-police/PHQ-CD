@@ -106,6 +106,7 @@ export async function fetchCctnsComplaints(timeFrom: string, timeTo: string): Pr
       'Authorization': `Bearer ${token}`,
       'Accept': 'application/json',
     },
+    signal: AbortSignal.timeout(60000), // 60 second timeout
   });
 
   if (!res.ok) {
@@ -113,13 +114,20 @@ export async function fetchCctnsComplaints(timeFrom: string, timeTo: string): Pr
   }
 
   const responseData = await res.text();
-  const decrypted = decrypt(responseData, decryptKey);
 
+  // Try plain JSON first
   try {
-    const parsed = JSON.parse(decrypted);
+    const parsed = JSON.parse(responseData);
     return Array.isArray(parsed) ? parsed : parsed.data || parsed.complaints || [];
   } catch {
-    return [];
+    // Fallback: try AES decrypt in case response format changes
+    const decrypted = decrypt(responseData, decryptKey);
+    try {
+      const parsed = JSON.parse(decrypted);
+      return Array.isArray(parsed) ? parsed : parsed.data || parsed.complaints || [];
+    } catch {
+      return [];
+    }
   }
 }
 
@@ -139,6 +147,7 @@ export async function fetchCctnsEnquiries(timeFrom: string, timeTo: string): Pro
       'Authorization': `Bearer ${token}`,
       'Accept': 'application/json',
     },
+    signal: AbortSignal.timeout(60000), // 60s timeout
   });
 
   if (!res.ok) {

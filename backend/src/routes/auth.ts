@@ -67,8 +67,10 @@ export const authRoutes = async (fastify: FastifyInstance) => {
       return sendError(reply, 'Username already exists');
     }
 
+    const hashedPassword = await bcrypt.hash(password, 10);
+
     await prisma.admin.create({
-      data: { username, password, role },
+      data: { username, password: hashedPassword, role },
     });
 
     return sendSuccess(reply, { username, role }, 'Admin created successfully');

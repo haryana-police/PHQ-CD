@@ -1,0 +1,246 @@
+HARYANA POLICE
+Complaints Supervision Portal
+Frontend & Backend Implementation Plan  —  AI Coding Agent Reference
+Version 2.0  |  April 2026
+1. DATA SOURCES & KEY FIELDS
+The portal reads from three complaint tables and supporting master tables. All complaint tables share a common structure: a registration number, district link, status, registration date, and disposal date. The key derived metric — disposal days — is computed as (disposalDate − complRegDt) in days.
+1.1  Complaint Tables
+Table
+Primary Use
+Key Fields Used by Portal
+Complaint
+General / misc complaints
+districtId, typeOfComplaint, statusOfComplaint, complRegDt, disposalDate, incidentType, classOfIncident, branch
+WomenSafety
+Women safety complaints
+districtId, statusOfComplaint, complRegDt, disposalDate, incidentType
+CCTNSComplaint
+FIR-linked / CCTNS cases
+districtId, compCategory, firNumber, firDate, incidentDate
+⚠ CCTNSComplaint has no statusOfComplaint or disposalDate. Disposal analytics apply only to Complaint and WomenSafety tables. CCTNS data feeds the FIR linkage view only.
+1.2  Master / Lookup Tables
+Table
+Portal Usage
+District / District_Master
+Populate district filter dropdowns; join to complaint tables via districtId
+PoliceStation_Master
+Populate station filter dropdowns; linked to district via DistrictID
+NatureOfComplaint
+Populate 'Nature of Complaint' filter; maps to Complaint.typeOfComplaint
+ReceivedFrom
+Populate complaint source filter; maps to Complaint.complaintSource
+Office / Offices_Master
+Office/branch filter for the Complaint table's branch field
+1.3  Status Values (Complaint & WomenSafety)
+The field statusOfComplaint drives all pending/disposed counts. The backend must map raw status strings to two canonical states:
+Canonical State
+Raw statusOfComplaint values that map to it
+DISPOSED
+Any value where disposalDate IS NOT NULL  —  treat as disposed regardless of status string
+PENDING
+disposalDate IS NULL  —  treat as pending regardless of status string
+⚠ Use disposalDate IS NULL / IS NOT NULL as the single source of truth for pending vs disposed. Do not rely on free-text status strings for counting.
+2. BACKEND API SPECIFICATION
+All endpoints are GET unless stated. All accept a common filter query-string. Responses are JSON. Disposal day buckets are computed server-side.
+2.1  Common Filter Parameters
+Param
+Type
+Description
+source
+string
+Which table: complaint | women_safety | cctns | all (default: all)
+district_id
+int
+Filter to one district (District.id)
+from_date
+date
+complRegDt >= from_date
+to_date
+date
+complRegDt <= to_date
+year
+int
+Shorthand: filter complRegDt to full calendar year
+month
+int (1–12)
+Combined with year: filter to single month
+complaint_type
+string
+typeOfComplaint value (Complaint table)
+nature_id
+int
+NatureOfComplaint.id
+status
+string
+pending | disposed | all (default: all)
+2.2  Endpoints
+GET /api/summary
+Returns state-level KPIs across all districts.
+Response fields: total, disposed, pending, disposal_rate_pct, avg_disposal_days, complaints_over_30_days, source_breakdown { complaint: {total,disposed,pending}, women_safety: {…} }
+GET /api/districts/summary
+Returns one row per district with aggregated counts. Used for the district-wise table and map.
+Response: array of { district_id, district_name, total, disposed, pending, disposal_rate_pct, avg_disposal_days, max_pending_age_days }
+GET /api/districts/:id/stations
+Police-station breakdown for a given district. Uses PoliceStation_Master joined to complaints via addressPs (Complaint) or districtId match.
+Response: array of { station_id, station_name, total, disposed, pending, avg_disposal_days, sla_breaches }
+GET /api/trends
+Monthly or yearly time-series.
+Additional params: granularity = monthly | yearly
+Response: array of { period (YYYY-MM or YYYY), total, disposed, pending } — one object per period
+GET /api/disposal-time
+Bucket distribution of disposal days. Accepts all common filters plus district_id for district-level buckets.
+Response: { lte7: N, d8_15: N, d16_30: N, gt30: N, avg_days: N, max_days: N, pending_gt30: N } — also as array per district when no district_id given
+GET /api/complaints/types
+Aggregation by typeOfComplaint (Complaint table) and incidentType (WomenSafety). Cross-tab by district when no district_id filter applied.
+Response: array of { type_label, total, disposed, pending, avg_disposal_days, lte7, d8_15, d16_30, gt30 }
+GET /api/complaints/ageing
+List of individual complaints pending beyond a threshold. Paginated.
+Additional params: min_days (default 30), page, page_size (default 50)
+Response: { total_count, page, data: [ { complRegNum, district_name, source_table, typeOfComplaint, received_date, days_pending } ] }
+GET /api/complaints/search
+Search and filter individual complaints.
+Additional params: q (searches complRegNum, firstName, lastName, mobile), all common filters, sort_by, sort_dir, page, page_size
+Response: paginated list of complaint summary rows
+GET /api/complaints/:source/:id
+Single complaint detail. source = complaint | women_safety | cctns
+Response: full record from the respective table, with computed disposal_days appended
+POST /api/reports/export
+Generate PDF or Excel of any current view.
+Body: { type: district_summary | ageing | type_analysis | trends | station, format: pdf | excel, filters: { …common filter params } }
+Response: file stream with appropriate Content-Type and Content-Disposition
+2.3  Computed Fields (server-side, not stored)
+Field
+Computation
+disposal_days
+DATEDIFF(disposalDate, complRegDt) — only for disposed records
+days_pending
+DATEDIFF(CURDATE(), complRegDt) — only for pending records
+disposal_rate_pct
+ROUND(disposed / total * 100, 1)
+bucket assignment
+≤7 / 8–15 / 16–30 / >30 based on disposal_days or days_pending
+⚠ No schema changes required. All computed fields are derived at query time. Consider a nightly materialized summary table (district_daily_summary) for performance once data volume exceeds ~100k rows.
+3. FRONTEND IMPLEMENTATION
+3.1  Global Layout
+Top header: Portal title, logged-in officer name/rank, Hindi/English toggle, logout
+Left sidebar (collapsible): navigation links to all modules
+Persistent filter bar (below header): Date range picker | Source selector (All / General / Women Safety / CCTNS) | District dropdown (from District_Master) | Complaint Type dropdown (from NatureOfComplaint)
+All modules read the active filter bar state; changing any filter rerenders the active module
+3.2  Module 1 — Executive Dashboard (Home)
+KPI Cards Row
+4 cards: Total Complaints | Disposed | Pending | Disposal Rate %
+Each card shows current period value + delta vs previous period (↑↓ with colour)
+Source: GET /api/summary with active filters
+SLA Breach Alert Panel
+Red banner listing districts with pending complaints > 30 days — count and district name
+Source: GET /api/complaints/ageing?min_days=30 — grouped by district_id client-side
+Click district name → navigates to Module 2 filtered to that district
+District Overview Chart
+Horizontal stacked bar chart — one bar per district, stacked: Disposed (green) | Pending (red)
+Sorted by pending count descending so worst districts appear first
+Source: GET /api/districts/summary
+3.3  Module 2 — District-Wise Analysis
+Summary Table
+Columns: District | Total | Disposed | Pending | Disposal Rate % | Avg Days | Complaints >30d
+Sortable on all numeric columns; search box filters by district name
+Row click → expands inline to show police-station breakdown (Module 6 data) for that district
+Source: GET /api/districts/summary
+Haryana Map (Choropleth)
+Haryana GeoJSON map — districts colour-coded by pending count (green→yellow→red scale)
+Hover tooltip: district name, pending, disposal rate
+Click district → sets district filter globally and navigates to station breakdown
+Export
+'Download Excel' and 'Download PDF' buttons — call POST /api/reports/export with type=district_summary
+3.4  Module 3 — Trends
+Monthly Trend Chart
+Dual-line chart: Received (blue) vs Disposed (green) per month — last 24 months
+X-axis: month labels (Apr 2024, May 2024 …). Y-axis: complaint count
+Source: GET /api/trends?granularity=monthly
+Year-on-Year Bar Chart
+Grouped bar chart: up to 5 years side-by-side — Total / Disposed / Pending
+Year selector (multi-select checkboxes, default last 3 years)
+Source: GET /api/trends?granularity=yearly
+Monthly Heatmap
+Grid: Districts (rows) × Months (columns) — cell colour = pending count intensity
+Used to spot seasonal spikes or consistently backlogged districts
+Source: GET /api/trends?granularity=monthly with no district_id — group by district client-side
+3.5  Module 4 — Disposal Time Analysis
+State-Level Donut Chart
+4 segments: ≤7 days | 8–15 days | 16–30 days | >30 days
+Segment labels show count and percentage
+Source: GET /api/disposal-time
+District-Wise Bucket Table
+Columns: District | ≤7d | 8–15d | 16–30d | >30d | Avg Days | Max Days
+Conditional formatting: >30d column turns red when value > 0
+Source: GET /api/disposal-time (no district_id — backend returns per-district array)
+Ageing Report Tab
+Paginated table of all complaints pending > 30 days
+Columns: Reg. No. | District | Source | Type | Date Received | Days Pending
+Sortable by days_pending DESC by default
+'Export to Excel' button — POST /api/reports/export with type=ageing
+Source: GET /api/complaints/ageing
+3.6  Module 5 — Complaint Type Analysis
+Type Summary Table
+Columns: Complaint Type | Total | Disposed | Pending | Disposal Rate % | Avg Days
+typeOfComplaint from Complaint table + incidentType from WomenSafety — merged and labelled by source
+Source: GET /api/complaints/types
+District × Type Cross-Tab
+Visible when no district filter is active
+Rows = complaint types, Columns = districts — each cell shows Pending count
+Highest-pending cells highlighted in red
+Source: GET /api/complaints/types (no district_id) — backend returns district breakdown per type
+Disposal Time by Type Chart
+Stacked horizontal bar per type: ≤7d | 8–15d | 16–30d | >30d
+Reveals which complaint categories take the longest to close
+3.7  Module 6 — Police Station Analysis
+Triggered by: selecting a district in Module 2, or via District dropdown in the filter bar
+Breadcrumb: State → [District Name] → Stations
+Station Table
+Columns: Station Name | Total | Disposed | Pending | Disposal Rate % | Avg Days | >30d Count
+Source: GET /api/districts/:id/stations
+Pending Bar Chart
+Horizontal bar chart — stations sorted by pending count DESC
+Quick visual to identify the most backlogged stations in the district
+3.8  Module 7 — Search & Complaint Detail
+Search Panel
+Search box: matches complRegNum (exact) or firstName/lastName/mobile (partial)
+Filters: Source table | District | Date range | Status | Complaint Type
+Results table: Reg. No. | Name | District | Type | Status | Date Received | Disposal Days
+Source: GET /api/complaints/search
+Complaint Detail Drawer
+Opens as a right-side panel on row click — no page navigation
+Shows all available fields from the respective source table
+For Complaint table: additionally shows ioDetails, actionTaken, firNumber, branch
+For CCTNSComplaint: shows accusedName, victimName, ActSection, firNumber
+Source: GET /api/complaints/:source/:id
+3.9  Module 8 — Reports
+Pre-built report types listed as tiles:
+Monthly District Summary — district totals for selected month
+Ageing Complaints Report — all pending > N days (configurable)
+Type-wise Disposal Report — type breakdown with disposal buckets
+Station Performance Report — for a selected district
+Each tile has: filter inputs → Preview (renders table inline) → Download PDF / Download Excel
+Scheduled reports (optional v2): configure frequency + email → backend cron job calls export endpoint
+3.10  Alerts & Notifications
+Badge counter on sidebar 'Ageing Complaints' link — count of complaints > 30 days
+Red banner on Dashboard home when any district has >N complaints breaching 30 days (N configurable)
+Filter bar shows 'As of [date]' label — data freshness indicator
+3.11  UX Rules for Senior Officers
+Rule
+Implementation
+3-Click Depth Max
+State KPI → District table → Station breakdown in 3 clicks
+Alerts Before Charts
+SLA breach panel always renders above all charts on home screen
+No Manual Filters Needed on Load
+Default view = current month, all districts, all sources. Useful without touching any filter.
+Persistent Filters
+Filter bar state persists across module navigation within session
+Export Everywhere
+Every table has a Download button. No need to visit a separate reports module for basic data.
+Hindi Labels
+All UI labels, column headers, and status values available in Hindi via toggle
+Mobile Responsive
+Full functionality on 10" tablet; charts reflow to single-column on narrow screens
+RBAC Data Scope
+DGP: all districts. Range IGP: range districts only. SP: own district only. Scope enforced by API, not just UI.

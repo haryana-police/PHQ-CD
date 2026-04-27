@@ -50,8 +50,10 @@ async function syncChunk(startDate: Date, endDate: Date) {
     let compCreated = 0;
     let compUpdated = 0;
 
+    const newComplaints = [];
+
     for (const row of complaints as CctnsComplaintRow[]) {
-      const data: Record<string, unknown> = {
+      const data: any = {
         complRegNum:   row.ComplRegNum || null,
         compCategory:  row.ComplCategory || row.ComplMainCat || null,
         psrNumber:     row.PSRNmuber || null,
@@ -65,25 +67,24 @@ async function syncChunk(startDate: Date, endDate: Date) {
         incidentDate:  row.IncidentDate ? new Date(row.IncidentDate) : null,
       };
 
-      if (!data.complRegNum) continue;
-
-      try {
-        const existing = await prisma.cCTNSComplaint.findUnique({
-          where: { complRegNum: String(data.complRegNum) },
-        });
-
-        if (existing) {
-          await prisma.cCTNSComplaint.update({ where: { id: existing.id }, data });
-          compUpdated++;
-        } else {
-          await prisma.cCTNSComplaint.create({ data });
-          compCreated++;
-        }
-      } catch (e) {
-        // silent fail on individual row
+      if (data.complRegNum) {
+        newComplaints.push(data);
       }
     }
-    console.log(`  Complaints: ${compCreated} created, ${compUpdated} updated`);
+
+    if (newComplaints.length > 0) {
+      try {
+        const result = await prisma.cCTNSComplaint.createMany({
+          data: newComplaints,
+          skipDuplicates: true,
+        });
+        compCreated = result.count;
+      } catch (e) {
+        console.error('Failed to bulk insert complaints:', e);
+      }
+    }
+
+    console.log(`  Complaints: ${compCreated} created (duplicates skipped)`);
   } catch (error) {
     console.error(`  [!] Failed to sync complaints for chunk: ${error}`);
   }
@@ -93,45 +94,46 @@ async function syncChunk(startDate: Date, endDate: Date) {
     let enqCreated = 0;
     let enqUpdated = 0;
 
+    const newEnquiries = [];
+
     for (const row of enquiries as CctnsEnquiryRow[]) {
       const complRegNum = row.COMPL_REG_NUM || null;
       if (!complRegNum) continue;
 
-      const data: Record<string, unknown> = {
-        complRegNum,
+      const data: any = {
+        complRegNum:   String(complRegNum),
         compCategory:  row.COMPLAINT_ACTION_TAKEN || null,
         ActSection:    row.ENQ_REMARKS || null,
         accusedName:   row.office_incharge?.trim() || null,
         incidentDate:  row.Investigation_start_date ? new Date(row.Investigation_start_date) : null,
       };
-
+      
+      newEnquiries.push(data);
+    }
+    
+    if (newEnquiries.length > 0) {
       try {
-        const existing = await prisma.cCTNSComplaint.findUnique({
-          where: { complRegNum: String(complRegNum) },
+        const result = await prisma.cCTNSComplaint.createMany({
+          data: newEnquiries,
+          skipDuplicates: true,
         });
-
-        if (existing) {
-          await prisma.cCTNSComplaint.update({ where: { id: existing.id }, data });
-          enqUpdated++;
-        } else {
-          await prisma.cCTNSComplaint.create({ data });
-          enqCreated++;
-        }
+        enqCreated = result.count;
       } catch (e) {
-        // silent fail on individual row
+        console.error('Failed to bulk insert enquiries:', e);
       }
     }
-    console.log(`  Enquiries: ${enqCreated} created, ${enqUpdated} updated`);
+
+    console.log(`  Enquiries: ${enqCreated} created (duplicates skipped)`);
   } catch (error) {
     console.error(`  [!] Failed to sync enquiries for chunk: ${error}`);
   }
 }
 
 async function runHistoricalSync() {
-  console.log('Starting historical sync for the past 90 days...');
+  console.log('Starting historical sync for the past 180 days...');
   const endDate = new Date(); // Today
   const startDate = new Date();
-  startDate.setDate(endDate.getDate() - 90); // 90 days ago
+  startDate.setDate(endDate.getDate() - 180); // 180 days ago
 
   let currentStart = new Date(startDate);
   
