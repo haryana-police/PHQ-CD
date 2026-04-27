@@ -5,6 +5,7 @@ const API_URL = (import.meta as any).env.VITE_API_URL || '/api';
 
 const api = axios.create({
   baseURL: API_URL,
+  timeout: 60000,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -248,19 +249,8 @@ export const cctnsApi = {
     const response = await api.get('/api/cctns/district');
     return response.data;
   },
-  // Live proxy — fetches from Enquiry API directly, no DB required
-  enquiriesLive: async (timeFrom: string, timeTo: string) => {
-    const response = await api.get('/api/cctns/enquiries-live', {
-      params: { timeFrom, timeTo },
-    });
-    return response.data;
-  },
   status: async () => {
     const response = await api.get('/api/cctns/status');
-    return response.data;
-  },
-  syncEnquiries: async (timeFrom: string, timeTo: string) => {
-    const response = await api.post('/api/cctns/sync-enquiries', { timeFrom, timeTo });
     return response.data;
   },
 };

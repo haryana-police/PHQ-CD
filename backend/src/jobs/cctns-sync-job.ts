@@ -36,106 +36,146 @@ const formatDateStr = (date: Date): string => {
   return `${mm}/${dd}/${yyyy}`;
 };
 
-export const runCctnsSync = async () => {
+const processInBatches = async <T>(
+  items: T[],
+  batchSize: number,
+  processor: (item: T) => Promise<void>
+) => {
+  for (let i = 0; i < items.length; i += batchSize) {
+    const batch = items.slice(i, i + batchSize);
+    await Promise.all(batch.map(item => processor(item)));
+  }
+};
+
+interface CctnsSyncResult {
+  timeFrom: string;
+  timeTo: string;
+  complaints: {
+    fetched: number;
+    upserted: number;
+    errors: number;
+  };
+  enquiries: {
+    fetched: number;
+    upserted: number;
+    errors: number;
+  };
+}
+
+let isSyncing = false;
+
+export const runCctnsSync = async (): Promise<CctnsSyncResult | null> => {
+  if (isSyncing) {
+    console.log('[SYNC] Already syncing, skipping...');
+    return null;
+  }
+
+  isSyncing = true;
   console.log('[SYNC] Starting background CCTNS data sync...');
-  
-  // Sync the last 2 days automatically
+
   const endDate = new Date();
   const startDate = new Date();
   startDate.setDate(endDate.getDate() - 2);
-  
+
   const timeFrom = formatDateStr(startDate);
   const timeTo = formatDateStr(endDate);
+  const result: CctnsSyncResult = {
+    timeFrom,
+    timeTo,
+    complaints: { fetched: 0, upserted: 0, errors: 0 },
+    enquiries: { fetched: 0, upserted: 0, errors: 0 },
+  };
 
   try {
     console.log(`[SYNC] Fetching complaints from ${timeFrom} to ${timeTo}...`);
-    const complaints = await fetchCctnsComplaints(timeFrom, timeTo);
-    
-    let compCreated = 0;
-    let compUpdated = 0;
+    const complaints = (await fetchCctnsComplaints(timeFrom, timeTo)) as CctnsComplaintRow[];
+    result.complaints.fetched = complaints.length;
 
-    for (const row of complaints as CctnsComplaintRow[]) {
-      const data: Record<string, unknown> = {
-        complRegNum:   row.ComplRegNum || null,
-        compCategory:  row.ComplCategory || row.ComplMainCat || null,
-        psrNumber:     row.PSRNmuber || null,
-        firNumber:     row.FIRNumber || null,
-        firDate:       row.FIRDate ? new Date(row.FIRDate) : null,
-        ActSection:    row.ActSection || null,
-        accusedName:   row.AccusedName || null,
-        accusedAge:    row.AccusedAge ? parseInt(String(row.AccusedAge)) : null,
-        accusedAddress:row.AccusedAddress || null,
-        victimName:    row.VictimName || null,
-        incidentDate:  row.IncidentDate ? new Date(row.IncidentDate) : null,
+    await processInBatches(complaints, 10, async (row) => {
+      if (!row.ComplRegNum) return;
+
+      const data = {
+        complRegNum: row.ComplRegNum,
+        compCategory: row.ComplCategory || row.ComplMainCat || null,
+        psrNumber: row.PSRNmuber || null,
+        firNumber: row.FIRNumber || null,
+        firDate: row.FIRDate ? new Date(row.FIRDate) : null,
+        ActSection: row.ActSection || null,
+        accusedName: row.AccusedName || null,
+        accusedAge: row.AccusedAge ? parseInt(String(row.AccusedAge), 10) : null,
+        accusedAddress: row.AccusedAddress || null,
+        victimName: row.VictimName || null,
+        incidentDate: row.IncidentDate ? new Date(row.IncidentDate) : null,
       };
 
-      if (!data.complRegNum) continue;
-
       try {
-        const existing = await prisma.cCTNSComplaint.findUnique({
-          where: { complRegNum: String(data.complRegNum) },
+        await prisma.cCTNSComplaint.upsert({
+          where: { complRegNum: row.ComplRegNum },
+          update: data,
+          create: data,
         });
-
-        if (existing) {
-          await prisma.cCTNSComplaint.update({ where: { id: existing.id }, data });
-          compUpdated++;
-        } else {
-          await prisma.cCTNSComplaint.create({ data });
-          compCreated++;
-        }
-      } catch (e) {
-        console.error('[SYNC] Error saving complaint:', e);
+        result.complaints.upserted++;
+      } catch (error) {
+        result.complaints.errors++;
+        console.error('[SYNC] Error saving complaint:', error);
       }
-    }
-    console.log(`[SYNC] Complaints synced. Created: ${compCreated}, Updated: ${compUpdated}`);
+    });
+
+    console.log(`[SYNC] Complaints synced. Fetched: ${result.complaints.fetched}, Upserted: ${result.complaints.upserted}, Errors: ${result.complaints.errors}`);
   } catch (error) {
+    result.complaints.errors++;
     console.error(`[SYNC] Failed to sync complaints: ${error}`);
   }
 
   try {
     console.log(`[SYNC] Fetching enquiries from ${timeFrom} to ${timeTo}...`);
-    const enquiries = await fetchCctnsEnquiries(timeFrom, timeTo);
+    const enquiries = (await fetchCctnsEnquiries(timeFrom, timeTo)) as CctnsEnquiryRow[];
+    result.enquiries.fetched = enquiries.length;
 
-    let enqCreated = 0;
-    let enqUpdated = 0;
-
-    for (const row of enquiries as CctnsEnquiryRow[]) {
+    await processInBatches(enquiries, 10, async (row) => {
       const complRegNum = row.COMPL_REG_NUM || null;
-      if (!complRegNum) continue;
+      if (!complRegNum) return;
 
-      const data: Record<string, unknown> = {
+      const data = {
         complRegNum,
-        compCategory:  row.COMPLAINT_ACTION_TAKEN || null,
-        ActSection:    row.ENQ_REMARKS || null,
-        accusedName:   row.office_incharge?.trim() || null,
-        incidentDate:  row.Investigation_start_date ? new Date(row.Investigation_start_date) : null,
+        compCategory: row.COMPLAINT_ACTION_TAKEN || null,
+        ActSection: row.ENQ_REMARKS || null,
+        accusedName: row.office_incharge?.trim() || null,
+        incidentDate: row.Investigation_start_date ? new Date(row.Investigation_start_date) : null,
       };
 
       try {
-        const existing = await prisma.cCTNSComplaint.findUnique({
-          where: { complRegNum: String(complRegNum) },
+        await prisma.cCTNSComplaint.upsert({
+          where: { complRegNum },
+          update: data,
+          create: data,
         });
-
-        if (existing) {
-          await prisma.cCTNSComplaint.update({ where: { id: existing.id }, data });
-          enqUpdated++;
-        } else {
-          await prisma.cCTNSComplaint.create({ data });
-          enqCreated++;
-        }
-      } catch (e) {
-        console.error('[SYNC] Error saving enquiry:', e);
+        result.enquiries.upserted++;
+      } catch (error) {
+        result.enquiries.errors++;
+        console.error('[SYNC] Error saving enquiry:', error);
       }
-    }
-    console.log(`[SYNC] Enquiries synced. Created: ${enqCreated}, Updated: ${enqUpdated}`);
+    });
+
+    console.log(`[SYNC] Enquiries synced. Fetched: ${result.enquiries.fetched}, Upserted: ${result.enquiries.upserted}, Errors: ${result.enquiries.errors}`);
   } catch (error) {
+    result.enquiries.errors++;
     console.error(`[SYNC] Failed to sync enquiries: ${error}`);
+  } finally {
+    isSyncing = false;
   }
+
+  return result;
 };
 
+let intervalHandle: NodeJS.Timeout | null = null;
+
 export const startCctnsBackgroundSync = () => {
-  // Run once immediately, then every 4 hours
-  runCctnsSync();
+  if (intervalHandle) return;
+
+  runCctnsSync().catch(error => console.error('[SYNC] Initial sync failed:', error));
   const FOUR_HOURS_MS = 4 * 60 * 60 * 1000;
-  setInterval(runCctnsSync, FOUR_HOURS_MS);
+  intervalHandle = setInterval(() => {
+    runCctnsSync().catch(error => console.error('[SYNC] Scheduled sync failed:', error));
+  }, FOUR_HOURS_MS);
 };

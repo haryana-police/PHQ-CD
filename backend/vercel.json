@@ -16,5 +16,11 @@
       "src": "/(.*)",
       "dest": "/api/serverless.js"
     }
+  ],
+  "crons": [
+    {
+      "path": "/api/cctns/cron-sync",
+      "schedule": "0 */4 * * *"
+    }
   ]
 }

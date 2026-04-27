@@ -3,6 +3,7 @@ import { prisma } from '../config/database.js';
 import { sendSuccess, sendError } from '../utils/response.js';
 import { authenticate } from '../middleware/auth.js';
 import { getCctnsToken, fetchCctnsComplaints, fetchCctnsEnquiries, clearCctnsToken } from '../services/cctns.js';
+import { runCctnsSync } from '../jobs/cctns-sync-job.js';
 
 // Fields from CCTNS Complaint Data API (IP-whitelisted, encrypted)
 interface CctnsComplaintRow {
@@ -33,6 +34,22 @@ interface CctnsEnquiryRow {
 }
 
 export const cctnsSyncRoutes = async (fastify: FastifyInstance) => {
+
+  fastify.get('/cctns/cron-sync', async (request, reply) => {
+    const cronSecret = process.env.CCTNS_CRON_SECRET || process.env.CRON_SECRET;
+    const authHeader = request.headers.authorization;
+
+    if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+      return sendError(reply, 'Unauthorized cron request', 401);
+    }
+
+    if (!cronSecret && process.env.NODE_ENV === 'production') {
+      return sendError(reply, 'CCTNS_CRON_SECRET or CRON_SECRET must be configured', 503);
+    }
+
+    const result = await runCctnsSync();
+    return sendSuccess(reply, result || { skipped: true }, result ? 'CCTNS sync completed' : 'CCTNS sync already running');
+  });
 
   // ─── Status ──────────────────────────────────────────────────────────
   fastify.get('/cctns/status', {
@@ -71,6 +88,14 @@ export const cctnsSyncRoutes = async (fastify: FastifyInstance) => {
       return sendError(reply, `Failed to get token: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   });
+
+  // Helper to process items in small parallel batches to speed up without overloading pool
+  const processInBatches = async <T>(items: T[], batchSize: number, processor: (item: T) => Promise<void>) => {
+    for (let i = 0; i < items.length; i += batchSize) {
+      const batch = items.slice(i, i + batchSize);
+      await Promise.all(batch.map(item => processor(item).catch(err => console.error('Batch item error:', err))));
+    }
+  };
 
   // ─── Live Enquiry Fetch (no DB save, direct proxy to Enquiry API) ─────
   fastify.get('/cctns/enquiries-live', {
@@ -124,9 +149,11 @@ export const cctnsSyncRoutes = async (fastify: FastifyInstance) => {
       let created = 0;
       let updated = 0;
 
-      for (const row of complaints as CctnsComplaintRow[]) {
-        const data: Record<string, unknown> = {
-          complRegNum:   row.ComplRegNum || null,
+      await processInBatches(complaints as CctnsComplaintRow[], 10, async (row) => {
+        if (!row.ComplRegNum) return;
+
+        const data: any = {
+          complRegNum:   row.ComplRegNum,
           compCategory:  row.ComplCategory || row.ComplMainCat || null,
           psrNumber:     row.PSRNmuber || null,
           firNumber:     row.FIRNumber || null,
@@ -139,22 +166,18 @@ export const cctnsSyncRoutes = async (fastify: FastifyInstance) => {
           incidentDate:  row.IncidentDate ? new Date(row.IncidentDate) : null,
         };
 
-        try {
-          const existing = await prisma.cCTNSComplaint.findUnique({
-            where: { complRegNum: String(data.complRegNum || '') },
-          });
+        const existing = await prisma.cCTNSComplaint.findUnique({
+          where: { complRegNum: String(data.complRegNum) },
+        });
 
-          if (existing) {
-            await prisma.cCTNSComplaint.update({ where: { id: existing.id }, data });
-            updated++;
-          } else {
-            await prisma.cCTNSComplaint.create({ data });
-            created++;
-          }
-        } catch (e) {
-          console.error('Error saving complaint:', e);
+        if (existing) {
+          await prisma.cCTNSComplaint.update({ where: { id: existing.id }, data });
+          updated++;
+        } else {
+          await prisma.cCTNSComplaint.create({ data });
+          created++;
         }
-      }
+      });
 
       return sendSuccess(reply, {
         message: 'Sync completed',
@@ -184,38 +207,30 @@ export const cctnsSyncRoutes = async (fastify: FastifyInstance) => {
       let created = 0;
       let updated = 0;
 
-      for (const row of enquiries as CctnsEnquiryRow[]) {
-        // Enquiry API fields: COMPL_REG_NUM, office_incharge, Investigation_start_date,
-        //                     ENQ_REMARKS, COMPLAINT_ACTION_TAKEN
+      await processInBatches(enquiries as CctnsEnquiryRow[], 10, async (row) => {
         const complRegNum = row.COMPL_REG_NUM || null;
-        if (!complRegNum) continue;
+        if (!complRegNum) return;
 
-        const data: Record<string, unknown> = {
+        const data: any = {
           complRegNum,
-          compCategory:  row.COMPLAINT_ACTION_TAKEN || null,  // best fit in existing schema
-          ActSection:    row.ENQ_REMARKS || null,             // remarks stored here
-          accusedName:   row.office_incharge?.trim() || null, // incharge officer
-          incidentDate:  row.Investigation_start_date
-            ? new Date(row.Investigation_start_date)
-            : null,
+          compCategory:  row.COMPLAINT_ACTION_TAKEN || null,
+          ActSection:    row.ENQ_REMARKS || null,
+          accusedName:   row.office_incharge?.trim() || null,
+          incidentDate:  row.Investigation_start_date ? new Date(row.Investigation_start_date) : null,
         };
 
-        try {
-          const existing = await prisma.cCTNSComplaint.findUnique({
-            where: { complRegNum: String(complRegNum) },
-          });
+        const existing = await prisma.cCTNSComplaint.findUnique({
+          where: { complRegNum: String(complRegNum) },
+        });
 
-          if (existing) {
-            await prisma.cCTNSComplaint.update({ where: { id: existing.id }, data });
-            updated++;
-          } else {
-            await prisma.cCTNSComplaint.create({ data });
-            created++;
-          }
-        } catch (e) {
-          console.error('Error saving enquiry:', e);
+        if (existing) {
+          await prisma.cCTNSComplaint.update({ where: { id: existing.id }, data });
+          updated++;
+        } else {
+          await prisma.cCTNSComplaint.create({ data });
+          created++;
         }
-      }
+      });
 
       return sendSuccess(reply, {
         message: 'Enquiry sync completed',
@@ -229,11 +244,7 @@ export const cctnsSyncRoutes = async (fastify: FastifyInstance) => {
     }
   });
 
-  // ─── Bulk Historical Sync (one calendar month at a time) ─────────────
-  // POST /api/cctns/sync-month
-  // Body: { "year": 2025, "month": 10 }  (month is 1-indexed)
-  // Fetches complaints + enquiries for that whole month and upserts into DB.
-  // Call this 6 times (month by month) to backfill last 6 months.
+  // ─── Bulk Historical Sync ──────────────────────────────────────────
   fastify.post('/cctns/sync-month', {
     preHandler: [authenticate],
   }, async (request, reply) => {
@@ -245,7 +256,7 @@ export const cctnsSyncRoutes = async (fastify: FastifyInstance) => {
       }
 
       const firstDay = new Date(year, month - 1, 1);
-      const lastDay  = new Date(year, month, 0); // last day of the month
+      const lastDay  = new Date(year, month, 0);
 
       const pad = (n: number) => String(n).padStart(2, '0');
       const fmt = (d: Date) => `${pad(d.getMonth() + 1)}/${pad(d.getDate())}/${d.getFullYear()}`;
@@ -253,18 +264,15 @@ export const cctnsSyncRoutes = async (fastify: FastifyInstance) => {
       const timeFrom = fmt(firstDay);
       const timeTo   = fmt(lastDay);
 
-      let compCreated = 0, compUpdated = 0, compFetched = 0;
-      let enqCreated  = 0, enqUpdated  = 0, enqFetched  = 0;
+      let compUpserted = 0, enqUpserted = 0;
       const errors: string[] = [];
 
       // ── Complaints ──
       try {
         const complaints = await fetchCctnsComplaints(timeFrom, timeTo);
-        compFetched = complaints.length;
-
-        for (const row of complaints as CctnsComplaintRow[]) {
-          if (!row.ComplRegNum) continue;
-          const data: Record<string, unknown> = {
+        await processInBatches(complaints as CctnsComplaintRow[], 10, async (row) => {
+          if (!row.ComplRegNum) return;
+          const data: any = {
             complRegNum:    row.ComplRegNum,
             compCategory:   row.ComplCategory || row.ComplMainCat || null,
             psrNumber:      row.PSRNmuber || null,
@@ -277,18 +285,13 @@ export const cctnsSyncRoutes = async (fastify: FastifyInstance) => {
             victimName:     row.VictimName || null,
             incidentDate:   row.IncidentDate ? new Date(row.IncidentDate) : null,
           };
-          try {
-            await prisma.cCTNSComplaint.upsert({
-              where:  { complRegNum: row.ComplRegNum },
-              update: data,
-              create: data,
-            });
-            // can't easily count create vs update with upsert — count as created
-            compCreated++;
-          } catch (e: any) {
-            errors.push(`Complaint ${row.ComplRegNum}: ${e.message}`);
-          }
-        }
+          await prisma.cCTNSComplaint.upsert({
+            where: { complRegNum: row.ComplRegNum },
+            update: data,
+            create: data,
+          });
+          compUpserted++;
+        });
       } catch (e: any) {
         errors.push(`Complaints fetch failed: ${e.message}`);
       }
@@ -296,38 +299,32 @@ export const cctnsSyncRoutes = async (fastify: FastifyInstance) => {
       // ── Enquiries ──
       try {
         const enquiries = await fetchCctnsEnquiries(timeFrom, timeTo);
-        enqFetched = enquiries.length;
-
-        for (const row of enquiries as CctnsEnquiryRow[]) {
+        await processInBatches(enquiries as CctnsEnquiryRow[], 10, async (row) => {
           const complRegNum = row.COMPL_REG_NUM;
-          if (!complRegNum) continue;
-          const data: Record<string, unknown> = {
+          if (!complRegNum) return;
+          const data: any = {
             complRegNum,
             compCategory:  row.COMPLAINT_ACTION_TAKEN || null,
             ActSection:    row.ENQ_REMARKS || null,
             accusedName:   row.office_incharge?.trim() || null,
             incidentDate:  row.Investigation_start_date ? new Date(row.Investigation_start_date) : null,
           };
-          try {
-            await prisma.cCTNSComplaint.upsert({
-              where:  { complRegNum },
-              update: data,
-              create: data,
-            });
-            enqCreated++;
-          } catch (e: any) {
-            errors.push(`Enquiry ${complRegNum}: ${e.message}`);
-          }
-        }
+          await prisma.cCTNSComplaint.upsert({
+            where: { complRegNum },
+            update: data,
+            create: data,
+          });
+          enqUpserted++;
+        });
       } catch (e: any) {
         errors.push(`Enquiries fetch failed: ${e.message}`);
       }
 
       return sendSuccess(reply, {
         period: `${timeFrom} – ${timeTo}`,
-        complaints: { fetched: compFetched, upserted: compCreated },
-        enquiries:  { fetched: enqFetched,  upserted: enqCreated  },
-        errors: errors.slice(0, 20), // cap to first 20 errors
+        complaints: { upserted: compUpserted },
+        enquiries:  { upserted: enqUpserted  },
+        errors: errors.slice(0, 20),
       });
     } catch (error) {
       console.error('Bulk month sync error:', error);

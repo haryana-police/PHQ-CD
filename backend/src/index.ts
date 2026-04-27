@@ -50,7 +50,7 @@ export async function buildApp() {
   isBuilt = true;
   return app;
 }
-if (process.env.NODE_ENV !== 'production' && process.env.VERCEL !== '1') {
+if (process.env.VERCEL !== '1') {
   buildApp().then(async () => {
     try {
       startCctnsBackgroundSync(); // Start background sync
