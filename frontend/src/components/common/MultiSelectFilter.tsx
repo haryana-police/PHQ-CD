@@ -12,6 +12,7 @@ interface MultiSelectFilterProps {
   onChange: (selected: string[]) => void;
   placeholder?: string;
   minWidth?: string;
+  singleSelect?: boolean;
 }
 
 export const MultiSelectFilter = ({
@@ -20,6 +21,7 @@ export const MultiSelectFilter = ({
   selected,
   onChange,
   minWidth = '160px',
+  singleSelect = false,
 }: MultiSelectFilterProps) => {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -42,9 +44,18 @@ export const MultiSelectFilter = ({
   );
 
   const toggle = (val: string) => {
+    if (singleSelect) {
+      if (selected.includes(val)) {
+        onChange([]);
+      } else {
+        onChange([val]);
+      }
+      setOpen(false);
+      return;
+    }
+
     if (selected.includes(val)) {
       const next = selected.filter(v => v !== val);
-      // if nothing left selected, treat as "all"
       onChange(next);
     } else {
       onChange([...selected, val]);
@@ -65,7 +76,7 @@ export const MultiSelectFilter = ({
   const isActive = selected.length > 0 && selected.length < options.length;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', zIndex: open ? 9999 : 1 }}>
       <span style={{
         fontSize: '10px', fontWeight: 700, textTransform: 'uppercase',
         letterSpacing: '0.7px', color: '#64748b',
@@ -125,7 +136,7 @@ export const MultiSelectFilter = ({
             border: '1px solid rgba(255,255,255,0.1)',
             borderRadius: '10px',
             boxShadow: '0 16px 40px rgba(0,0,0,0.6)',
-            zIndex: 9999,
+            zIndex: 10000,
             minWidth: '200px',
             maxWidth: '260px',
             overflow: 'hidden',
@@ -151,36 +162,38 @@ export const MultiSelectFilter = ({
             )}
 
             {/* Select All / Unselect All */}
-            <div style={{
-              display: 'flex', gap: '0', borderBottom: '1px solid rgba(255,255,255,0.07)',
-            }}>
-              <button
-                onClick={selectAll}
-                style={{
-                  flex: 1, padding: '7px 10px', fontSize: '11px', fontWeight: 600,
-                  background: allSelected ? 'rgba(99,102,241,0.15)' : 'transparent',
-                  color: allSelected ? '#818cf8' : '#94a3b8',
-                  border: 'none', borderRight: '1px solid rgba(255,255,255,0.07)',
-                  cursor: 'pointer', transition: 'all 0.15s',
-                }}
-                onMouseEnter={e => { if (!allSelected) e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; }}
-                onMouseLeave={e => { if (!allSelected) e.currentTarget.style.background = 'transparent'; }}
-              >
-                ✓ Select All
-              </button>
-              <button
-                onClick={unselectAll}
-                style={{
-                  flex: 1, padding: '7px 10px', fontSize: '11px', fontWeight: 600,
-                  background: 'transparent', color: '#94a3b8',
-                  border: 'none', cursor: 'pointer', transition: 'all 0.15s',
-                }}
-                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; }}
-                onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
-              >
-                ✕ Clear
-              </button>
-            </div>
+            {!singleSelect && (
+              <div style={{
+                display: 'flex', gap: '0', borderBottom: '1px solid rgba(255,255,255,0.07)',
+              }}>
+                <button
+                  onClick={selectAll}
+                  style={{
+                    flex: 1, padding: '7px 10px', fontSize: '11px', fontWeight: 600,
+                    background: allSelected ? 'rgba(99,102,241,0.15)' : 'transparent',
+                    color: allSelected ? '#818cf8' : '#94a3b8',
+                    border: 'none', borderRight: '1px solid rgba(255,255,255,0.07)',
+                    cursor: 'pointer', transition: 'all 0.15s',
+                  }}
+                  onMouseEnter={e => { if (!allSelected) e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; }}
+                  onMouseLeave={e => { if (!allSelected) e.currentTarget.style.background = 'transparent'; }}
+                >
+                  ✓ Select All
+                </button>
+                <button
+                  onClick={unselectAll}
+                  style={{
+                    flex: 1, padding: '7px 10px', fontSize: '11px', fontWeight: 600,
+                    background: 'transparent', color: '#94a3b8',
+                    border: 'none', cursor: 'pointer', transition: 'all 0.15s',
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+                >
+                  ✕ Clear
+                </button>
+              </div>
+            )}
 
             {/* Options list */}
             <div style={{ maxHeight: '220px', overflowY: 'auto' }}>
@@ -211,21 +224,23 @@ export const MultiSelectFilter = ({
                         if (!isExplicitlySelected) e.currentTarget.style.background = 'transparent';
                       }}
                     >
-                      {/* Custom checkbox */}
-                      <div style={{
-                        width: '14px', height: '14px', borderRadius: '3px', flexShrink: 0,
-                        border: displayCheck ? '1px solid #6366f1' : '1px solid rgba(255,255,255,0.2)',
-                        background: displayCheck ? '#6366f1' : 'transparent',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        transition: 'all 0.15s',
-                      }}>
-                        {displayCheck && (
-                          <svg width="9" height="9" viewBox="0 0 12 12" fill="none">
-                            <polyline points="2 6 5 9 10 3" stroke="#fff" strokeWidth="2" strokeLinecap="round" />
-                          </svg>
-                        )}
-                      </div>
-                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {/* Custom checkbox or single select active state */}
+                      {!singleSelect ? (
+                        <div style={{
+                          width: '14px', height: '14px', borderRadius: '3px', flexShrink: 0,
+                          border: displayCheck ? '1px solid #6366f1' : '1px solid rgba(255,255,255,0.2)',
+                          background: displayCheck ? '#6366f1' : 'transparent',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          transition: 'all 0.15s',
+                        }}>
+                          {displayCheck && (
+                            <svg width="9" height="9" viewBox="0 0 12 12" fill="none">
+                              <polyline points="2 6 5 9 10 3" stroke="#fff" strokeWidth="2" strokeLinecap="round" />
+                            </svg>
+                          )}
+                        </div>
+                      ) : null}
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: isExplicitlySelected ? 600 : 400 }}>
                         {opt.label}
                       </span>
                     </div>

@@ -16,6 +16,8 @@ export const ComplaintsPage = () => {
   const [toDate, setToDate] = useState('');
   const [districtFilter, setDistrictFilter] = useState<string[]>([]);
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
+  const [sourceFilter, setSourceFilter] = useState<string[]>(['All Sources']);
+  const [complaintTypeFilter, setComplaintTypeFilter] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data, isLoading, refetch } = useQuery({
@@ -84,6 +86,21 @@ export const ComplaintsPage = () => {
     return Array.from(unique).filter(Boolean).sort().map(v => ({ value: v, label: v }));
   }, [tableData]);
 
+  const sourceOptions = [
+    { value: 'All Sources', label: 'All Sources' },
+    { value: 'General Complaints', label: 'General Complaints' },
+    { value: 'Women Safety', label: 'Women Safety' },
+    { value: 'CCTNS / FIR', label: 'CCTNS / FIR' },
+  ];
+
+  const complaintTypeOptions = [
+    // Mock data until dynamic API is added
+    { value: 'Theft', label: 'Theft' },
+    { value: 'Harassment', label: 'Harassment' },
+    { value: 'Cyber Crime', label: 'Cyber Crime' },
+    { value: 'Fraud', label: 'Fraud' },
+  ];
+
   const filteredTableData = useMemo(() => {
     return tableData.filter((r: ComplaintRow) => {
       const distOk = districtFilter.length === 0 || districtFilter.includes(r.district);
@@ -108,9 +125,6 @@ export const ComplaintsPage = () => {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', gap: '12px', flexWrap: 'wrap' }}>
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
             <input className="search-input" placeholder="Search..." value={search} onChange={e => setSearch(e.target.value)} style={{ maxWidth: '280px' }} />
-            <input type="date" className="search-input" value={fromDate} onChange={e => setFromDate(e.target.value)} title="From Date" style={{ width: '130px' }} />
-            <span style={{ color: 'var(--text-muted)' }}>to</span>
-            <input type="date" className="search-input" value={toDate} onChange={e => setToDate(e.target.value)} title="To Date" style={{ width: '130px' }} />
           </div>
           <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
             <input type="file" ref={fileInputRef} onChange={handleImport} accept=".xlsx,.xls" className="hidden" />
@@ -125,24 +139,77 @@ export const ComplaintsPage = () => {
           background: 'rgba(19,32,53,0.6)', border: '1px solid rgba(255,255,255,0.07)',
           borderRadius: '12px', padding: '12px 16px', marginBottom: '14px',
           backdropFilter: 'blur(12px)', display: 'flex', flexWrap: 'wrap', gap: '16px', alignItems: 'flex-end',
+          position: 'relative', zIndex: 1000
         }}>
+          {/* Date Range */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <span style={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.7px', color: '#64748b' }}>
+              Date Range
+            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <input 
+                type="date" 
+                value={fromDate}
+                onChange={e => setFromDate(e.target.value)}
+                style={{
+                  padding: '6px 10px', borderRadius: '8px', background: 'rgba(15,23,42,0.9)', 
+                  color: '#e2e8f0', border: '1px solid rgba(255,255,255,0.1)', fontSize: '12.5px',
+                  outline: 'none', cursor: 'pointer'
+                }} 
+              />
+              <span style={{ color: '#475569' }}>-</span>
+              <input 
+                type="date" 
+                value={toDate}
+                onChange={e => setToDate(e.target.value)}
+                style={{
+                  padding: '6px 10px', borderRadius: '8px', background: 'rgba(15,23,42,0.9)', 
+                  color: '#e2e8f0', border: '1px solid rgba(255,255,255,0.1)', fontSize: '12.5px',
+                  outline: 'none', cursor: 'pointer'
+                }} 
+              />
+            </div>
+          </div>
+
+          <MultiSelectFilter
+            label="Source"
+            options={sourceOptions}
+            selected={sourceFilter}
+            onChange={setSourceFilter}
+            placeholder="All Sources"
+            minWidth="160px"
+            singleSelect={true}
+          />
+
           <MultiSelectFilter
             label="District"
             options={districtOptions}
             selected={districtFilter}
             onChange={setDistrictFilter}
-            minWidth="200px"
+            placeholder="All Districts"
+            minWidth="160px"
           />
+
+          <MultiSelectFilter
+            label="Complaint Type"
+            options={complaintTypeOptions}
+            selected={complaintTypeFilter}
+            onChange={setComplaintTypeFilter}
+            placeholder="All Types"
+            minWidth="160px"
+          />
+
           <MultiSelectFilter
             label="Status"
             options={statusOptions}
             selected={statusFilter}
             onChange={setStatusFilter}
-            minWidth="180px"
+            placeholder="All Status"
+            minWidth="160px"
           />
-          {(districtFilter.length > 0 || statusFilter.length > 0) && (
+          {(districtFilter.length > 0 || statusFilter.length > 0 || sourceFilter.length > 0 || complaintTypeFilter.length > 0) && (
             <button
-              onClick={() => { setDistrictFilter([]); setStatusFilter([]); }}
+              onClick={() => { setDistrictFilter([]); setStatusFilter([]); setSourceFilter([]); setComplaintTypeFilter([]); }}
               style={{ padding: '6px 12px', borderRadius: '6px', fontSize: '11px', background: 'rgba(239,68,68,0.1)', color: '#fca5a5', border: '1px solid rgba(239,68,68,0.25)', cursor: 'pointer' }}
             >
               ✕ Clear All

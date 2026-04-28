@@ -153,6 +153,7 @@ export const HighlightsPage = () => {
           background: 'rgba(19,32,53,0.6)', border: '1px solid rgba(255,255,255,0.07)',
           borderRadius: '12px', padding: '12px 16px', marginBottom: '10px',
           backdropFilter: 'blur(12px)', display: 'flex', flexWrap: 'wrap', gap: '16px', alignItems: 'flex-end',
+          position: 'relative', zIndex: 1000
         }}>
           <MultiSelectFilter
             label="Category"
@@ -170,6 +171,14 @@ export const HighlightsPage = () => {
             placeholder="All Incident Types"
             minWidth="200px"
           />
+          {(categoryFilter.length > 0 || natureFilter.length > 0) && (
+            <button
+              onClick={() => { setCategoryFilter([]); setNatureFilter([]); }}
+              style={{ padding: '6px 12px', borderRadius: '6px', fontSize: '11px', background: 'rgba(239,68,68,0.1)', color: '#fca5a5', border: '1px solid rgba(239,68,68,0.25)', cursor: 'pointer' }}
+            >
+              ✕ Clear All
+            </button>
+          )}
         </div>
           {/* Charts */}
         <div className="charts-grid">

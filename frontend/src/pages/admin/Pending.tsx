@@ -82,9 +82,10 @@ export const PendingPage = () => {
         <div style={{
           background: 'rgba(19,32,53,0.6)', border: '1px solid rgba(255,255,255,0.07)',
           borderRadius: '12px', padding: '12px 16px', marginBottom: '20px',
-          backdropFilter: 'blur(12px)', display: 'flex', flexWrap: 'wrap', gap: '12px', alignItems: 'center',
+          backdropFilter: 'blur(12px)', display: 'flex', flexWrap: 'wrap', gap: '16px', alignItems: 'flex-end',
+          position: 'relative', zIndex: 1000
         }}>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginBottom: '2px' }}>
             {tabs.map(t => (
               <Link
                 key={t.id}

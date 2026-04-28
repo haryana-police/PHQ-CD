@@ -324,6 +324,7 @@ export const ReportsPage = () => {
             marginBottom: '10px',
             backdropFilter: 'blur(12px)',
             display: 'flex', flexWrap: 'wrap', gap: '12px', alignItems: 'flex-end',
+            position: 'relative', zIndex: 1000
           }}>
             <MultiSelectFilter
               label={tab.label}
