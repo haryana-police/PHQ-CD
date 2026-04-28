@@ -1,8 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
-import { useState, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Layout } from '@/components/layout/Layout';
 import { DataTable, Column } from '@/components/data/DataTable';
+import { MultiSelectFilter } from '@/components/common/MultiSelectFilter';
 
 const tabs = [
   { id: 'all', label: 'All Pending' },
@@ -19,54 +20,17 @@ const ep: Record<string, string> = {
   'over-60': '/api/pending/over-60-days',
 };
 
-const StyledSelect = ({ value, onChange, children }: { value: string; onChange: (v: string) => void; children: React.ReactNode }) => (
-  <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
-    <select
-      value={value}
-      onChange={e => onChange(e.target.value)}
-      style={{
-        appearance: 'none', padding: '7px 32px 7px 12px', borderRadius: '8px',
-        background: 'rgba(15,23,42,0.8)', color: '#e2e8f0', border: '1px solid rgba(255,255,255,0.1)',
-        fontSize: '12.5px', fontWeight: 500, cursor: 'pointer', outline: 'none',
-        backdropFilter: 'blur(8px)', boxShadow: '0 2px 8px rgba(0,0,0,0.3)', minWidth: '160px',
-      }}
-    >
-      {children}
-    </select>
-    <svg style={{ position: 'absolute', right: '10px', pointerEvents: 'none', color: '#64748b' }} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="6 9 12 15 18 9"/></svg>
-  </div>
-);
-
 export const PendingPage = () => {
   const [sp] = useSearchParams();
   const type = sp.get('type') || 'all';
-  const [branch, setBranch] = useState('');
-  const [branches, setBranches] = useState<string[]>([]);
-
-  const { data: branchesData } = useQuery({
-    queryKey: ['pending', 'branches'],
-    queryFn: async () => {
-      const r = await fetch('/api/pending/branches', { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
-      return r.json();
-    },
-    enabled: type === 'branch',
-  });
-
-  useEffect(() => {
-    if (branchesData?.data) {
-      setBranches(branchesData.data);
-    }
-  }, [branchesData]);
+  const [districtFilter, setDistrictFilter] = useState<string[]>([]);
 
   const getEndpoint = () => {
-    if (type === 'branch' && branch) {
-      return `/api/pending/branch/${encodeURIComponent(branch)}`;
-    }
     return ep[type] || ep.all;
   };
 
   const { data, isLoading } = useQuery({
-    queryKey: ['pending', type, branch],
+    queryKey: ['pending', type],
     queryFn: async () => {
       const r = await fetch(getEndpoint(), { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
       return r.json();
@@ -83,6 +47,16 @@ export const PendingPage = () => {
     date: r.complRegDt ? new Date(String(r.complRegDt)).toLocaleDateString() : '-',
     status: 'Pending',
   }));
+
+  const districtOptions = useMemo(() => {
+    const s = new Set(rows.map(r => String(r.addressDistrict ?? '')).filter(Boolean));
+    return Array.from(s).sort().map(v => ({ value: v, label: v }));
+  }, [rows]);
+
+  const filteredTableData = useMemo(() => {
+    if (districtFilter.length === 0) return tableData;
+    return tableData.filter(r => districtFilter.includes(String(r.district)));
+  }, [tableData, districtFilter]);
 
   const cols: Column<typeof tableData[0]>[] = [
     { key: 'regNum', label: 'Reg. No.', sortable: true },
@@ -129,21 +103,29 @@ export const PendingPage = () => {
             ))}
           </div>
 
-          {type === 'branch' && (
-            <>
-              <div style={{ width: '1px', height: '20px', background: 'rgba(255,255,255,0.08)', margin: '0 4px' }} />
-              <StyledSelect value={branch} onChange={setBranch}>
-                <option value="">Select District…</option>
-                {branches.map(b => <option key={b} value={b}>{b}</option>)}
-              </StyledSelect>
-            </>
+          <div style={{ width: '1px', height: '20px', background: 'rgba(255,255,255,0.08)', margin: '0 4px', flexShrink: 0 }} />
+
+          <MultiSelectFilter
+            label="District"
+            options={districtOptions}
+            selected={districtFilter}
+            onChange={setDistrictFilter}
+            minWidth="200px"
+          />
+          {districtFilter.length > 0 && (
+            <button
+              onClick={() => setDistrictFilter([])}
+              style={{ padding: '6px 12px', borderRadius: '6px', fontSize: '11px', background: 'rgba(239,68,68,0.1)', color: '#fca5a5', border: '1px solid rgba(239,68,68,0.25)', cursor: 'pointer' }}
+            >
+              ✕ Clear
+            </button>
           )}
         </div>
 
         {/* Data Table */}
         <DataTable
-          title={`${tabs.find(t => t.id === type)?.label} Records`}
-          data={tableData}
+          title={`${tabs.find(t => t.id === type)?.label} Records${districtFilter.length > 0 ? ` · Filtered (${filteredTableData.length})` : ''}`}
+          data={filteredTableData}
           isLoading={isLoading}
           skeletonRows={8}
           columns={cols.map(c => ({

@@ -1,15 +1,18 @@
 import { useQuery } from '@tanstack/react-query';
-import { useRef, useState } from 'react';
+import { useRef, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Layout } from '@/components/layout/Layout';
 import { Button } from '@/components/common/Button';
 import { DataTable, Column } from '@/components/data/DataTable';
 import { Select } from '@/components/common/Select';
+import { MultiSelectFilter } from '@/components/common/MultiSelectFilter';
 import * as XLSX from 'xlsx';
 
 export const WomenSafetyPage = () => {
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(100);
+  const [incidentFilter, setIncidentFilter] = useState<string[]>([]);
+  const [statusFilter, setStatusFilter] = useState<string[]>([]);
   const search = '';
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -66,15 +69,33 @@ export const WomenSafetyPage = () => {
   const records = data?.data?.data || [];
   const pagination = data?.data?.pagination;
 
-  const tableData = records.map((r: any) => ({
-    regNum: r.complRegNum || '-',
+  type WomenSafetyRow = { regNum: string; name: string; mobile: string; incidentType: string; date: string; status: string; id: unknown; };
+
+  const tableData: WomenSafetyRow[] = records.map((r: Record<string, unknown>) => ({
+    regNum: String(r.complRegNum || '-'),
     name: `${r.firstName || ''} ${r.lastName || ''}`.trim() || '-',
-    mobile: r.mobile || '-',
-    incidentType: r.incidentType || '-',
+    mobile: String(r.mobile || '-'),
+    incidentType: String(r.incidentType || '-'),
     date: r.complRegDt ? new Date(String(r.complRegDt)).toLocaleDateString() : '-',
-    status: r.statusOfComplaint || 'Pending',
+    status: String(r.statusOfComplaint || 'Pending'),
     id: r.id,
   }));
+
+  const incidentOptions = useMemo(() => {
+    const s = new Set(tableData.map((r: WomenSafetyRow) => r.incidentType).filter(Boolean));
+    return Array.from(s).sort().map(v => ({ value: v, label: v }));
+  }, [tableData]);
+
+  const statusOptions = useMemo(() => {
+    const s = new Set(tableData.map((r: WomenSafetyRow) => r.status).filter(Boolean));
+    return Array.from(s).sort().map(v => ({ value: v, label: v }));
+  }, [tableData]);
+
+  const filteredData = useMemo(() => tableData.filter((r: WomenSafetyRow) => {
+    const incOk = incidentFilter.length === 0 || incidentFilter.includes(r.incidentType);
+    const statOk = statusFilter.length === 0 || statusFilter.includes(r.status);
+    return incOk && statOk;
+  }), [tableData, incidentFilter, statusFilter]);
 
   const cols: Column<typeof tableData[0]>[] = [
     { key: 'regNum', label: 'Reg. No.', sortable: true },
@@ -102,6 +123,36 @@ export const WomenSafetyPage = () => {
           <Link to="/admin/women-safety/add"><Button>Add</Button></Link>
         </div>
 
+        {/* Filter Bar */}
+        <div style={{
+          background: 'rgba(19,32,53,0.6)', border: '1px solid rgba(255,255,255,0.07)',
+          borderRadius: '12px', padding: '12px 16px', marginBottom: '14px',
+          backdropFilter: 'blur(12px)', display: 'flex', flexWrap: 'wrap', gap: '16px', alignItems: 'flex-end',
+        }}>
+          <MultiSelectFilter
+            label="Incident Type"
+            options={incidentOptions}
+            selected={incidentFilter}
+            onChange={setIncidentFilter}
+            minWidth="220px"
+          />
+          <MultiSelectFilter
+            label="Status"
+            options={statusOptions}
+            selected={statusFilter}
+            onChange={setStatusFilter}
+            minWidth="180px"
+          />
+          {(incidentFilter.length > 0 || statusFilter.length > 0) && (
+            <button
+              onClick={() => { setIncidentFilter([]); setStatusFilter([]); }}
+              style={{ padding: '6px 12px', borderRadius: '6px', fontSize: '11px', background: 'rgba(239,68,68,0.1)', color: '#fca5a5', border: '1px solid rgba(239,68,68,0.25)', cursor: 'pointer' }}
+            >
+              ✕ Clear All
+            </button>
+          )}
+        </div>
+
         {isLoading ? (
           <div className="loading-spinner"><svg width="28" height="28" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg></div>
         ) : tableData.length === 0 ? (
@@ -109,8 +160,8 @@ export const WomenSafetyPage = () => {
         ) : (
           <>
             <DataTable
-              title="Women Safety Complaints"
-              data={tableData}
+              title={`Women Safety Complaints${incidentFilter.length || statusFilter.length ? ` · Filtered (${filteredData.length})` : ''}`}
+              data={filteredData}
               columns={cols.map(c => ({
                 ...c,
                 render: (row) => {

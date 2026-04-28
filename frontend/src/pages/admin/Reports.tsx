@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { Layout } from '@/components/layout/Layout';
 import { ChartCard } from '@/components/charts/ChartCard';
@@ -139,6 +139,9 @@ export const ReportsPage = () => {
   const [customTo,   setCustomTo]     = useState('');
   const [chartSort, setChartSort] = useState('Total Reg');
   const [itemFilter, setItemFilter] = useState<string[]>([]);
+
+  // Reset item filter when report tab changes
+  useEffect(() => { setItemFilter([]); }, [type]);
 
   // Build API URL
   const apiUrl = useMemo(() => {

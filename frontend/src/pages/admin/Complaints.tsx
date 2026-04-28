@@ -1,10 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
-import { useState, useRef } from 'react';
+import { useState, useRef, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Layout } from '@/components/layout/Layout';
 import { Button } from '@/components/common/Button';
 import { DataTable, Column } from '@/components/data/DataTable';
 import { Select } from '@/components/common/Select';
+import { MultiSelectFilter } from '@/components/common/MultiSelectFilter';
 import * as XLSX from 'xlsx';
 
 export const ComplaintsPage = () => {
@@ -13,6 +14,8 @@ export const ComplaintsPage = () => {
   const [limit, setLimit] = useState(100);
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
+  const [districtFilter, setDistrictFilter] = useState<string[]>([]);
+  const [statusFilter, setStatusFilter] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data, isLoading, refetch } = useQuery({
@@ -59,15 +62,35 @@ export const ComplaintsPage = () => {
     e.target.value = '';
   };
 
-  const tableData = complaints.map((c: Record<string, unknown>) => ({
-    regNum: c.complRegNum || '-',
-    district: (c.district as Record<string, unknown>)?.name || c.addressDistrict || '-',
-    name: `${c.firstName || ''} ${c.lastName || ''}`.trim(),
-    mobile: c.mobile || '-',
+  type ComplaintRow = { regNum: string; district: string; name: string; mobile: string; date: string; status: string; id: unknown; };
+
+  const tableData: ComplaintRow[] = complaints.map((c: Record<string, unknown>) => ({
+    regNum: String(c.complRegNum || '-'),
+    district: String((c.district as Record<string, unknown>)?.name || c.addressDistrict || '-'),
+    name: `${c.firstName || ''} ${c.lastName || ''}`.trim() || '-',
+    mobile: String(c.mobile || '-'),
     date: c.complRegDt ? new Date(String(c.complRegDt)).toLocaleDateString() : '-',
-    status: c.statusOfComplaint || 'Pending',
+    status: String(c.statusOfComplaint || 'Pending'),
     id: c.id,
   }));
+
+  const districtOptions = useMemo(() => {
+    const unique = new Set(tableData.map((r: ComplaintRow) => r.district));
+    return Array.from(unique).filter(Boolean).sort().map(v => ({ value: v, label: v }));
+  }, [tableData]);
+
+  const statusOptions = useMemo(() => {
+    const unique = new Set(tableData.map((r: ComplaintRow) => r.status));
+    return Array.from(unique).filter(Boolean).sort().map(v => ({ value: v, label: v }));
+  }, [tableData]);
+
+  const filteredTableData = useMemo(() => {
+    return tableData.filter((r: ComplaintRow) => {
+      const distOk = districtFilter.length === 0 || districtFilter.includes(r.district);
+      const statOk = statusFilter.length === 0 || statusFilter.includes(r.status);
+      return distOk && statOk;
+    });
+  }, [tableData, districtFilter, statusFilter]);
 
   const cols: Column<typeof tableData[0]>[] = [
     { key: 'regNum', label: 'Reg. No.', sortable: true },
@@ -97,6 +120,36 @@ export const ComplaintsPage = () => {
           </div>
         </div>
 
+        {/* Filter Bar */}
+        <div style={{
+          background: 'rgba(19,32,53,0.6)', border: '1px solid rgba(255,255,255,0.07)',
+          borderRadius: '12px', padding: '12px 16px', marginBottom: '14px',
+          backdropFilter: 'blur(12px)', display: 'flex', flexWrap: 'wrap', gap: '16px', alignItems: 'flex-end',
+        }}>
+          <MultiSelectFilter
+            label="District"
+            options={districtOptions}
+            selected={districtFilter}
+            onChange={setDistrictFilter}
+            minWidth="200px"
+          />
+          <MultiSelectFilter
+            label="Status"
+            options={statusOptions}
+            selected={statusFilter}
+            onChange={setStatusFilter}
+            minWidth="180px"
+          />
+          {(districtFilter.length > 0 || statusFilter.length > 0) && (
+            <button
+              onClick={() => { setDistrictFilter([]); setStatusFilter([]); }}
+              style={{ padding: '6px 12px', borderRadius: '6px', fontSize: '11px', background: 'rgba(239,68,68,0.1)', color: '#fca5a5', border: '1px solid rgba(239,68,68,0.25)', cursor: 'pointer' }}
+            >
+              ✕ Clear All
+            </button>
+          )}
+        </div>
+
         {isLoading ? (
           <div className="loading-spinner"><svg width="28" height="28" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg></div>
         ) : tableData.length === 0 ? (
@@ -104,8 +157,8 @@ export const ComplaintsPage = () => {
         ) : (
           <>
             <DataTable
-              title="All Complaints"
-              data={tableData}
+              title={`All Complaints${districtFilter.length || statusFilter.length ? ` · Filtered (${filteredTableData.length})` : ''}`}
+              data={filteredTableData}
               columns={cols.map(c => ({
                 ...c,
                 render: (row) => {
