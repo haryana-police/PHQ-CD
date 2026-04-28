@@ -57,6 +57,24 @@ const yAxisVal = (name = '') => ({
 });
 
 // ── BaseChart component ───────────────────────────────────────────────────────
+export const percentFormatter = (params: any[]) => {
+  let out = `<b>${params[0].axisValue}</b><br/>`;
+  let total = params.find(p => p.seriesName.startsWith('Total'))?.value;
+  if (total === undefined) {
+    const p = params.find(x => x.seriesName === 'Pending')?.value || 0;
+    const d = params.find(x => x.seriesName === 'Disposed')?.value || 0;
+    total = p + d;
+  }
+  params.forEach((p: any) => {
+    out += `${p.marker} ${p.seriesName}: <b>${p.value?.toLocaleString() || 0}</b>`;
+    if (total && total > 0 && (p.seriesName === 'Pending' || p.seriesName === 'Disposed')) {
+      out += ` <span style="opacity: 0.8; font-size: 11px">(${((p.value / total) * 100).toFixed(1)}%)</span>`;
+    }
+    out += '<br/>';
+  });
+  return out;
+};
+
 export const BaseChart = ({ option, height = '400px', width = '100%' }: {
   option: EChartsOption; height?: string; width?: string;
 }) => (
@@ -79,7 +97,7 @@ export const getDistrictBarOptions = (
 
   if (opts?.horizontal) {
     return {
-      tooltip: { ...tooltip(), trigger: 'axis', axisPointer: { type: 'shadow' } },
+      tooltip: { ...tooltip(percentFormatter as any), trigger: 'axis', axisPointer: { type: 'shadow' } },
       legend: legend(['Pending', 'Disposed']),
       grid: { left: '2%', right: '6%', bottom: '10%', top: '4%', containLabel: true },
       xAxis: { ...yAxisVal() },
@@ -92,7 +110,7 @@ export const getDistrictBarOptions = (
   }
 
   return {
-    tooltip: { ...tooltip(), trigger: 'axis', axisPointer: { type: 'shadow' } },
+    tooltip: { ...tooltip(percentFormatter as any), trigger: 'axis', axisPointer: { type: 'shadow' } },
     legend: legend(['Pending', 'Disposed']),
     grid: { left: '2%', right: '2%', bottom: '14%', top: '4%', containLabel: true },
     xAxis: xAxisCat(labels),
@@ -148,7 +166,7 @@ export const getDurationLineOptions = (
         out += `${p.marker} ${p.seriesName}: <b>${p.value.toLocaleString()}</b>`;
         if (p.seriesName === 'Pending' || p.seriesName === 'Disposed') {
           const t = params.find((x:any) => x.seriesName === `Total ${year}`)?.value || 1;
-          out += ` (${((p.value / t) * 100).toFixed(1)}%)`;
+          out += ` <span style="opacity: 0.8; font-size: 11px">(${((p.value / t) * 100).toFixed(1)}%)</span>`;
         }
         out += '<br/>';
       });
@@ -243,7 +261,7 @@ export const getPieOptions = (data: { name: string; value: number }[]): EChartsO
 export const getGroupedBarOptions = (
   data: { category: string; total: number; pending: number; disposed: number }[]
 ): EChartsOption => ({
-  tooltip: { ...tooltip(), trigger: 'axis', axisPointer: { type: 'shadow' } },
+  tooltip: { ...tooltip(percentFormatter as any), trigger: 'axis', axisPointer: { type: 'shadow' } },
   legend: legend(['Pending', 'Disposed']),
   grid: { left: '2%', right: '6%', bottom: '10%', top: '4%', containLabel: true },
   xAxis: { type: 'value', axisLabel: { color: COLORS.text, fontSize: 10 }, splitLine: { lineStyle: { color: COLORS.grid } }, axisLine: { show: false } },
