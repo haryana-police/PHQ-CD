@@ -5,6 +5,7 @@ import { ChartCard } from '@/components/charts/ChartCard';
 import { DataTable, Column } from '@/components/data/DataTable';
 import { getHorizontalSingleBarOptions, getGroupedBarOptions } from '@/components/charts/Charts';
 import { Select } from '@/components/common/Select';
+import { MultiSelectFilter } from '@/components/common/MultiSelectFilter';
 
 const CY = new Date().getFullYear();
 const PREVIEW_COUNT = 8;
@@ -22,6 +23,8 @@ export const HighlightsPage = () => {
   const [showAllNature, setShowAllNature] = useState(false);
   const [year, setYear] = useState(CY);
   const [natureChartSort, setNatureChartSort] = useState('Total Reg');
+  const [categoryFilter, setCategoryFilter] = useState<string[]>([]);
+  const [natureFilter, setNatureFilter] = useState<string[]>([]);
   const YEARS = Array.from({ length: CY - 2014 + 1 }, (_, i) => CY - i);
 
   const { data: hd, isLoading: hl } = useQuery({
@@ -96,6 +99,24 @@ export const HighlightsPage = () => {
   const topRows = showAllCategories ? allTopRows : allTopRows.slice(0, PREVIEW_COUNT);
   const natureRows = showAllNature ? allNatureRows : allNatureRows.slice(0, PREVIEW_COUNT);
 
+  const categoryOptions = useMemo(
+    () => allTopRows.map(r => ({ value: r.name, label: r.name })),
+    [allTopRows]
+  );
+  const natureOptions = useMemo(
+    () => allNatureRows.map(r => ({ value: r.name, label: r.name })),
+    [allNatureRows]
+  );
+
+  const filteredTopRows = useMemo(
+    () => categoryFilter.length === 0 ? allTopRows.slice(0, 10) : allTopRows.filter(r => categoryFilter.includes(r.name)).slice(0, 20),
+    [allTopRows, categoryFilter]
+  );
+  const filteredNatureRows = useMemo(
+    () => natureFilter.length === 0 ? sortedNatureRows.slice(0, 10) : sortedNatureRows.filter(r => natureFilter.includes(r.name)).slice(0, 20),
+    [sortedNatureRows, natureFilter]
+  );
+
   const catCols: Column<typeof allTopRows[0]>[] = [
     { key: 'rank', label: '#', width: '50px', align: 'center' },
     { key: 'name', label: 'Category', sortable: true },
@@ -127,13 +148,36 @@ export const HighlightsPage = () => {
             width="100px"
           />
         </div>
+          {/* Filter bar */}
+        <div style={{
+          background: 'rgba(19,32,53,0.6)', border: '1px solid rgba(255,255,255,0.07)',
+          borderRadius: '12px', padding: '12px 16px', marginBottom: '10px',
+          backdropFilter: 'blur(12px)', display: 'flex', flexWrap: 'wrap', gap: '16px', alignItems: 'flex-end',
+        }}>
+          <MultiSelectFilter
+            label="Category"
+            options={categoryOptions}
+            selected={categoryFilter}
+            onChange={setCategoryFilter}
+            placeholder="All Categories"
+            minWidth="200px"
+          />
+          <MultiSelectFilter
+            label="Incident Type"
+            options={natureOptions}
+            selected={natureFilter}
+            onChange={setNatureFilter}
+            placeholder="All Incident Types"
+            minWidth="200px"
+          />
+        </div>
           {/* Charts */}
         <div className="charts-grid">
           <ChartCard title={`Top Categories · ${year}`} isLoading={hl}
-            option={getHorizontalSingleBarOptions(allTopRows.slice(0, 10).map(r => ({ name: r.name, value: r.count })))}
+            option={getHorizontalSingleBarOptions(filteredTopRows.map(r => ({ name: r.name, value: r.count })))}
             height="280px" />
           <ChartCard title={`Nature of Incidents · ${year}`} isLoading={nl}
-            option={getGroupedBarOptions(sortedNatureRows.slice(0, 10).map(r => ({ category: r.name, total: r.total, pending: r.pending, disposed: r.disposed })))}
+            option={getGroupedBarOptions(filteredNatureRows.map(r => ({ category: r.name, total: r.total, pending: r.pending, disposed: r.disposed })))}
             sortOptions={HIGHLIGHTS_SORT_OPTIONS}
             currentSort={natureChartSort}
             onSortChange={setNatureChartSort}

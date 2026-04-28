@@ -9,6 +9,7 @@ import {
   getYoYBarOptions,
 } from '@/components/charts/Charts';
 import { Select } from '@/components/common/Select';
+import { MultiSelectFilter } from '@/components/common/MultiSelectFilter';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const CY = new Date().getFullYear();           // 2026
@@ -137,6 +138,7 @@ export const ReportsPage = () => {
   const [customFrom, setCustomFrom]   = useState('');
   const [customTo,   setCustomTo]     = useState('');
   const [chartSort, setChartSort] = useState('Total Reg');
+  const [itemFilter, setItemFilter] = useState<string[]>([]);
 
   // Build API URL
   const apiUrl = useMemo(() => {
@@ -200,13 +202,38 @@ export const ReportsPage = () => {
     return arr;
   }, [raw, chartSort]);
 
+  // Multi-select item filter (filters rows by the current tab's name key)
   const tab = TABS.find(t => t.id === type)!;
 
-  // Summary
-  const total = raw.reduce((s, r) => s + Number(r.total ?? r.count ?? 0), 0);
-  const pend  = raw.reduce((s, r) => s + Number(r.pending  ?? 0), 0);
-  const disp  = raw.reduce((s, r) => s + Number(r.disposed ?? 0), 0);
-  const prevTotal = raw.reduce((s, r) => s + Number(r.prevTotal ?? 0), 0);
+  const filterOptions = useMemo(() =>
+    raw.map(r => {
+      const name = String(r[tab?.nameKey] ?? r.district ?? '');
+      return { value: name, label: name };
+    }).filter((o, i, a) => o.value && a.findIndex(x => x.value === o.value) === i),
+    [raw, tab]
+  );
+
+  const filteredRawForChart = useMemo(() => {
+    if (itemFilter.length === 0) return sortedRawForChart;
+    return sortedRawForChart.filter(r => {
+      const name = String(r[tab?.nameKey] ?? r.district ?? '');
+      return itemFilter.includes(name);
+    });
+  }, [sortedRawForChart, itemFilter, tab]);
+
+  const filteredRaw = useMemo(() => {
+    if (itemFilter.length === 0) return raw;
+    return raw.filter(r => {
+      const name = String(r[tab?.nameKey] ?? r.district ?? '');
+      return itemFilter.includes(name);
+    });
+  }, [raw, itemFilter, tab]);
+
+  // Summary (use filteredRaw so KPIs reflect filter)
+  const total = filteredRaw.reduce((s, r) => s + Number(r.total ?? r.count ?? 0), 0);
+  const pend  = filteredRaw.reduce((s, r) => s + Number(r.pending  ?? 0), 0);
+  const disp  = filteredRaw.reduce((s, r) => s + Number(r.disposed ?? 0), 0);
+  const prevTotal = filteredRaw.reduce((s, r) => s + Number(r.prevTotal ?? 0), 0);
 
   const dispRate = total > 0 ? (disp / total * 100).toFixed(1) : '0.0';
   const pendRate = total > 0 ? (pend / total * 100).toFixed(1) : '0.0';
@@ -219,8 +246,8 @@ export const ReportsPage = () => {
   const showYoY = periodMode === 'year' && type === 'district';
   const activeYear = data?.data?.year ?? selectedYear;
 
-  // Table rows
-  const tableData = raw.map((r, i) => {
+  // Table rows (use filteredRaw)
+  const tableData = filteredRaw.map((r, i) => {
     const tot = Number(r.total ?? r.count ?? 0);
     const p   = Number(r.pending  ?? 0);
     const d   = Number(r.disposed ?? 0);
@@ -249,8 +276,8 @@ export const ReportsPage = () => {
     ] : []),
   ];
 
-  // Chart options
-  const districtData = sortedRawForChart.map(r => ({
+  // Chart options (use filteredRawForChart)
+  const districtData = filteredRawForChart.map(r => ({
     district: String(r[tab.nameKey] ?? r.district ?? ''),
     total:    Number(r.total ?? 0),
     pending:  Number(r.pending  ?? 0),
@@ -260,11 +287,11 @@ export const ReportsPage = () => {
 
   const horizontalOpt= getDistrictBarOptions(districtData, { horizontal: true });
   const yoyOpt       = getYoYBarOptions(districtData, activeYear);
-  const horizontalSingleOpt = getHorizontalSingleBarOptions(sortedRawForChart.map(r => ({
+  const horizontalSingleOpt = getHorizontalSingleBarOptions(filteredRawForChart.map(r => ({
     name:  String(r[tab.nameKey] ?? r.district ?? ''),
     value: Number(r.total ?? r.count ?? 0),
   })));
-  const groupedCatOpt= getGroupedBarOptions(sortedRawForChart.map(r => ({
+  const groupedCatOpt= getGroupedBarOptions(filteredRawForChart.map(r => ({
     category: String(r[tab.nameKey] ?? ''),
     total:    Number(r.total ?? 0),
     pending:  Number(r.pending ?? 0),
@@ -283,6 +310,40 @@ export const ReportsPage = () => {
   return (
     <Layout>
       <div className="page-content">
+
+        {/* ── Filter Bar ────────────────────────────────────────────────── */}
+        {filterOptions.length > 0 && (
+          <div style={{
+            background: 'rgba(19,32,53,0.6)',
+            border: '1px solid rgba(255,255,255,0.07)',
+            borderRadius: '12px',
+            padding: '12px 16px',
+            marginBottom: '10px',
+            backdropFilter: 'blur(12px)',
+            display: 'flex', flexWrap: 'wrap', gap: '12px', alignItems: 'flex-end',
+          }}>
+            <MultiSelectFilter
+              label={tab.label}
+              options={filterOptions}
+              selected={itemFilter}
+              onChange={v => { setItemFilter(v); }}
+              placeholder={`All ${tab.label}s`}
+              minWidth="220px"
+            />
+            {itemFilter.length > 0 && (
+              <button
+                onClick={() => setItemFilter([])}
+                style={{
+                  padding: '6px 12px', borderRadius: '6px', fontSize: '11px',
+                  background: 'rgba(239,68,68,0.1)', color: '#fca5a5',
+                  border: '1px solid rgba(239,68,68,0.25)', cursor: 'pointer',
+                }}
+              >
+                ✕ Clear Filter
+              </button>
+            )}
+          </div>
+        )}
 
         {/* ── Period Controls ─────────────────────────────────────────────── */}
         <div style={{

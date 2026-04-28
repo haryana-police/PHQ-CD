@@ -112,7 +112,7 @@ export const ChartCard = ({
               position: 'absolute', top: 'calc(100% + 4px)', right: 0,
               background: '#1e293b', border: '1px solid rgba(255,255,255,0.1)',
               borderRadius: '6px', boxShadow: '0 10px 25px rgba(0,0,0,0.5)',
-              zIndex: 50, minWidth: '180px', overflow: 'hidden',
+              zIndex: 9999, minWidth: '180px', overflow: 'hidden',
               animation: 'fadeIn 0.15s ease-out'
             }}>
               {sortOptions.map(opt => (

@@ -4,6 +4,7 @@ import { ChartCard } from '@/components/charts/ChartCard';
 import { getDistrictBarOptions, getDurationLineOptions, getYoYBarOptions } from '@/components/charts/Charts';
 import { useDashboardSummary, useDistrictChart, useMonthWiseData } from '@/hooks/useData';
 import { Select } from '@/components/common/Select';
+import { MultiSelectFilter } from '@/components/common/MultiSelectFilter';
 
 const CY = new Date().getFullYear();
 const DEFAULT_YEAR = CY;
@@ -58,6 +59,7 @@ const DASHBOARD_SORT_OPTIONS = [
 export const DashboardPage = () => {
   const [year, setYear] = useState(DEFAULT_YEAR);
   const [districtSort, setDistrictSort] = useState('Total Reg');
+  const [districtFilter, setDistrictFilter] = useState<string[]>([]);
 
   const { data: sumData, isLoading: sl } = useDashboardSummary(year);
   const { data: distData, isLoading: dl } = useDistrictChart(year);
@@ -99,6 +101,17 @@ export const DashboardPage = () => {
     }
     return arr;
   }, [distRows, districtSort]);
+
+  // Apply multi-select filter after sort
+  const filteredDistRows = useMemo(() => {
+    if (districtFilter.length === 0) return sortedDistRows;
+    return sortedDistRows.filter(r => districtFilter.includes(r.district));
+  }, [sortedDistRows, districtFilter]);
+
+  const districtOptions = useMemo(
+    () => distRows.map(r => ({ value: r.district, label: r.district })),
+    [distRows]
+  );
 
   return (
     <Layout>
@@ -148,11 +161,27 @@ export const DashboardPage = () => {
         )}
 
         {/* Charts */}
+        <div style={{ marginBottom: '10px' }}>
+          <div style={{
+            background: 'rgba(19,32,53,0.6)', border: '1px solid rgba(255,255,255,0.07)',
+            borderRadius: '12px', padding: '12px 16px',
+            backdropFilter: 'blur(12px)', display: 'flex', flexWrap: 'wrap', gap: '12px', alignItems: 'flex-end',
+          }}>
+            <MultiSelectFilter
+              label="District"
+              options={districtOptions}
+              selected={districtFilter}
+              onChange={setDistrictFilter}
+              placeholder="All Districts"
+              minWidth="200px"
+            />
+          </div>
+        </div>
         <div className="charts-grid">
           <ChartCard
             title={`District-wise · ${year}`}
-            option={getDistrictBarOptions(sortedDistRows, { horizontal: true })}
-            alternativeOptions={{ grouped: getYoYBarOptions(sortedDistRows, year) }}
+            option={getDistrictBarOptions(filteredDistRows, { horizontal: true })}
+            alternativeOptions={{ grouped: getYoYBarOptions(filteredDistRows, year) }}
             sortOptions={DASHBOARD_SORT_OPTIONS}
             currentSort={districtSort}
             onSortChange={setDistrictSort}
