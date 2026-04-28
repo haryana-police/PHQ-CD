@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Layout } from '@/components/layout/Layout';
 import { usePendencyMatrix, useDisposalMatrix } from '@/hooks/useData';
 
@@ -70,6 +71,7 @@ function TableSkeleton({ cols }: { cols: number }) {
 export const PendencyDisposalMatrixPage = () => {
   const [year, setYear] = useState(CY);
   const [tab, setTab] = useState<Tab>('pendency');
+  const [expanded, setExpanded] = useState(false);
 
   const { data: pData, isLoading: pLoading } = usePendencyMatrix(year);
   const { data: dData, isLoading: dLoading } = useDisposalMatrix(year);
@@ -212,7 +214,19 @@ export const PendencyDisposalMatrixPage = () => {
                 </span>
               )}
             </div>
-            <span style={{ fontSize: '11px', color: '#334155' }}>Haryana Police · PHQ</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <span style={{ fontSize: '11px', color: '#334155' }}>Haryana Police · PHQ</span>
+              <button
+                onClick={() => setExpanded(true)}
+                style={{ padding: '6px', borderRadius: '7px', background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.2)', color: '#818cf8', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                title="Fullscreen"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/>
+                  <line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/>
+                </svg>
+              </button>
+            </div>
           </div>
 
           <div style={{ overflowX: 'auto' }}>
@@ -340,6 +354,163 @@ export const PendencyDisposalMatrixPage = () => {
           * Age buckets are calculated from registration date to today (pendency) or to disposal date (disposal). Only Haryana's 22 districts shown.
         </p>
       </div>
+
+      {/* ── Fullscreen Overlay ─────────────────────────────────────── */}
+      {expanded && typeof document !== 'undefined' && createPortal(
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 9999,
+          background: 'rgba(6,13,26,0.98)',
+          backdropFilter: 'blur(16px)',
+          display: 'flex', flexDirection: 'column',
+          animation: 'fadeIn 0.2s ease',
+        }}>
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: '14px 24px', borderBottom: '1px solid rgba(255,255,255,0.07)',
+            background: 'rgba(13,20,38,0.9)', flexWrap: 'wrap', gap: '12px',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <div style={{ width: '3px', height: '18px', background: '#6366f1', borderRadius: '2px' }} />
+              <span style={{ fontSize: '15px', fontWeight: 700, color: '#f1f5f9' }}>
+                {tab === 'pendency' ? 'District-wise Pendency Aging' : 'District-wise Disposal Speed'} · {year}
+              </span>
+              {!isLoading && (
+                <span style={{ fontSize: '12px', color: '#64748b', background: 'rgba(255,255,255,0.04)', padding: '2px 8px', borderRadius: '4px' }}>
+                  {tab === 'pendency' ? pRows.length : dRows.length} districts
+                </span>
+              )}
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <button
+                onClick={() => setExpanded(false)}
+                style={{ padding: '8px', borderRadius: '8px', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: '#f87171', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                title="Close Fullscreen"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+          <div style={{ flex: 1, overflowX: 'auto', overflowY: 'auto', padding: '24px' }}>
+            <div style={{ background: 'rgba(15,23,42,0.4)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.05)', overflow: 'hidden' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '700px' }}>
+                <thead>
+                  <tr>
+                    <th style={thS({ textAlign: 'left', width: '180px' })}>District</th>
+                    <th style={thS({ textAlign: 'right' })}>≤7 Days</th>
+                    <th style={thS({ textAlign: 'right' })}>8–15 Days</th>
+                    <th style={thS({ textAlign: 'right' })}>16–30 Days</th>
+                    <th style={thS({ textAlign: 'right' })}>&gt;30 Days</th>
+                    {tab === 'pendency'
+                      ? <th style={thS({ textAlign: 'right', color: '#f87171' })}>Total Pending</th>
+                      : <>
+                          <th style={thS({ textAlign: 'right', color: '#34d399' })}>Total Disposed</th>
+                          <th style={thS({ textAlign: 'right', color: '#a78bfa' })}>Avg Days</th>
+                        </>
+                    }
+                    <th style={thS({ textAlign: 'right', color: '#94a3b8' })}>Total Received</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {isLoading ? (
+                    <TableSkeleton cols={tab === 'pendency' ? 6 : 7} />
+                  ) : tab === 'pendency' ? (
+                    <>
+                      {pRows.map((r: any, i: number) => (
+                        <tr key={i}
+                          style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.01)' }}
+                          onMouseEnter={e => (e.currentTarget.style.background = 'rgba(99,102,241,0.06)')}
+                          onMouseLeave={e => (e.currentTarget.style.background = i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.01)')}
+                        >
+                          <td style={{ padding: '9px 14px', fontSize: '12.5px', fontWeight: 600, color: '#e2e8f0', borderBottom: '1px solid rgba(255,255,255,0.04)', whiteSpace: 'nowrap' }}>
+                            {r.district}
+                          </td>
+                          <HeatCell value={r.within7}  max={pMax7}  color="#10b981" />
+                          <HeatCell value={r.within15} max={pMax15} color="#f59e0b" />
+                          <HeatCell value={r.within30} max={pMax30} color="#f97316" />
+                          <HeatCell value={r.over30}   max={pMaxO}  color="#ef4444" />
+                          <td style={{ padding: '9px 14px', textAlign: 'right', fontSize: '12.5px', fontWeight: 700, color: '#f87171', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                            {fmtNum(r.totalPending)}
+                          </td>
+                          <td style={{ padding: '9px 14px', textAlign: 'right', fontSize: '12.5px', color: '#64748b', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                            {fmtNum(r.totalReceived)}
+                          </td>
+                        </tr>
+                      ))}
+                      {pRows.length > 0 && (
+                        <tr style={{ background: 'rgba(99,102,241,0.08)', borderTop: '2px solid rgba(99,102,241,0.25)' }}>
+                          <td style={{ padding: '10px 14px', fontSize: '12.5px', fontWeight: 700, color: '#a5b4fc' }}>TOTAL</td>
+                          <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 700, fontSize: '12.5px', color: '#34d399' }}>{fmtNum(pTotals.within7 ?? 0)}</td>
+                          <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 700, fontSize: '12.5px', color: '#fbbf24' }}>{fmtNum(pTotals.within15 ?? 0)}</td>
+                          <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 700, fontSize: '12.5px', color: '#fb923c' }}>{fmtNum(pTotals.within30 ?? 0)}</td>
+                          <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 700, fontSize: '12.5px', color: '#f87171' }}>{fmtNum(pTotals.over30 ?? 0)}</td>
+                          <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 800, fontSize: '13px', color: '#f87171' }}>{fmtNum(pTotals.totalPending ?? 0)}</td>
+                          <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 700, fontSize: '12.5px', color: '#94a3b8' }}>{fmtNum(pTotals.totalReceived ?? 0)}</td>
+                        </tr>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      {dRows.map((r: any, i: number) => (
+                        <tr key={i}
+                          style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.01)' }}
+                          onMouseEnter={e => (e.currentTarget.style.background = 'rgba(99,102,241,0.06)')}
+                          onMouseLeave={e => (e.currentTarget.style.background = i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.01)')}
+                        >
+                          <td style={{ padding: '9px 14px', fontSize: '12.5px', fontWeight: 600, color: '#e2e8f0', borderBottom: '1px solid rgba(255,255,255,0.04)', whiteSpace: 'nowrap' }}>
+                            {r.district}
+                          </td>
+                          <HeatCell value={r.within7}  max={dMax7}  color="#10b981" />
+                          <HeatCell value={r.within15} max={dMax15} color="#f59e0b" />
+                          <HeatCell value={r.within30} max={dMax30} color="#f97316" />
+                          <HeatCell value={r.over30}   max={dMaxO}  color="#ef4444" />
+                          <td style={{ padding: '9px 14px', textAlign: 'right', fontSize: '12.5px', fontWeight: 700, color: '#34d399', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                            {fmtNum(r.totalDisposed)}
+                          </td>
+                          <td style={{ padding: '9px 14px', textAlign: 'right', fontSize: '12.5px', fontWeight: 600, color: '#a78bfa', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                            {r.avgDisposalDays != null ? `${r.avgDisposalDays}d` : '—'}
+                          </td>
+                          <td style={{ padding: '9px 14px', textAlign: 'right', fontSize: '12.5px', color: '#64748b', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                            {fmtNum(r.totalReceived)}
+                          </td>
+                        </tr>
+                      ))}
+                      {dRows.length > 0 && (
+                        <tr style={{ background: 'rgba(99,102,241,0.08)', borderTop: '2px solid rgba(99,102,241,0.25)' }}>
+                          <td style={{ padding: '10px 14px', fontSize: '12.5px', fontWeight: 700, color: '#a5b4fc' }}>TOTAL</td>
+                          <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 700, fontSize: '12.5px', color: '#34d399' }}>{fmtNum(dTotals.within7 ?? 0)}</td>
+                          <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 700, fontSize: '12.5px', color: '#fbbf24' }}>{fmtNum(dTotals.within15 ?? 0)}</td>
+                          <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 700, fontSize: '12.5px', color: '#fb923c' }}>{fmtNum(dTotals.within30 ?? 0)}</td>
+                          <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 700, fontSize: '12.5px', color: '#f87171' }}>{fmtNum(dTotals.over30 ?? 0)}</td>
+                          <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 800, fontSize: '13px', color: '#34d399' }}>{fmtNum(dTotals.totalDisposed ?? 0)}</td>
+                          <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 700, fontSize: '12.5px', color: '#a78bfa' }}>
+                            {dTotals.avgDisposalDays != null ? `${dTotals.avgDisposalDays}d` : '—'}
+                          </td>
+                          <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 700, fontSize: '12.5px', color: '#94a3b8' }}>{fmtNum(dTotals.totalReceived ?? 0)}</td>
+                        </tr>
+                      )}
+                    </>
+                  )}
+                  {!isLoading && (tab === 'pendency' ? pRows.length : dRows.length) === 0 && (
+                    <tr>
+                      <td colSpan={tab === 'pendency' ? 6 : 7} style={{ textAlign: 'center', padding: '48px', color: '#334155' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+                          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ opacity: 0.3 }}>
+                            <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+                          </svg>
+                          <span style={{ fontSize: '13px' }}>No data for {year}</span>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </Layout>
   );
 };
