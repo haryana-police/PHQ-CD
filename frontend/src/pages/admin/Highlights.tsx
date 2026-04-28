@@ -89,7 +89,7 @@ export const HighlightsPage = () => {
           />
         </div>
           {/* Charts */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '20px' }}>
+        <div className="charts-grid">
           <ChartCard title={`Top Categories · ${year}`} isLoading={hl}
             option={getPieOptions(allTopRows.slice(0, 10).map(r => ({ name: r.name, value: r.count })))}
             height="280px" />

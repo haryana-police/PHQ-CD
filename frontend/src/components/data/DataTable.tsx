@@ -95,7 +95,7 @@ export function DataTable<T extends Record<string, unknown>>({
   });
 
   const renderTable = (isFullscreen: boolean) => (
-    <div style={{ overflowX: 'hidden', overflowY: 'auto', flex: 1, maxHeight: isFullscreen ? '100%' : maxHeight, minHeight: '300px' }}>
+    <div style={{ overflowX: 'auto', overflowY: 'auto', flex: 1, maxHeight: isFullscreen ? '100%' : maxHeight, minHeight: '300px' }}>
       <table style={{ width: '100%', borderCollapse: 'collapse' }}>
         <thead>
           <tr>

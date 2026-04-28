@@ -77,14 +77,14 @@ export const DashboardPage = () => {
 
         {/* KPI Cards */}
         {sl ? (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(160px,1fr))', gap: '12px', marginBottom: '20px' }}>
+          <div className="stats-grid">
             {Array.from({ length: 6 }).map((_, i) => (
               <div key={i} style={{ height: '90px', borderRadius: '12px', background: 'linear-gradient(90deg, rgba(255,255,255,0.04) 25%, rgba(255,255,255,0.07) 50%, rgba(255,255,255,0.04) 75%)', backgroundSize: '200% 100%', animation: 'shimmer 1.5s infinite' }} />
             ))}
           </div>
         ) : (
           <>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '12px' }}>
+            <div className="stats-grid">
               <KpiCard label="Total Received" value={s?.totalReceived ?? 0} gradient="linear-gradient(135deg,#6a11cb,#2575fc)"
                 icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>} />
               <KpiCard label="Disposed" value={s?.totalDisposed ?? 0} gradient="linear-gradient(135deg,#11998e,#38ef7d)"
@@ -96,7 +96,7 @@ export const DashboardPage = () => {
               <KpiCard label="Pending 15-30 Days" value={s?.pendingOverFifteenDays ?? 0} gradient="linear-gradient(135deg,#f7971e,#ffd200)"
                 icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/></svg>} />
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px', marginBottom: '20px' }}>
+            <div className="stats-grid-half">
               <KpiCard label="Pending 1-2 Months" value={s?.pendingOverOneMonth ?? 0} gradient="linear-gradient(135deg,#ee0979,#ff6a00)"
                 icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/></svg>} />
               <KpiCard label="Pending Over 2 Months" value={s?.pendingOverTwoMonths ?? 0} gradient="linear-gradient(135deg,#283c86,#45a247)"

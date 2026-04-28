@@ -76,7 +76,7 @@ export const Layout = ({ children }: LayoutProps) => {
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <button
             onClick={() => setSidebarOpen(o => !o)}
-            style={{ display: 'none', background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '4px' }}
+            style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '4px' }}
             className="mobile-menu-btn"
           >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -90,7 +90,7 @@ export const Layout = ({ children }: LayoutProps) => {
           }}>
             <img src="/PHQlogo.png" alt="Haryana Police" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
           </div>
-          <div>
+          <div className="header-app-title">
             <div style={{ fontSize: '13.5px', fontWeight: 700, color: '#f1f5f9', lineHeight: 1.2 }}>
               PHQ Complaint Dashboard
             </div>
@@ -101,7 +101,7 @@ export const Layout = ({ children }: LayoutProps) => {
         </div>
 
         {/* Centre: Module name */}
-        <div style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)' }}>
+        <div className="header-module-name" style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)' }}>
           <span style={{
             fontSize: '13px', fontWeight: 600, color: '#818cf8',
             letterSpacing: '1.5px', textTransform: 'uppercase',
@@ -115,7 +115,7 @@ export const Layout = ({ children }: LayoutProps) => {
 
         {/* Right: Date/Time + Logout */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-          <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column' }}>
+          <div className="header-date-time" style={{ textAlign: 'right', display: 'flex', flexDirection: 'column' }}>
             <span style={{ fontSize: '12px', fontWeight: 600, color: '#e2e8f0', fontVariantNumeric: 'tabular-nums' }}>{timeStr}</span>
             <span style={{ fontSize: '10px', color: '#475569' }}>{dateStr}</span>
           </div>
