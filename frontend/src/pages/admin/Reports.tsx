@@ -15,6 +15,14 @@ const CY = new Date().getFullYear();           // 2026
 const DEFAULT_YEAR = CY;                       // Current year as default
 const YEARS = Array.from({ length: CY - 2014 + 1 }, (_, i) => CY - i);
 
+const REPORTS_SORT_OPTIONS = [
+  { label: 'Total Reg', value: 'Total Reg' },
+  { label: 'Total Pending', value: 'Total Pending' },
+  { label: 'Total Disposed', value: 'Total Disposed' },
+  { label: 'Pending %', value: 'Pending %' },
+  { label: 'Disposed %', value: 'Disposed %' }
+];
+
 const TABS = [
   { id: 'district',         label: 'District',          nameKey: 'district' },
   { id: 'mode-receipt',     label: 'Receipt Mode',      nameKey: 'mode' },
@@ -128,6 +136,7 @@ export const ReportsPage = () => {
   const [selectedYear, setSelectedYear] = useState(DEFAULT_YEAR);
   const [customFrom, setCustomFrom]   = useState('');
   const [customTo,   setCustomTo]     = useState('');
+  const [chartSort, setChartSort] = useState('Total Reg');
 
   // Build API URL
   const apiUrl = useMemo(() => {
@@ -160,6 +169,36 @@ export const ReportsPage = () => {
     if (!d) return [];
     return Array.isArray(d) ? d : (Array.isArray(d.rows) ? d.rows : []);
   }, [data]);
+
+  const sortedRawForChart = useMemo(() => {
+    const arr = [...raw];
+    switch (chartSort) {
+      case 'Total Pending':
+        arr.sort((a, b) => Number(b.pending ?? 0) - Number(a.pending ?? 0));
+        break;
+      case 'Total Disposed':
+        arr.sort((a, b) => Number(b.disposed ?? 0) - Number(a.disposed ?? 0));
+        break;
+      case 'Pending %':
+        arr.sort((a, b) => {
+          const tA = Number(a.total ?? a.count ?? 0); const pA = Number(a.pending ?? 0);
+          const tB = Number(b.total ?? b.count ?? 0); const pB = Number(b.pending ?? 0);
+          return (tB > 0 ? pB / tB : 0) - (tA > 0 ? pA / tA : 0);
+        });
+        break;
+      case 'Disposed %':
+        arr.sort((a, b) => {
+          const tA = Number(a.total ?? a.count ?? 0); const dA = Number(a.disposed ?? 0);
+          const tB = Number(b.total ?? b.count ?? 0); const dB = Number(b.disposed ?? 0);
+          return (tB > 0 ? dB / tB : 0) - (tA > 0 ? dA / tA : 0);
+        });
+        break;
+      case 'Total Reg':
+      default:
+        arr.sort((a, b) => Number(b.total ?? b.count ?? 0) - Number(a.total ?? a.count ?? 0));
+    }
+    return arr;
+  }, [raw, chartSort]);
 
   const tab = TABS.find(t => t.id === type)!;
 
@@ -211,7 +250,7 @@ export const ReportsPage = () => {
   ];
 
   // Chart options
-  const districtData = raw.map(r => ({
+  const districtData = sortedRawForChart.map(r => ({
     district: String(r[tab.nameKey] ?? r.district ?? ''),
     total:    Number(r.total ?? 0),
     pending:  Number(r.pending  ?? 0),
@@ -221,11 +260,11 @@ export const ReportsPage = () => {
 
   const horizontalOpt= getDistrictBarOptions(districtData, { horizontal: true });
   const yoyOpt       = getYoYBarOptions(districtData, activeYear);
-  const horizontalSingleOpt = getHorizontalSingleBarOptions(raw.map(r => ({
+  const horizontalSingleOpt = getHorizontalSingleBarOptions(sortedRawForChart.map(r => ({
     name:  String(r[tab.nameKey] ?? r.district ?? ''),
     value: Number(r.total ?? r.count ?? 0),
   })));
-  const groupedCatOpt= getGroupedBarOptions(raw.map(r => ({
+  const groupedCatOpt= getGroupedBarOptions(sortedRawForChart.map(r => ({
     category: String(r[tab.nameKey] ?? ''),
     total:    Number(r.total ?? 0),
     pending:  Number(r.pending ?? 0),
@@ -378,6 +417,9 @@ export const ReportsPage = () => {
                 option={primaryOption as any}
                 alternativeOptions={altOptions as any}
                 defaultType={defaultChartType as any}
+                sortOptions={REPORTS_SORT_OPTIONS}
+                currentSort={chartSort}
+                onSortChange={setChartSort}
                 height="320px"
               />
             </div>

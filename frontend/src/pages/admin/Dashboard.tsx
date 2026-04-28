@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Layout } from '@/components/layout/Layout';
 import { ChartCard } from '@/components/charts/ChartCard';
 import { getDistrictBarOptions, getDurationLineOptions, getYoYBarOptions } from '@/components/charts/Charts';
@@ -46,8 +46,19 @@ const YearSelect = ({ value, onChange }: { value: number; onChange: (y: number) 
   />
 );
 
+const DASHBOARD_SORT_OPTIONS = [
+  { label: 'Total Reg', value: 'Total Reg' },
+  { label: 'Total Pending', value: 'Total Pending' },
+  { label: 'Total Disposed', value: 'Total Disposed' },
+  { label: 'Total % (from state total)', value: 'Total %' },
+  { label: 'Pending % (from district total)', value: 'Pending %' },
+  { label: 'Disposed % (from district total)', value: 'Disposed %' }
+];
+
 export const DashboardPage = () => {
   const [year, setYear] = useState(DEFAULT_YEAR);
+  const [districtSort, setDistrictSort] = useState('Total Reg');
+
   const { data: sumData, isLoading: sl } = useDashboardSummary(year);
   const { data: distData, isLoading: dl } = useDistrictChart(year);
   const { data: monthData, isLoading: ml } = useMonthWiseData(year);
@@ -57,6 +68,37 @@ export const DashboardPage = () => {
   const months    = ((monthData?.data || []) as { month: string; total: number; pending: number; disposed: number }[]);
 
   const distRows = districts.map(d => ({ district: d.district, total: d.totalComplaints, pending: d.pending, disposed: d.disposed, prevTotal: 0 }));
+
+  const sortedDistRows = useMemo(() => {
+    const arr = [...distRows];
+    switch (districtSort) {
+      case 'Total Pending':
+        arr.sort((a, b) => b.pending - a.pending);
+        break;
+      case 'Total Disposed':
+        arr.sort((a, b) => b.disposed - a.disposed);
+        break;
+      case 'Pending %':
+        arr.sort((a, b) => {
+          const pA = a.total > 0 ? a.pending / a.total : 0;
+          const pB = b.total > 0 ? b.pending / b.total : 0;
+          return pB - pA;
+        });
+        break;
+      case 'Disposed %':
+        arr.sort((a, b) => {
+          const dA = a.total > 0 ? a.disposed / a.total : 0;
+          const dB = b.total > 0 ? b.disposed / b.total : 0;
+          return dB - dA;
+        });
+        break;
+      case 'Total Reg':
+      case 'Total %':
+      default:
+        arr.sort((a, b) => b.total - a.total);
+    }
+    return arr;
+  }, [distRows, districtSort]);
 
   return (
     <Layout>
@@ -109,8 +151,11 @@ export const DashboardPage = () => {
         <div className="charts-grid">
           <ChartCard
             title={`District-wise · ${year}`}
-            option={getDistrictBarOptions(distRows, { horizontal: true })}
-            alternativeOptions={{ grouped: getYoYBarOptions(distRows, year) }}
+            option={getDistrictBarOptions(sortedDistRows, { horizontal: true })}
+            alternativeOptions={{ grouped: getYoYBarOptions(sortedDistRows, year) }}
+            sortOptions={DASHBOARD_SORT_OPTIONS}
+            currentSort={districtSort}
+            onSortChange={setDistrictSort}
             isLoading={dl}
             height="320px"
           />

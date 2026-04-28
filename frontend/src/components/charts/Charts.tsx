@@ -101,7 +101,7 @@ export const getDistrictBarOptions = (
       legend: legend(['Pending', 'Disposed']),
       grid: { left: '2%', right: '6%', bottom: '10%', top: '4%', containLabel: true },
       xAxis: { ...yAxisVal() },
-      yAxis: { type: 'category', data: labels, axisLabel: { fontSize: 10, color: COLORS.text }, axisLine: { lineStyle: { color: 'rgba(255,255,255,0.1)' } }, axisTick: { show: false } },
+      yAxis: { type: 'category', data: labels, inverse: true, axisLabel: { fontSize: 10, color: COLORS.text }, axisLine: { lineStyle: { color: 'rgba(255,255,255,0.1)' } }, axisTick: { show: false } },
       series: [
         { name: 'Pending',  type: 'bar', stack: 'total', data: pending,  itemStyle: { color: COLORS.pending,  borderRadius: [0,0,0,0] }, barMaxWidth: 22 },
         { name: 'Disposed', type: 'bar', stack: 'total', data: disposed, itemStyle: { color: COLORS.disposed, borderRadius: [0,3,3,0] }, barMaxWidth: 22 },
@@ -276,7 +276,7 @@ export const getHorizontalSingleBarOptions = (data: { name: string; value: numbe
   tooltip: { ...tooltip(), trigger: 'axis', axisPointer: { type: 'shadow' } },
   grid: { left: '2%', right: '6%', bottom: '10%', top: '4%', containLabel: true },
   xAxis: { type: 'value', axisLabel: { color: COLORS.text, fontSize: 10 }, splitLine: { lineStyle: { color: COLORS.grid } }, axisLine: { show: false } },
-  yAxis: { type: 'category', data: data.map(d => d.name), axisLabel: { color: COLORS.text, fontSize: 10 }, axisLine: { lineStyle: { color: 'rgba(255,255,255,0.1)' } }, axisTick: { show: false } },
+  yAxis: { type: 'category', data: data.map(d => d.name), inverse: true, axisLabel: { color: COLORS.text, fontSize: 10 }, axisLine: { lineStyle: { color: 'rgba(255,255,255,0.1)' } }, axisTick: { show: false } },
   series: [
     {
       type: 'bar',

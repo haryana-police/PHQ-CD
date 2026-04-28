@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { BaseChart } from './Charts';
 import type { EChartsOption } from 'echarts';
 
@@ -20,6 +20,9 @@ interface ChartCardProps {
   expandedHeight?: string;
   isLoading?: boolean;
   defaultType?: ChartType;
+  sortOptions?: { label: string; value: string }[];
+  currentSort?: string;
+  onSortChange?: (value: string) => void;
 }
 
 const CONTROLS: ChartControl[] = [
@@ -52,9 +55,24 @@ export const ChartCard = ({
   expandedHeight = 'calc(100vh - 100px)',
   isLoading = false,
   defaultType = 'horizontal',
+  sortOptions,
+  currentSort,
+  onSortChange,
 }: ChartCardProps) => {
   const [expanded, setExpanded] = useState(false);
   const [chartType, setChartType] = useState<ChartType>(defaultType);
+  const [sortOpen, setSortOpen] = useState(false);
+  const sortRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (sortRef.current && !sortRef.current.contains(e.target as Node)) {
+        setSortOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // Available controls = current type + whatever alternatives provided
   const availableControls = CONTROLS.filter(
@@ -68,6 +86,55 @@ export const ChartCard = ({
 
   const renderControls = () => (
     <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flexWrap: 'wrap' }}>
+      {sortOptions && sortOptions.length > 0 && onSortChange && (
+        <div ref={sortRef} style={{ position: 'relative' }}>
+          <button
+            onClick={() => setSortOpen(!sortOpen)}
+            style={{
+              padding: '3px 9px',
+              borderRadius: '5px',
+              fontSize: '11px',
+              border: '1px solid rgba(255,255,255,0.08)',
+              background: sortOpen ? 'rgba(255,255,255,0.05)' : 'transparent',
+              color: '#64748b',
+              cursor: 'pointer',
+              display: 'flex', alignItems: 'center', gap: '4px',
+            }}
+            title="Sort By"
+          >
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
+            </svg>
+            Sort By
+          </button>
+          {sortOpen && (
+            <div style={{
+              position: 'absolute', top: 'calc(100% + 4px)', right: 0,
+              background: '#1e293b', border: '1px solid rgba(255,255,255,0.1)',
+              borderRadius: '6px', boxShadow: '0 10px 25px rgba(0,0,0,0.5)',
+              zIndex: 50, minWidth: '180px', overflow: 'hidden',
+              animation: 'fadeIn 0.15s ease-out'
+            }}>
+              {sortOptions.map(opt => (
+                <div
+                  key={opt.value}
+                  onClick={() => { onSortChange(opt.value); setSortOpen(false); }}
+                  style={{
+                    padding: '8px 12px', fontSize: '12px',
+                    color: opt.value === currentSort ? '#818cf8' : '#cbd5e1',
+                    background: opt.value === currentSort ? 'rgba(99,102,241,0.1)' : 'transparent',
+                    cursor: 'pointer', transition: 'background 0.1s',
+                  }}
+                  onMouseEnter={e => { if (opt.value !== currentSort) e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; }}
+                  onMouseLeave={e => { if (opt.value !== currentSort) e.currentTarget.style.background = 'transparent'; }}
+                >
+                  {opt.label}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
       {availableControls.length > 1 && availableControls.map(c => (
         <button
           key={c.id}

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Layout } from '@/components/layout/Layout';
 import { ChartCard } from '@/components/charts/ChartCard';
@@ -9,10 +9,19 @@ import { Select } from '@/components/common/Select';
 const CY = new Date().getFullYear();
 const PREVIEW_COUNT = 8;
 
+const HIGHLIGHTS_SORT_OPTIONS = [
+  { label: 'Total Reg', value: 'Total Reg' },
+  { label: 'Total Pending', value: 'Total Pending' },
+  { label: 'Total Disposed', value: 'Total Disposed' },
+  { label: 'Pending %', value: 'Pending %' },
+  { label: 'Disposed %', value: 'Disposed %' }
+];
+
 export const HighlightsPage = () => {
   const [showAllCategories, setShowAllCategories] = useState(false);
   const [showAllNature, setShowAllNature] = useState(false);
   const [year, setYear] = useState(CY);
+  const [natureChartSort, setNatureChartSort] = useState('Total Reg');
   const YEARS = Array.from({ length: CY - 2014 + 1 }, (_, i) => CY - i);
 
   const { data: hd, isLoading: hl } = useQuery({
@@ -54,6 +63,36 @@ export const HighlightsPage = () => {
     };
   });
 
+  const sortedNatureRows = useMemo(() => {
+    const arr = [...allNatureRows];
+    switch (natureChartSort) {
+      case 'Total Pending':
+        arr.sort((a, b) => b.pending - a.pending);
+        break;
+      case 'Total Disposed':
+        arr.sort((a, b) => b.disposed - a.disposed);
+        break;
+      case 'Pending %':
+        arr.sort((a, b) => {
+          const pA = a.total > 0 ? a.pending / a.total : 0;
+          const pB = b.total > 0 ? b.pending / b.total : 0;
+          return pB - pA;
+        });
+        break;
+      case 'Disposed %':
+        arr.sort((a, b) => {
+          const dA = a.total > 0 ? a.disposed / a.total : 0;
+          const dB = b.total > 0 ? b.disposed / b.total : 0;
+          return dB - dA;
+        });
+        break;
+      case 'Total Reg':
+      default:
+        arr.sort((a, b) => b.total - a.total);
+    }
+    return arr;
+  }, [allNatureRows, natureChartSort]);
+
   const topRows = showAllCategories ? allTopRows : allTopRows.slice(0, PREVIEW_COUNT);
   const natureRows = showAllNature ? allNatureRows : allNatureRows.slice(0, PREVIEW_COUNT);
 
@@ -94,7 +133,10 @@ export const HighlightsPage = () => {
             option={getHorizontalSingleBarOptions(allTopRows.slice(0, 10).map(r => ({ name: r.name, value: r.count })))}
             height="280px" />
           <ChartCard title={`Nature of Incidents · ${year}`} isLoading={nl}
-            option={getGroupedBarOptions(allNatureRows.slice(0, 10).map(r => ({ category: r.name, total: r.total, pending: r.pending, disposed: r.disposed })))}
+            option={getGroupedBarOptions(sortedNatureRows.slice(0, 10).map(r => ({ category: r.name, total: r.total, pending: r.pending, disposed: r.disposed })))}
+            sortOptions={HIGHLIGHTS_SORT_OPTIONS}
+            currentSort={natureChartSort}
+            onSortChange={setNatureChartSort}
             height="280px" />
         </div>
 
