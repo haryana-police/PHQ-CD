@@ -45,6 +45,7 @@ function SummaryKpi({ label, value, sub, color }: { label: string; value: string
 
 // ── Tab toggle ─────────────────────────────────────────────────────────────
 type Tab = 'pendency' | 'disposal';
+type SortCol = 'district' | 'within7' | 'within15' | 'within30' | 'over30' | 'totalPending' | 'totalDisposed' | 'avgDisposalDays' | 'totalReceived';
 
 // ── Skeleton table ─────────────────────────────────────────────────────────
 function TableSkeleton({ cols }: { cols: number }) {
@@ -72,12 +73,37 @@ export const PendencyDisposalMatrixPage = () => {
   const [year, setYear] = useState(CY);
   const [tab, setTab] = useState<Tab>('pendency');
   const [expanded, setExpanded] = useState(false);
+  const [sortCol, setSortCol] = useState<SortCol>('district');
+  const [sortDesc, setSortDesc] = useState(false);
 
   const { data: pData, isLoading: pLoading } = usePendencyMatrix(year);
   const { data: dData, isLoading: dLoading } = useDisposalMatrix(year);
 
   const pRows: any[] = pData?.data?.rows ?? [];
   const dRows: any[] = dData?.data?.rows ?? [];
+  
+  const handleSort = (col: SortCol) => {
+    if (sortCol === col) {
+      setSortDesc(!sortDesc);
+    } else {
+      setSortCol(col);
+      setSortDesc(col !== 'district'); // default numeric to desc
+    }
+  };
+
+  const sortFn = (a: any, b: any) => {
+    const aVal = a[sortCol];
+    const bVal = b[sortCol];
+    if (aVal === bVal) return 0;
+    if (aVal == null) return 1;
+    if (bVal == null) return -1;
+    const cmp = aVal < bVal ? -1 : 1;
+    return sortDesc ? -cmp : cmp;
+  };
+
+  const sortedPRows = [...pRows].sort(sortFn);
+  const sortedDRows = [...dRows].sort(sortFn);
+
   const pTotals = pData?.data?.totals ?? {};
   const dTotals = dData?.data?.totals ?? {};
 
@@ -103,6 +129,23 @@ export const PendencyDisposalMatrixPage = () => {
     outline: active ? '1px solid rgba(99,102,241,0.4)' : '1px solid rgba(255,255,255,0.06)',
     transition: 'all 0.15s',
   });
+
+  const SortTh = ({ col, label, style = {} }: { col: SortCol, label: string, style?: React.CSSProperties }) => (
+    <th 
+      style={{ ...thS(style), cursor: 'pointer', userSelect: 'none' }}
+      onClick={() => handleSort(col)}
+      title={`Sort by ${label}`}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: '4px', justifyContent: style.textAlign === 'right' ? 'flex-end' : 'flex-start' }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+          {label}
+          <span style={{ fontSize: '9px', opacity: sortCol === col ? 1 : 0.3, color: sortCol === col ? '#818cf8' : '#64748b' }}>
+            {sortCol === col ? (sortDesc ? '▼' : '▲') : '⇅'}
+          </span>
+        </span>
+      </div>
+    </th>
+  );
 
   return (
     <Layout>
@@ -233,19 +276,19 @@ export const PendencyDisposalMatrixPage = () => {
             <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '700px' }}>
               <thead>
                 <tr>
-                  <th style={thS({ textAlign: 'left', width: '180px' })}>District</th>
-                  <th style={thS({ textAlign: 'right' })}>≤7 Days</th>
-                  <th style={thS({ textAlign: 'right' })}>8–15 Days</th>
-                  <th style={thS({ textAlign: 'right' })}>16–30 Days</th>
-                  <th style={thS({ textAlign: 'right' })}>&gt;30 Days</th>
+                  <SortTh col="district" label="District" style={{ textAlign: 'left', width: '180px' }} />
+                  <SortTh col="within7" label="≤7 Days" style={{ textAlign: 'right' }} />
+                  <SortTh col="within15" label="8–15 Days" style={{ textAlign: 'right' }} />
+                  <SortTh col="within30" label="16–30 Days" style={{ textAlign: 'right' }} />
+                  <SortTh col="over30" label=">30 Days" style={{ textAlign: 'right' }} />
                   {tab === 'pendency'
-                    ? <th style={thS({ textAlign: 'right', color: '#f87171' })}>Total Pending</th>
+                    ? <SortTh col="totalPending" label="Total Pending" style={{ textAlign: 'right', color: '#f87171' }} />
                     : <>
-                        <th style={thS({ textAlign: 'right', color: '#34d399' })}>Total Disposed</th>
-                        <th style={thS({ textAlign: 'right', color: '#a78bfa' })}>Avg Days</th>
+                        <SortTh col="totalDisposed" label="Total Disposed" style={{ textAlign: 'right', color: '#34d399' }} />
+                        <SortTh col="avgDisposalDays" label="Avg Days" style={{ textAlign: 'right', color: '#a78bfa' }} />
                       </>
                   }
-                  <th style={thS({ textAlign: 'right', color: '#94a3b8' })}>Total Received</th>
+                  <SortTh col="totalReceived" label="Total Received" style={{ textAlign: 'right', color: '#94a3b8' }} />
                 </tr>
               </thead>
               <tbody>
@@ -253,7 +296,7 @@ export const PendencyDisposalMatrixPage = () => {
                   <TableSkeleton cols={tab === 'pendency' ? 6 : 7} />
                 ) : tab === 'pendency' ? (
                   <>
-                    {pRows.map((r: any, i: number) => (
+                    {sortedPRows.map((r: any, i: number) => (
                       <tr key={i}
                         style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.01)' }}
                         onMouseEnter={e => (e.currentTarget.style.background = 'rgba(99,102,241,0.06)')}
@@ -289,7 +332,7 @@ export const PendencyDisposalMatrixPage = () => {
                   </>
                 ) : (
                   <>
-                    {dRows.map((r: any, i: number) => (
+                    {sortedDRows.map((r: any, i: number) => (
                       <tr key={i}
                         style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.01)' }}
                         onMouseEnter={e => (e.currentTarget.style.background = 'rgba(99,102,241,0.06)')}
@@ -397,19 +440,19 @@ export const PendencyDisposalMatrixPage = () => {
               <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '700px' }}>
                 <thead>
                   <tr>
-                    <th style={thS({ textAlign: 'left', width: '180px' })}>District</th>
-                    <th style={thS({ textAlign: 'right' })}>≤7 Days</th>
-                    <th style={thS({ textAlign: 'right' })}>8–15 Days</th>
-                    <th style={thS({ textAlign: 'right' })}>16–30 Days</th>
-                    <th style={thS({ textAlign: 'right' })}>&gt;30 Days</th>
+                    <SortTh col="district" label="District" style={{ textAlign: 'left', width: '180px' }} />
+                    <SortTh col="within7" label="≤7 Days" style={{ textAlign: 'right' }} />
+                    <SortTh col="within15" label="8–15 Days" style={{ textAlign: 'right' }} />
+                    <SortTh col="within30" label="16–30 Days" style={{ textAlign: 'right' }} />
+                    <SortTh col="over30" label=">30 Days" style={{ textAlign: 'right' }} />
                     {tab === 'pendency'
-                      ? <th style={thS({ textAlign: 'right', color: '#f87171' })}>Total Pending</th>
+                      ? <SortTh col="totalPending" label="Total Pending" style={{ textAlign: 'right', color: '#f87171' }} />
                       : <>
-                          <th style={thS({ textAlign: 'right', color: '#34d399' })}>Total Disposed</th>
-                          <th style={thS({ textAlign: 'right', color: '#a78bfa' })}>Avg Days</th>
+                          <SortTh col="totalDisposed" label="Total Disposed" style={{ textAlign: 'right', color: '#34d399' }} />
+                          <SortTh col="avgDisposalDays" label="Avg Days" style={{ textAlign: 'right', color: '#a78bfa' }} />
                         </>
                     }
-                    <th style={thS({ textAlign: 'right', color: '#94a3b8' })}>Total Received</th>
+                    <SortTh col="totalReceived" label="Total Received" style={{ textAlign: 'right', color: '#94a3b8' }} />
                   </tr>
                 </thead>
                 <tbody>
@@ -417,7 +460,7 @@ export const PendencyDisposalMatrixPage = () => {
                     <TableSkeleton cols={tab === 'pendency' ? 6 : 7} />
                   ) : tab === 'pendency' ? (
                     <>
-                      {pRows.map((r: any, i: number) => (
+                      {sortedPRows.map((r: any, i: number) => (
                         <tr key={i}
                           style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.01)' }}
                           onMouseEnter={e => (e.currentTarget.style.background = 'rgba(99,102,241,0.06)')}
@@ -452,7 +495,7 @@ export const PendencyDisposalMatrixPage = () => {
                     </>
                   ) : (
                     <>
-                      {dRows.map((r: any, i: number) => (
+                      {sortedDRows.map((r: any, i: number) => (
                         <tr key={i}
                           style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.01)' }}
                           onMouseEnter={e => (e.currentTarget.style.background = 'rgba(99,102,241,0.06)')}
