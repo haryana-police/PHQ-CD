@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Layout } from '@/components/layout/Layout';
 import { ChartCard } from '@/components/charts/ChartCard';
-import { getDistrictBarOptions, getDurationLineOptions, getYoYBarOptions, getPieOptions } from '@/components/charts/Charts';
+import { getDistrictBarOptions, getDurationLineOptions, getYoYBarOptions } from '@/components/charts/Charts';
 import { useDashboardSummary, useDistrictChart, useMonthWiseData } from '@/hooks/useData';
 import { Select } from '@/components/common/Select';
 
@@ -109,9 +109,8 @@ export const DashboardPage = () => {
         <div className="charts-grid">
           <ChartCard
             title={`District-wise · ${year}`}
-            option={getDistrictBarOptions(distRows)}
-            alternativeOptions={{ horizontal: getDistrictBarOptions(distRows, { horizontal: true }), grouped: getYoYBarOptions(distRows, year), pie: getPieOptions(distRows.map(d => ({ name: d.district, value: d.total }))) }}
-            defaultType="stacked"
+            option={getDistrictBarOptions(distRows, { horizontal: true })}
+            alternativeOptions={{ grouped: getYoYBarOptions(distRows, year) }}
             isLoading={dl}
             height="320px"
           />

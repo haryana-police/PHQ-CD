@@ -5,7 +5,7 @@ import { Layout } from '@/components/layout/Layout';
 import { ChartCard } from '@/components/charts/ChartCard';
 import { DataTable, Column } from '@/components/data/DataTable';
 import {
-  getPieOptions, getStackedBarOptions, getDistrictBarOptions,
+  getHorizontalSingleBarOptions, getGroupedBarOptions, getDistrictBarOptions,
   getYoYBarOptions,
 } from '@/components/charts/Charts';
 import { Select } from '@/components/common/Select';
@@ -219,14 +219,13 @@ export const ReportsPage = () => {
     prevTotal:Number(r.prevTotal ?? 0),
   }));
 
-  const stackedOpt   = getDistrictBarOptions(districtData);
   const horizontalOpt= getDistrictBarOptions(districtData, { horizontal: true });
   const yoyOpt       = getYoYBarOptions(districtData, activeYear);
-  const pieOpt       = getPieOptions(raw.map(r => ({
+  const horizontalSingleOpt = getHorizontalSingleBarOptions(raw.map(r => ({
     name:  String(r[tab.nameKey] ?? r.district ?? ''),
     value: Number(r.total ?? r.count ?? 0),
   })));
-  const stackedCatOpt= getStackedBarOptions(raw.map(r => ({
+  const groupedCatOpt= getGroupedBarOptions(raw.map(r => ({
     category: String(r[tab.nameKey] ?? ''),
     total:    Number(r.total ?? 0),
     pending:  Number(r.pending ?? 0),
@@ -236,13 +235,11 @@ export const ReportsPage = () => {
   const isDistrictType = type === 'district' || type === 'date-wise';
   const isPieType = type === 'mode-receipt' || type === 'status';
 
-  const primaryOption = isDistrictType ? stackedOpt : isPieType ? pieOpt : stackedCatOpt;
+  const primaryOption = isDistrictType ? horizontalOpt : isPieType ? horizontalSingleOpt : groupedCatOpt;
   const altOptions = isDistrictType
-    ? { horizontal: horizontalOpt, grouped: yoyOpt, pie: pieOpt }
-    : isPieType
-    ? { stacked: stackedCatOpt }
-    : { pie: pieOpt };
-  const defaultChartType = isDistrictType ? 'stacked' : isPieType ? 'pie' : 'stacked';
+    ? { grouped: yoyOpt }
+    : {};
+  const defaultChartType = isDistrictType ? 'horizontal' : isPieType ? 'horizontal' : 'grouped';
 
   return (
     <Layout>

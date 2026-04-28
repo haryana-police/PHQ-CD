@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Layout } from '@/components/layout/Layout';
 import { ChartCard } from '@/components/charts/ChartCard';
 import { DataTable, Column } from '@/components/data/DataTable';
-import { getPieOptions, getStackedBarOptions } from '@/components/charts/Charts';
+import { getHorizontalSingleBarOptions, getGroupedBarOptions } from '@/components/charts/Charts';
 import { Select } from '@/components/common/Select';
 
 const CY = new Date().getFullYear();
@@ -91,10 +91,10 @@ export const HighlightsPage = () => {
           {/* Charts */}
         <div className="charts-grid">
           <ChartCard title={`Top Categories · ${year}`} isLoading={hl}
-            option={getPieOptions(allTopRows.slice(0, 10).map(r => ({ name: r.name, value: r.count })))}
+            option={getHorizontalSingleBarOptions(allTopRows.slice(0, 10).map(r => ({ name: r.name, value: r.count })))}
             height="280px" />
           <ChartCard title={`Nature of Incidents · ${year}`} isLoading={nl}
-            option={getStackedBarOptions(allNatureRows.slice(0, 10).map(r => ({ category: r.name, total: r.total, pending: r.pending, disposed: r.disposed })))}
+            option={getGroupedBarOptions(allNatureRows.slice(0, 10).map(r => ({ category: r.name, total: r.total, pending: r.pending, disposed: r.disposed })))}
             height="280px" />
         </div>
 

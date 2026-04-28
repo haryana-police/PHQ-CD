@@ -239,8 +239,8 @@ export const getPieOptions = (data: { name: string; value: number }[]): EChartsO
   };
 };
 
-// ── 5. Horizontal Stacked Bar (categories) ────────────────────────────────────
-export const getStackedBarOptions = (
+// ── 5. Horizontal Grouped Bar (categories) ────────────────────────────────────
+export const getGroupedBarOptions = (
   data: { category: string; total: number; pending: number; disposed: number }[]
 ): EChartsOption => ({
   tooltip: { ...tooltip(), trigger: 'axis', axisPointer: { type: 'shadow' } },
@@ -249,8 +249,23 @@ export const getStackedBarOptions = (
   xAxis: { type: 'value', axisLabel: { color: COLORS.text, fontSize: 10 }, splitLine: { lineStyle: { color: COLORS.grid } }, axisLine: { show: false } },
   yAxis: { type: 'category', data: data.map(d => d.category), axisLabel: { color: COLORS.text, fontSize: 10 }, axisLine: { lineStyle: { color: 'rgba(255,255,255,0.1)' } }, axisTick: { show: false } },
   series: [
-    { name: 'Pending',  type: 'bar', stack: 'total', data: data.map(d => d.pending),  itemStyle: { color: COLORS.pending,  borderRadius: [0,0,0,0] }, barMaxWidth: 20, emphasis: { focus: 'series' } },
-    { name: 'Disposed', type: 'bar', stack: 'total', data: data.map(d => d.disposed), itemStyle: { color: COLORS.disposed, borderRadius: [0,3,3,0] }, barMaxWidth: 20, emphasis: { focus: 'series' } },
+    { name: 'Pending',  type: 'bar', data: data.map(d => d.pending),  itemStyle: { color: COLORS.pending,  borderRadius: [0,3,3,0] }, barMaxWidth: 20, emphasis: { focus: 'series' } },
+    { name: 'Disposed', type: 'bar', data: data.map(d => d.disposed), itemStyle: { color: COLORS.disposed, borderRadius: [0,3,3,0] }, barMaxWidth: 20, emphasis: { focus: 'series' } },
+  ],
+});
+
+export const getHorizontalSingleBarOptions = (data: { name: string; value: number }[]): EChartsOption => ({
+  tooltip: { ...tooltip(), trigger: 'axis', axisPointer: { type: 'shadow' } },
+  grid: { left: '2%', right: '6%', bottom: '10%', top: '4%', containLabel: true },
+  xAxis: { type: 'value', axisLabel: { color: COLORS.text, fontSize: 10 }, splitLine: { lineStyle: { color: COLORS.grid } }, axisLine: { show: false } },
+  yAxis: { type: 'category', data: data.map(d => d.name), axisLabel: { color: COLORS.text, fontSize: 10 }, axisLine: { lineStyle: { color: 'rgba(255,255,255,0.1)' } }, axisTick: { show: false } },
+  series: [
+    {
+      type: 'bar',
+      data: data.map(d => d.value),
+      itemStyle: { color: COLORS.primary, borderRadius: [0,3,3,0] },
+      barMaxWidth: 20,
+    },
   ],
 });
 

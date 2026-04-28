@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { BaseChart } from './Charts';
 import type { EChartsOption } from 'echarts';
 
-type ChartType = 'stacked' | 'grouped' | 'horizontal' | 'line' | 'pie';
+type ChartType = 'grouped' | 'horizontal' | 'line';
 
 interface ChartControl {
   id: ChartType;
@@ -23,11 +23,9 @@ interface ChartCardProps {
 }
 
 const CONTROLS: ChartControl[] = [
-  { id: 'stacked',    icon: '▦',  label: 'Stacked Bar' },
   { id: 'grouped',    icon: '⊞',  label: 'Comparison' },
   { id: 'horizontal', icon: '≡',  label: 'Horizontal' },
   { id: 'line',       icon: '∿',  label: 'Line Trend' },
-  { id: 'pie',        icon: '◉',  label: 'Donut' },
 ];
 
 const btnStyle = (active: boolean): React.CSSProperties => ({
@@ -53,7 +51,7 @@ export const ChartCard = ({
   height = '300px',
   expandedHeight = 'calc(100vh - 100px)',
   isLoading = false,
-  defaultType = 'stacked',
+  defaultType = 'horizontal',
 }: ChartCardProps) => {
   const [expanded, setExpanded] = useState(false);
   const [chartType, setChartType] = useState<ChartType>(defaultType);
