@@ -11,6 +11,7 @@ import WomenSafetyDetail from './pages/admin/WomenSafetyDetail';
 import CCTNSPage from './pages/admin/CCTNS';
 import ComplaintDetail from './pages/admin/ComplaintDetail';
 import ComplaintAdd from './pages/admin/ComplaintAdd';
+import PendencyDisposalMatrixPage from './pages/admin/PendencyDisposalMatrix';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -114,6 +115,14 @@ const App = () => {
             element={
               <ProtectedRoute>
                 <CCTNSPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/matrix"
+            element={
+              <ProtectedRoute>
+                <PendencyDisposalMatrixPage />
               </ProtectedRoute>
             }
           />

@@ -12,7 +12,7 @@ const PREVIEW_COUNT = 8;
 export const HighlightsPage = () => {
   const [showAllCategories, setShowAllCategories] = useState(false);
   const [showAllNature, setShowAllNature] = useState(false);
-  const [year, setYear] = useState(CY - 1);
+  const [year, setYear] = useState(CY);
   const YEARS = Array.from({ length: CY - 2014 + 1 }, (_, i) => CY - i);
 
   const { data: hd, isLoading: hl } = useQuery({
