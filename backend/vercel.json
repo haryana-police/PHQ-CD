@@ -20,7 +20,7 @@
   "crons": [
     {
       "path": "/api/cctns/cron-sync",
-      "schedule": "0 */4 * * *"
+      "schedule": "0 0 * * *"
     }
   ]
 }

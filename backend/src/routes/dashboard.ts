@@ -4,10 +4,104 @@ import { sendSuccess, sendError } from '../utils/response.js';
 import { authenticate } from '../middleware/auth.js';
 import { buildPrismaWhereClause } from '../utils/filters.js';
 
+const splitCsv = (value: unknown): string[] => {
+  if (!value || typeof value !== 'string') return [];
+  return value.split(',').map(v => v.trim()).filter(Boolean);
+};
+
+const buildCctnsWhereClause = (query: any) => {
+  const where: any = {};
+  const andClauses: any[] = [];
+
+  const districtName = query.district_name || query.districtName;
+  const complaintType = query.complaint_type || query.complaintType;
+
+  const districtFilters = splitCsv(districtName);
+  const typeFilters = splitCsv(complaintType);
+
+  if (districtFilters.length > 0) {
+    andClauses.push({ compCategory: { in: districtFilters } });
+  }
+  if (typeFilters.length > 0) {
+    andClauses.push({ compCategory: { in: typeFilters } });
+  }
+
+  const fromDate = query.from_date || query.fromDate;
+  const toDate = query.to_date || query.toDate;
+  if (fromDate || toDate) {
+    where.incidentDate = {};
+    if (fromDate) where.incidentDate.gte = new Date(fromDate as string);
+    if (toDate) where.incidentDate.lte = new Date(toDate as string);
+  }
+
+  if (andClauses.length === 1) {
+    Object.assign(where, andClauses[0]);
+  } else if (andClauses.length > 1) {
+    where.AND = andClauses;
+  }
+
+  return where;
+};
+
+const shouldUseCctnsData = async (query: any) => {
+  const source = String(query?.source || '').trim().toLowerCase();
+  if (source === 'cctns') return true;
+  if (source === 'complaint' || source === 'women_safety') return false;
+
+  const complaintWhere = buildPrismaWhereClause(query);
+  const complaintCount = await prisma.complaint.count({ where: complaintWhere });
+  if (complaintCount > 0) return false;
+
+  const cctnsWhere = buildCctnsWhereClause(query);
+  const cctnsCount = await prisma.cCTNSComplaint.count({ where: cctnsWhere });
+  return cctnsCount > 0;
+};
+
 export const dashboardRoutes = async (fastify: FastifyInstance) => {
   fastify.get('/dashboard/summary', {
     preHandler: [authenticate],
   }, async (request, reply) => {
+    if (await shouldUseCctnsData(request.query)) {
+      const cctnsWhere = buildCctnsWhereClause(request.query);
+      const totalReceived = await prisma.cCTNSComplaint.count({ where: cctnsWhere });
+
+      const now = new Date();
+      const fifteenDaysAgo = new Date(now.getTime() - 15 * 24 * 60 * 60 * 1000);
+      const oneMonthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      const twoMonthsAgo = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000);
+
+      const pending15 = await prisma.cCTNSComplaint.count({
+        where: {
+          ...cctnsWhere,
+          incidentDate: { ...(cctnsWhere.incidentDate || {}), lte: fifteenDaysAgo, gt: oneMonthAgo },
+        },
+      });
+
+      const pendingOver1 = await prisma.cCTNSComplaint.count({
+        where: {
+          ...cctnsWhere,
+          incidentDate: { ...(cctnsWhere.incidentDate || {}), lte: oneMonthAgo, gt: twoMonthsAgo },
+        },
+      });
+
+      const pendingOver2 = await prisma.cCTNSComplaint.count({
+        where: {
+          ...cctnsWhere,
+          incidentDate: { ...(cctnsWhere.incidentDate || {}), lte: twoMonthsAgo },
+        },
+      });
+
+      return sendSuccess(reply, {
+        totalReceived,
+        totalDisposed: 0,
+        totalPending: totalReceived,
+        pendingOverFifteenDays: pending15,
+        pendingOverOneMonth: pendingOver1,
+        pendingOverTwoMonths: pendingOver2,
+        avgDisposalTime: 0,
+      });
+    }
+
     const baseWhere = buildPrismaWhereClause(request.query);
 
     const totalReceived = await prisma.complaint.count({ where: baseWhere });
@@ -96,26 +190,48 @@ export const dashboardRoutes = async (fastify: FastifyInstance) => {
   fastify.get('/dashboard/district-wise', {
     preHandler: [authenticate],
   }, async (request, reply) => {
+    if (await shouldUseCctnsData(request.query)) {
+      const cctnsWhere = buildCctnsWhereClause(request.query);
+      const counts = await prisma.cCTNSComplaint.groupBy({
+        by: ['compCategory'],
+        where: cctnsWhere,
+        _count: { _all: true },
+      });
+
+      const data = counts.map(c => ({
+        district: c.compCategory || 'Unknown',
+        total: c._count._all,
+        pending: c._count._all,
+        disposed: 0,
+      }));
+
+      return sendSuccess(reply, data);
+    }
+
     const baseWhere = buildPrismaWhereClause(request.query);
-    const complaints = await prisma.complaint.findMany({ where: baseWhere });
+    const grouped = await prisma.complaint.groupBy({
+      by: ['addressDistrict', 'statusOfComplaint'],
+      where: baseWhere,
+      _count: { _all: true },
+    });
 
-    const districtMap = new Map();
+    const districtMap = new Map<string, { total: number; pending: number; disposed: number }>();
 
-    for (const comp of complaints) {
-      const districtName = comp.addressDistrict || 'Unknown';
-      const status = (comp.statusOfComplaint || '').toLowerCase();
+    for (const row of grouped) {
+      const districtName = row.addressDistrict || 'Unknown';
+      const status = (row.statusOfComplaint || '').toLowerCase();
       
       if (!districtMap.has(districtName)) {
         districtMap.set(districtName, { total: 0, pending: 0, disposed: 0 });
       }
       
-      const stats = districtMap.get(districtName);
-      stats.total++;
+      const stats = districtMap.get(districtName)!;
+      stats.total += row._count._all;
       
       if (status.includes('disposed')) {
-        stats.disposed++;
+        stats.disposed += row._count._all;
       } else if (status === '' || status.includes('pending')) {
-        stats.pending++;
+        stats.pending += row._count._all;
       }
     }
 
@@ -132,6 +248,42 @@ export const dashboardRoutes = async (fastify: FastifyInstance) => {
   fastify.get('/dashboard/duration-wise', {
     preHandler: [authenticate],
   }, async (request, reply) => {
+    if (await shouldUseCctnsData(request.query)) {
+      const cctnsWhere = buildCctnsWhereClause(request.query);
+      const complaints = await prisma.cCTNSComplaint.findMany({
+        where: cctnsWhere,
+        select: { incidentDate: true },
+      });
+
+      const durationMap = new Map<string, { total: number; pending: number; disposed: number; sortKey: number }>();
+
+      for (const comp of complaints) {
+        if (!comp.incidentDate) continue;
+
+        const date = new Date(comp.incidentDate);
+        const monthYear = `${date.toLocaleString('default', { month: 'short' })} ${date.getFullYear()}`;
+
+        if (!durationMap.has(monthYear)) {
+          durationMap.set(monthYear, { total: 0, pending: 0, disposed: 0, sortKey: date.getTime() });
+        }
+
+        const stats = durationMap.get(monthYear)!;
+        stats.total++;
+        stats.pending++;
+      }
+
+      const data = Array.from(durationMap.entries())
+        .sort((a, b) => a[1].sortKey - b[1].sortKey)
+        .map(([duration, stats]) => ({
+          duration,
+          total: stats.total,
+          pending: stats.pending,
+          disposed: stats.disposed,
+        }));
+
+      return sendSuccess(reply, data);
+    }
+
     const baseWhere = buildPrismaWhereClause(request.query);
     const complaints = await prisma.complaint.findMany({ where: baseWhere });
 
@@ -243,6 +395,41 @@ export const dashboardRoutes = async (fastify: FastifyInstance) => {
   fastify.get('/dashboard/ageing-matrix', {
     preHandler: [authenticate],
   }, async (request, reply) => {
+    if (await shouldUseCctnsData(request.query)) {
+      const cctnsWhere = buildCctnsWhereClause(request.query);
+      const complaints = await prisma.cCTNSComplaint.findMany({
+        where: {
+          ...cctnsWhere,
+          incidentDate: { ...(cctnsWhere.incidentDate || {}), not: null },
+        },
+        select: { compCategory: true, incidentDate: true },
+      });
+
+      const now = new Date().getTime();
+      const matrixMap = new Map<string, { u7: number; u15: number; u30: number; o30: number }>();
+
+      for (const comp of complaints) {
+        const dist = comp.compCategory || 'Unknown';
+        if (!matrixMap.has(dist)) {
+          matrixMap.set(dist, { u7: 0, u15: 0, u30: 0, o30: 0 });
+        }
+        const stats = matrixMap.get(dist)!;
+        const daysPending = (now - comp.incidentDate!.getTime()) / (1000 * 60 * 60 * 24);
+
+        if (daysPending < 7) stats.u7++;
+        else if (daysPending < 15) stats.u15++;
+        else if (daysPending < 30) stats.u30++;
+        else stats.o30++;
+      }
+
+      const data = Array.from(matrixMap.entries()).map(([district, stats]) => ({
+        district,
+        ...stats
+      }));
+
+      return sendSuccess(reply, data);
+    }
+
     const baseWhere = buildPrismaWhereClause(request.query);
     const complaints = await prisma.complaint.findMany({
       where: {
@@ -285,6 +472,10 @@ export const dashboardRoutes = async (fastify: FastifyInstance) => {
   fastify.get('/dashboard/disposal-matrix', {
     preHandler: [authenticate],
   }, async (request, reply) => {
+    if (await shouldUseCctnsData(request.query)) {
+      return sendSuccess(reply, []);
+    }
+
     const baseWhere = buildPrismaWhereClause(request.query);
     const complaints = await prisma.complaint.findMany({
       where: {
@@ -417,26 +608,47 @@ export const dashboardRoutes = async (fastify: FastifyInstance) => {
   fastify.get('/dashboard/category-wise', {
     preHandler: [authenticate],
   }, async (request, reply) => {
+    if (await shouldUseCctnsData(request.query)) {
+      const cctnsWhere = buildCctnsWhereClause(request.query);
+      const grouped = await prisma.cCTNSComplaint.groupBy({
+        by: ['compCategory'],
+        where: cctnsWhere,
+        _count: { _all: true },
+      });
+
+      const data = grouped
+        .map((row) => ({
+          category: row.compCategory || 'Uncategorized',
+          total: row._count._all,
+          pending: row._count._all,
+          disposed: 0,
+        }))
+        .sort((a, b) => b.total - a.total);
+
+      return sendSuccess(reply, data);
+    }
+
     const baseWhere = buildPrismaWhereClause(request.query);
-    const complaints = await prisma.complaint.findMany({
+    const grouped = await prisma.complaint.groupBy({
+      by: ['typeOfComplaint', 'statusOfComplaint'],
       where: baseWhere,
-      select: { typeOfComplaint: true, statusOfComplaint: true }
+      _count: { _all: true },
     });
 
     const categoryMap = new Map<string, { total: number; pending: number; disposed: number }>();
 
-    for (const comp of complaints) {
-      const cat = comp.typeOfComplaint || 'Uncategorized';
+    for (const row of grouped) {
+      const cat = row.typeOfComplaint || 'Uncategorized';
       if (!categoryMap.has(cat)) {
         categoryMap.set(cat, { total: 0, pending: 0, disposed: 0 });
       }
       
       const stats = categoryMap.get(cat)!;
-      stats.total++;
+      stats.total += row._count._all;
       
-      const status = (comp.statusOfComplaint || '').toLowerCase();
-      if (status.includes('disposed')) stats.disposed++;
-      else if (status === '' || status.includes('pending')) stats.pending++;
+      const status = (row.statusOfComplaint || '').toLowerCase();
+      if (status.includes('disposed')) stats.disposed += row._count._all;
+      else if (status === '' || status.includes('pending')) stats.pending += row._count._all;
     }
 
     const data = Array.from(categoryMap.entries()).map(([category, stats]) => ({

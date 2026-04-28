@@ -8,8 +8,10 @@ export const cctnsRoutes = async (fastify: FastifyInstance) => {
     preHandler: [authenticate],
   }, async (request, reply) => {
     // Limit to latest 500 records to prevent hanging
+    // Using id: 'desc' instead of firDate: 'desc' because firDate is not indexed
+    // and ordering by it causes a full table sort which hangs the portal
     const records = await prisma.cCTNSComplaint.findMany({ 
-      orderBy: { firDate: 'desc' },
+      orderBy: { id: 'desc' },
       take: 500
     });
     return sendSuccess(reply, records);

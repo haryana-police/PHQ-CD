@@ -1,7 +1,10 @@
 import axios, { AxiosError } from 'axios';
 import type { ApiResponse, User } from '../types';
 
-const API_URL = (import.meta as any).env.VITE_API_URL || '/api';
+const rawApiUrl = ((import.meta as any).env.VITE_API_URL as string | undefined)?.trim();
+const API_URL = rawApiUrl
+  ? rawApiUrl.replace(/\/+$/, '').replace(/\/api$/i, '')
+  : '';
 
 const api = axios.create({
   baseURL: API_URL,

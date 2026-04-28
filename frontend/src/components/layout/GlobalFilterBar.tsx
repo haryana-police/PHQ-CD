@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useFilters } from '../../contexts/FilterContext';
 import { useQuery } from '@tanstack/react-query';
-import { dashboardApi } from '../../services/api';
+import { referenceApi } from '../../services/api';
 
 // Reusable multi-select dropdown component
 const MultiSelectDropdown = ({ 
@@ -127,13 +127,13 @@ export const GlobalFilterBar = () => {
   // Fetch unique districts and categories for dropdowns
   const { data: districts } = useQuery({
     queryKey: ['filter-districts'],
-    queryFn: () => dashboardApi.getDistrictWise(),
+    queryFn: () => referenceApi.districts(),
     staleTime: 5 * 60 * 1000
   });
 
   const { data: categories } = useQuery({
     queryKey: ['filter-categories'],
-    queryFn: () => dashboardApi.getCategoryWise(),
+    queryFn: () => referenceApi.complaintType(),
     staleTime: 5 * 60 * 1000
   });
 
@@ -185,7 +185,7 @@ export const GlobalFilterBar = () => {
           allLabel="All Districts"
           allChecked={selectedDistricts.length === 0}
           onAllClick={() => setFilter('districtName', '')}
-          items={(districts?.data || []).map((d: any) => d.district)}
+          items={(districts?.data || []).map((d: any) => d.name).filter(Boolean)}
           selectedItems={selectedDistricts}
           onToggleItem={toggleDistrict}
         />
@@ -200,7 +200,7 @@ export const GlobalFilterBar = () => {
           allLabel="All Types"
           allChecked={selectedTypes.length === 0}
           onAllClick={() => setFilter('complaintType', '')}
-          items={(categories?.data || []).map((c: any) => c.category)}
+          items={(categories?.data || []).filter(Boolean)}
           selectedItems={selectedTypes}
           onToggleItem={toggleType}
         />
