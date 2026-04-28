@@ -137,10 +137,12 @@ export const PendencyDisposalMatrixPage = () => {
       title={`Sort by ${label}`}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: '4px', justifyContent: style.textAlign === 'right' ? 'flex-end' : 'flex-start' }}>
-        {label}
-        {sortCol === col && (
-          <span style={{ fontSize: '10px', color: '#818cf8', display: 'flex' }}>{sortDesc ? '↓' : '↑'}</span>
-        )}
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+          {label}
+          <span style={{ fontSize: '9px', opacity: sortCol === col ? 1 : 0.3, color: sortCol === col ? '#818cf8' : '#64748b' }}>
+            {sortCol === col ? (sortDesc ? '▼' : '▲') : '⇅'}
+          </span>
+        </span>
       </div>
     </th>
   );
