@@ -68,7 +68,7 @@ function TableSkeleton({ cols }: { cols: number }) {
 
 // ═══════════════════════════════════════════════════════════════════════════
 export const PendencyDisposalMatrixPage = () => {
-  const [year, setYear] = useState(CY - 1);
+  const [year, setYear] = useState(CY);
   const [tab, setTab] = useState<Tab>('pendency');
 
   const { data: pData, isLoading: pLoading } = usePendencyMatrix(year);

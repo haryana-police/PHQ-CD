@@ -12,7 +12,7 @@ import { Select } from '@/components/common/Select';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const CY = new Date().getFullYear();           // 2026
-const DEFAULT_YEAR = CY - 1;                   // 2025 — last complete year as smart default
+const DEFAULT_YEAR = CY;                       // Current year as default
 const YEARS = Array.from({ length: CY - 2014 + 1 }, (_, i) => CY - i);
 
 const TABS = [

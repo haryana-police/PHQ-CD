@@ -6,7 +6,7 @@ import { useDashboardSummary, useDistrictChart, useMonthWiseData } from '@/hooks
 import { Select } from '@/components/common/Select';
 
 const CY = new Date().getFullYear();
-const DEFAULT_YEAR = CY - 1;
+const DEFAULT_YEAR = CY;
 const YEARS = Array.from({ length: CY - 2014 + 1 }, (_, i) => CY - i);
 
 // ── KPI Card ──────────────────────────────────────────────────────────────
