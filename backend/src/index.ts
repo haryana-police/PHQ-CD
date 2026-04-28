@@ -18,6 +18,7 @@ import { cctnsRoutes } from './routes/cctns.js';
 import { cctnsSyncRoutes } from './routes/cctns-sync.js';
 import { importExportRoutes } from './routes/import-export.js';
 import { governmentRoutes } from './routes/government.js';
+import { matrixRoutes } from './routes/matrix.js';
 import { seedDistrictMaster } from './config/seed.js';
 
 const fastify = Fastify({ logger: true });
@@ -41,6 +42,7 @@ async function main() {
   await fastify.register(cctnsSyncRoutes, { prefix: '/api' });
   await fastify.register(importExportRoutes, { prefix: '/api' });
   await fastify.register(governmentRoutes, { prefix: '/api' });
+  await fastify.register(matrixRoutes, { prefix: '/api' });
 
   fastify.get('/api/health', async () => {
     return { status: 'ok', timestamp: new Date().toISOString() };

@@ -219,3 +219,31 @@ export const useCctns = () => {
     staleTime: 5 * 60 * 1000,
   });
 };
+
+export const usePendencyMatrix = (year?: number) => {
+  return useQuery({
+    queryKey: ['matrix', 'pendency', year],
+    queryFn: async () => {
+      const params = year ? `?year=${year}` : '';
+      const response = await fetch(`/api/matrix/pendency${params}`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+      });
+      return response.json();
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+};
+
+export const useDisposalMatrix = (year?: number) => {
+  return useQuery({
+    queryKey: ['matrix', 'disposal', year],
+    queryFn: async () => {
+      const params = year ? `?year=${year}` : '';
+      const response = await fetch(`/api/matrix/disposal${params}`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+      });
+      return response.json();
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+};
