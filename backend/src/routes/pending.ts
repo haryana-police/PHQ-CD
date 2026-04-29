@@ -148,7 +148,7 @@ export const pendingRoutes = async (fastify: FastifyInstance) => {
     const { branch } = request.params as { branch: string };
     const dm = await prisma.district_Master.findFirst({ where: { DistrictName: branch } });
     const complaints = await prisma.complaint.findMany({
-      where: { resolvedDistrictId: dm?.id ?? BigInt(-1), OR: PENDING_WHERE_PRISMA } as any,
+      where: { resolvedDistrictId: dm?.id ?? BigInt(-1), OR: PENDING_WHERE_PRISMA },
       orderBy: { complRegDt: 'asc' },
     });
     return sendSuccess(reply, complaints);
@@ -163,7 +163,7 @@ export const pendingRoutes = async (fastify: FastifyInstance) => {
         resolvedDistrictId: dm?.id ?? BigInt(-1),
         complRegDt: { gt: new Date(now.getTime() - 30 * 864e5), lte: new Date(now.getTime() - 15 * 864e5) },
         OR: PENDING_WHERE_PRISMA,
-      } as any,
+      },
       orderBy: { complRegDt: 'asc' },
     });
     return sendSuccess(reply, complaints);
@@ -178,7 +178,7 @@ export const pendingRoutes = async (fastify: FastifyInstance) => {
         resolvedDistrictId: dm?.id ?? BigInt(-1),
         complRegDt: { gt: new Date(now.getTime() - 60 * 864e5), lte: new Date(now.getTime() - 30 * 864e5) },
         OR: PENDING_WHERE_PRISMA,
-      } as any,
+      },
       orderBy: { complRegDt: 'asc' },
     });
     return sendSuccess(reply, complaints);
@@ -192,7 +192,7 @@ export const pendingRoutes = async (fastify: FastifyInstance) => {
         resolvedDistrictId: dm?.id ?? BigInt(-1),
         complRegDt: { lte: new Date(Date.now() - 60 * 864e5) },
         OR: PENDING_WHERE_PRISMA,
-      } as any,
+      },
       orderBy: { complRegDt: 'asc' },
     });
     return sendSuccess(reply, complaints);
@@ -201,7 +201,7 @@ export const pendingRoutes = async (fastify: FastifyInstance) => {
   // ── List of active police district branches (from District_Master — no hardcoded list)
   fastify.get('/pending/branches', { preHandler: [authenticate] }, async (_request, reply) => {
     const rows = await prisma.district_Master.findMany({
-      where: { isPoliceDistrict: true } as any,
+      where: { isPoliceDistrict: true },
       orderBy: { DistrictName: 'asc' },
       select: { DistrictName: true },
     });

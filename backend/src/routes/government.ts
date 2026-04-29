@@ -68,8 +68,8 @@ export const governmentRoutes = async (fastify: FastifyInstance) => {
         await prisma.district_Master.upsert({
           where: { id: BigInt(d.ID) },
           // On update: keep existing isPoliceDistrict unless it's a known bureau unit
-          update: { DistrictName: d.Name, isPoliceDistrict } as any,
-          create: { id: BigInt(d.ID), DistrictName: d.Name, isPoliceDistrict } as any,
+          update: { DistrictName: d.Name, isPoliceDistrict },
+          create: { id: BigInt(d.ID), DistrictName: d.Name, isPoliceDistrict },
         });
       }
 
@@ -134,7 +134,7 @@ export const governmentRoutes = async (fastify: FastifyInstance) => {
   fastify.post('/gov/police-stations/sync-all', { preHandler: [authenticate] }, async (_request, reply) => {
     try {
       const districts = await prisma.district_Master.findMany({
-        where: { isPoliceDistrict: true } as any,
+        where: { isPoliceDistrict: true },
         orderBy: { DistrictName: 'asc' },
       });
 
@@ -226,8 +226,8 @@ export const governmentRoutes = async (fastify: FastifyInstance) => {
           const isPoliceDistrict = !NON_DISTRICT_NAMES.has(d.Name);
           await prisma.district_Master.upsert({
             where: { id: BigInt(d.ID) },
-            update: { DistrictName: d.Name, isPoliceDistrict } as any,
-            create: { id: BigInt(d.ID), DistrictName: d.Name, isPoliceDistrict } as any,
+            update: { DistrictName: d.Name, isPoliceDistrict },
+            create: { id: BigInt(d.ID), DistrictName: d.Name, isPoliceDistrict },
           });
         }
         results.districts = districtData.DropDownDTO?.length || 0;
