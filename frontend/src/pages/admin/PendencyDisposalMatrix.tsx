@@ -3,6 +3,8 @@ import { createPortal } from 'react-dom';
 import { Layout } from '@/components/layout/Layout';
 import { usePendencyMatrix, useDisposalMatrix } from '@/hooks/useData';
 import { GlobalFilterBar } from '@/components/common/GlobalFilterBar';
+import { Select } from '@/components/common/Select';
+
 
 const CY = new Date().getFullYear();
 const YEARS = Array.from({ length: CY - 2014 + 1 }, (_, i) => CY - i);
@@ -177,22 +179,14 @@ export const PendencyDisposalMatrixPage = () => {
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <span style={{ fontSize: '12px', color: '#475569' }}>Year:</span>
-            <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
-              <select
-                value={year}
-                onChange={e => setYear(Number(e.target.value))}
-                style={{
-                  appearance: 'none', padding: '7px 32px 7px 12px', borderRadius: '8px',
-                  background: 'rgba(15,23,42,0.85)', color: '#e2e8f0',
-                  border: '1px solid rgba(255,255,255,0.1)', fontSize: '13px',
-                  fontWeight: 600, cursor: 'pointer', outline: 'none',
-                }}
-              >
-                {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
-              </select>
-              <svg style={{ position: 'absolute', right: '10px', pointerEvents: 'none', color: '#64748b' }} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="6 9 12 15 18 9" /></svg>
-            </div>
+            <Select
+              value={year}
+              onChange={v => setYear(Number(v))}
+              options={YEARS.map(y => ({ value: y, label: y }))}
+              width="90px"
+            />
           </div>
+
         </div>
 
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', alignItems: 'center', marginBottom: '18px' }}>

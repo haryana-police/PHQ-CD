@@ -3,7 +3,9 @@ import { useQuery } from '@tanstack/react-query';
 import { Layout } from '@/components/layout/Layout';
 import { ChartCard } from '@/components/charts/ChartCard';
 import { DataTable, Column } from '@/components/data/DataTable';
-import { getHorizontalSingleBarOptions, getGroupedBarOptions, getPieOptions, getDistrictBarOptions, COLORS } from '@/components/charts/Charts';
+import { getHorizontalSingleBarOptions, getGroupedBarOptions, getYoYBarOptions } from '@/components/charts/Charts';
+
+
 
 import { Select } from '@/components/common/Select';
 import { GlobalFilterBar } from '@/components/common/GlobalFilterBar';
@@ -66,6 +68,24 @@ export const HighlightsPage = () => {
     staleTime: 5 * 60 * 1000,
   });
 
+  // Previous year — same district/source/type filters but always year-1 (for YoY comparison)
+  const prevFilters = useMemo(() => ({ ...filters, year: year - 1, fromDate: undefined, toDate: undefined }), [filters, year]);
+  const buildPrevQS = () => {
+    const p = new URLSearchParams({ year: String(year - 1) });
+    if (districtFilter.length > 0)      p.set('district',      districtFilter.join(','));
+    if (sourceFilter.length > 0)        p.set('source',        sourceFilter.join(','));
+    if (complaintTypeFilter.length > 0) p.set('complaintType', complaintTypeFilter.join(','));
+    return p.toString();
+  };
+  const { data: hdPrev } = useQuery({
+    queryKey: ['reports', 'highlights', prevFilters],
+    queryFn: async () => {
+      const r = await fetch(`/api/reports/highlights?${buildPrevQS()}`, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
+      return r.json();
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
   const { data: nd, isLoading: nl } = useQuery({
     queryKey: ['reports', 'nature', filters],
     queryFn: async () => {
@@ -75,8 +95,26 @@ export const HighlightsPage = () => {
     staleTime: 5 * 60 * 1000,
   });
 
-  const highlights = (hd?.data?.rows ?? (Array.isArray(hd?.data) ? hd?.data : [])) as Record<string, unknown>[];
-  const natures    = (nd?.data?.rows ?? (Array.isArray(nd?.data) ? nd?.data : [])) as Record<string, unknown>[];
+  const ndPrevFilters = useMemo(() => ({ ...filters, year: year - 1, fromDate: undefined, toDate: undefined, key: 'nature-prev' }), [filters, year]);
+  const { data: ndPrev } = useQuery({
+    queryKey: ['reports', 'nature', ndPrevFilters],
+    queryFn: async () => {
+      const r = await fetch(`/api/reports/nature-incident?${buildPrevQS()}`, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
+      return r.json();
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
+
+
+  const highlights      = (hd?.data?.rows    ?? (Array.isArray(hd?.data)    ? hd?.data    : [])) as Record<string, unknown>[];
+  const natures         = (nd?.data?.rows    ?? (Array.isArray(nd?.data)    ? nd?.data    : [])) as Record<string, unknown>[];
+  const highlightsPrev  = (hdPrev?.data?.rows ?? (Array.isArray(hdPrev?.data) ? hdPrev?.data : [])) as Record<string, unknown>[];
+  const naturesPrev     = (ndPrev?.data?.rows  ?? (Array.isArray(ndPrev?.data)  ? ndPrev?.data  : [])) as Record<string, unknown>[];
+
+  // Lookup maps: category/nature name → prev year count/total
+  const prevCatMap  = Object.fromEntries(highlightsPrev.map(r => [String(r.category), Number(r.count  || 0)]));
+  const prevNatMap  = Object.fromEntries(naturesPrev.map(r   => [String(r.natureOfIncident), Number(r.total || 0)]));
 
 
   const allTopRows = highlights.map((r, i) => ({
@@ -207,36 +245,36 @@ export const HighlightsPage = () => {
           {/* Charts */}
         <div className="charts-grid">
           <ChartCard
-            title={`Top Categories · ${year}`}
+            title={`Top Categories · ${year} vs ${year - 1}`}
             isLoading={hl}
             height="300px"
             defaultType="horizontal"
             option={getHorizontalSingleBarOptions(filteredTopRows.map(r => ({ name: r.name, value: r.count })))}
             alternativeOptions={{
-              grouped: {
-                tooltip: { trigger: 'axis' as const, backgroundColor: '#0f172a', borderColor: 'rgba(255,255,255,0.08)', textStyle: { color: '#e2e8f0', fontSize: 12 }, extraCssText: 'border-radius:8px;' },
-                legend: { data: ['Count'], bottom: 4, textStyle: { color: '#94a3b8', fontSize: 11 } },
-                grid: { left: '2%', right: '2%', bottom: '14%', top: '4%', containLabel: true },
-                xAxis: { type: 'category' as const, data: filteredTopRows.map(r => r.name), axisLabel: { rotate: 35, fontSize: 10, color: '#94a3b8', interval: 0 }, axisLine: { lineStyle: { color: 'rgba(255,255,255,0.1)' } }, axisTick: { show: false } },
-                yAxis: { type: 'value' as const, axisLabel: { color: '#94a3b8', fontSize: 10 }, splitLine: { lineStyle: { color: 'rgba(255,255,255,0.05)' } }, axisLine: { show: false } },
-                series: [{ name: 'Count', type: 'bar' as const, data: filteredTopRows.map(r => r.count), itemStyle: { color: COLORS.primary, borderRadius: [4,4,0,0] }, barMaxWidth: 32, emphasis: { focus: 'series' as const } }],
-              },
-              pie: getPieOptions(filteredTopRows.slice(0, 10).map(r => ({ name: r.name, value: r.count }))),
+              grouped: getYoYBarOptions(
+                filteredTopRows.map(r => ({
+                  district: r.name,
+                  total:     r.count,
+                  prevTotal: prevCatMap[r.name] ?? 0,
+                })),
+                year
+              ),
             }}
           />
           <ChartCard
-            title={`Nature of Incidents · ${year}`}
+            title={`Nature of Incidents · ${year} vs ${year - 1}`}
             isLoading={nl}
             height="300px"
             defaultType="grouped"
             option={getGroupedBarOptions(filteredNatureRows.map(r => ({ category: r.name, total: r.total, pending: r.pending, disposed: r.disposed })))}
             alternativeOptions={{
-              horizontal: getDistrictBarOptions(
-                filteredNatureRows.map(r => ({ district: r.name, total: r.total, pending: r.pending, disposed: r.disposed })),
-                { horizontal: true }
-              ),
-              pie: getPieOptions(
-                filteredNatureRows.slice(0, 10).map(r => ({ name: r.name, value: r.total }))
+              horizontal: getYoYBarOptions(
+                filteredNatureRows.map(r => ({
+                  district:  r.name,
+                  total:     r.total,
+                  prevTotal: prevNatMap[r.name] ?? 0,
+                })),
+                year
               ),
             }}
             sortOptions={HIGHLIGHTS_SORT_OPTIONS}

@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { BaseChart } from './Charts';
 import type { EChartsOption } from 'echarts';
 
-type ChartType = 'grouped' | 'horizontal' | 'line' | 'pie';
+type ChartType = 'grouped' | 'horizontal' | 'line';
 
 interface ChartControl {
   id: ChartType;
@@ -29,7 +29,6 @@ const CONTROLS: ChartControl[] = [
   { id: 'grouped',    icon: '⊞',  label: 'Comparison' },
   { id: 'horizontal', icon: '≡',  label: 'Horizontal' },
   { id: 'line',       icon: '∿',  label: 'Line Trend' },
-  { id: 'pie',        icon: '◑',  label: 'Pie / Donut' },
 ];
 
 const btnStyle = (active: boolean): React.CSSProperties => ({
