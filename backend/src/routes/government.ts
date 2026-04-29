@@ -251,4 +251,53 @@ export const governmentRoutes = async (fastify: FastifyInstance) => {
       return sendError(reply, 'Sync failed');
     }
   });
+
+  /**
+   * GET /api/gov/sync-reference
+   * Refreshes tb_received_from (complaint sources) and tb_nature_complaints (types)
+   * from live Complaint table distinct values. Run after each CCTNS sync.
+   */
+  fastify.get('/gov/sync-reference', { preHandler: [authenticate] }, async (_request, reply) => {
+    try {
+      // Upsert all distinct complaintSource values into tb_received_from
+      const [sources, types] = await Promise.all([
+        prisma.$queryRaw<{ val: string }[]>`
+          SELECT DISTINCT "complaintSource" AS val FROM "Complaint"
+          WHERE "complaintSource" IS NOT NULL AND "complaintSource" <> ''`,
+        prisma.$queryRaw<{ val: string }[]>`
+          SELECT DISTINCT "typeOfComplaint" AS val FROM "Complaint"
+          WHERE "typeOfComplaint" IS NOT NULL AND "typeOfComplaint" <> ''`,
+      ]);
+
+      // Insert new sources (skip existing by name match)
+      for (const { val } of sources) {
+        await prisma.$executeRaw`
+          INSERT INTO "tb_received_from" ("recieved_from")
+          VALUES (${val})
+          ON CONFLICT DO NOTHING`;
+      }
+
+      // Insert new types
+      for (const { val } of types) {
+        await prisma.$executeRaw`
+          INSERT INTO "tb_nature_complaints" ("nature_complaints")
+          VALUES (${val})
+          ON CONFLICT DO NOTHING`;
+      }
+
+      const [srcCount, typeCount] = await Promise.all([
+        prisma.$queryRaw<[{ c: bigint }]>`SELECT COUNT(*) AS c FROM "tb_received_from"`,
+        prisma.$queryRaw<[{ c: bigint }]>`SELECT COUNT(*) AS c FROM "tb_nature_complaints"`,
+      ]);
+
+      return sendSuccess(reply, {
+        message: 'Reference tables synced',
+        sources: Number(srcCount[0].c),
+        types:   Number(typeCount[0].c),
+      });
+    } catch (error) {
+      console.error('[gov/sync-reference] error:', error);
+      return sendError(reply, 'Failed to sync reference tables');
+    }
+  });
 };
