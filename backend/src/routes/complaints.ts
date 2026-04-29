@@ -17,21 +17,10 @@ function setCached(key: string, data: unknown) {
   cache.set(key, { data, expiresAt: Date.now() + CACHE_TTL_MS });
 }
 
-/**
- * Official 22 Haryana police districts — mirrors the same constant in dashboard.ts.
- * Complaints are fetched per police-office from the Haryana Police API; "addressDistrict"
- * in the Complaint table maps to the HANDLING police district (not complainant's home address).
- * We restrict dropdowns to these 22 to match what the chart/summary queries actually show.
- */
-const HARYANA_DISTRICTS = [
-  'AMBALA','BHIWANI','CHARKHI DADRI','FARIDABAD','FATEHABAD',
-  'GURUGRAM','HISAR','JHAJJAR','JIND','KAITHAL','KARNAL',
-  'KURUKSHETRA','MAHENDERGARH','NUH','PALWAL','PANCHKULA',
-  'PANIPAT','REWARI','ROHTAK','SIRSA','SONIPAT','YAMUNA NAGAR',
-].sort();
+
 
 export const complaintRoutes = async (fastify: FastifyInstance) => {
-  // ── Distinct filter options (fast raw SQL SELECT DISTINCT + cached)
+  // ── Distinct filter options — districts come from District_Master (DB-driven, not hardcoded)
   fastify.get('/complaints/filter-options', {
     preHandler: [authenticate],
   }, async (_request, reply) => {
@@ -40,10 +29,14 @@ export const complaintRoutes = async (fastify: FastifyInstance) => {
     if (cached) return sendSuccess(reply, cached);
 
     try {
-      // District list: use the authoritative 22 Haryana police districts (same as chart queries).
-      // We don't SELECT DISTINCT for districts because that returns non-Haryana values
-      // (NEW DELHI, ALWAR, CHANDIGARH etc. — forwarded complaints) which pollute the dropdown.
-      const [sourceRows, typeRows, statusRows] = await Promise.all([
+      // Districts: from District_Master where isPoliceDistrict = true (includes HANSI, DABWALI, etc.)
+      // Source/Type/Status: distinct values from Complaint table
+      const [districtRows, sourceRows, typeRows, statusRows] = await Promise.all([
+        prisma.$queryRaw<{ val: string }[]>`
+          SELECT "DistrictName" AS val
+          FROM "District_Master"
+          WHERE "isPoliceDistrict" = true
+          ORDER BY val`,
         prisma.$queryRaw<{ val: string }[]>`
           SELECT DISTINCT "complaintSource" AS val
           FROM "Complaint"
@@ -62,11 +55,10 @@ export const complaintRoutes = async (fastify: FastifyInstance) => {
       ]);
 
       const result = {
-        // Authoritative 22 Haryana police-district list — consistent with all chart data
-        districts: HARYANA_DISTRICTS,
-        sources: sourceRows.map(r => r.val),
-        types: typeRows.map(r => r.val),
-        statuses: statusRows.map(r => r.val),
+        districts: districtRows.map(r => r.val),   // DB-driven from Haryana Police API
+        sources:   sourceRows.map(r => r.val),
+        types:     typeRows.map(r => r.val),
+        statuses:  statusRows.map(r => r.val),
       };
 
       setCached(CACHE_KEY, result);
@@ -112,9 +104,14 @@ export const complaintRoutes = async (fastify: FastifyInstance) => {
       }
 
       if (district) {
-        const districts = district.split(',').map(d => d.trim()).filter(Boolean);
-        if (districts.length === 1) where.addressDistrict = districts[0];
-        else where.addressDistrict = { in: districts };
+        // Resolve district names → resolvedDistrictId via District_Master
+        const districtNames = district.split(',').map((d: string) => d.trim()).filter(Boolean);
+        const dmRows = await prisma.$queryRaw<{ id: bigint }[]>`
+          SELECT id FROM "District_Master"
+          WHERE "DistrictName" = ANY(${districtNames}::text[]) AND "isPoliceDistrict" = true`;
+        const ids = dmRows.map(r => r.id);
+        if (ids.length === 1) where.resolvedDistrictId = ids[0];
+        else if (ids.length > 1) where.resolvedDistrictId = { in: ids };
       }
 
       if (source) {

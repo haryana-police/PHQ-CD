@@ -62,8 +62,19 @@ function str(val: unknown): string | null {
 }
 
 function mapRowToComplaint(row: CctnsRow) {
+  const complRegNum = str(row.COMPL_REG_NUM);
+
+  // Derive the police-district ID from the 5-digit prefix of complRegNum.
+  // The Haryana Police API encodes District_Master.id as the first 5 digits.
+  // e.g. "1322713227..." → prefix 5 = 13227 = GURUGRAM
+  let resolvedDistrictId: bigint | null = null;
+  if (complRegNum && complRegNum.length >= 5 && /^[0-9]/.test(complRegNum)) {
+    try { resolvedDistrictId = BigInt(complRegNum.substring(0, 5)); } catch {}
+  }
+
   return {
-    complRegNum: str(row.COMPL_REG_NUM),
+    complRegNum,
+    resolvedDistrictId,
     complDesc: str(row.COMPL_DESC),
     complSrno: str(row.COMPL_SRNO),
     complRegDt: parseCctnsDate(row.COMPL_REG_DT),
