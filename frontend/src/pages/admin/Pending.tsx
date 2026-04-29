@@ -24,6 +24,11 @@ export const PendingPage = () => {
   const [sp] = useSearchParams();
   const type = sp.get('type') || 'all';
   const [districtFilter, setDistrictFilter] = useState<string[]>([]);
+  const [sourceFilter, setSourceFilter] = useState<string[]>([]);
+  const [complaintTypeFilter, setComplaintTypeFilter] = useState<string[]>([]);
+  const [statusFilter, setStatusFilter] = useState<string[]>([]);
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
 
   const getEndpoint = () => {
     return ep[type] || ep.all;
@@ -45,7 +50,9 @@ export const PendingPage = () => {
     name: `${r.firstName || ''} ${r.lastName || ''}`.trim() || '-',
     mobile: r.mobile || '-',
     date: r.complRegDt ? new Date(String(r.complRegDt)).toLocaleDateString() : '-',
-    status: 'Pending',
+    status: r.statusOfComplaint || 'Pending',
+    source: r.complaintSource || 'General Complaints',
+    complaintType: r.typeOfComplaint || r.incidentType || 'Other',
   }));
 
   const districtOptions = useMemo(() => {
@@ -53,10 +60,31 @@ export const PendingPage = () => {
     return Array.from(s).sort().map(v => ({ value: v, label: v }));
   }, [rows]);
 
+  const sourceOptions = useMemo(() => {
+    const s = new Set(tableData.map(r => String(r.source)).filter(Boolean));
+    return Array.from(s).sort().map(v => ({ value: v, label: v }));
+  }, [tableData]);
+
+  const complaintTypeOptions = useMemo(() => {
+    const s = new Set(tableData.map(r => String(r.complaintType)).filter(Boolean));
+    return Array.from(s).sort().map(v => ({ value: v, label: v }));
+  }, [tableData]);
+
+  const statusOptions = useMemo(() => {
+    const s = new Set(tableData.map(r => String(r.status)).filter(Boolean));
+    return Array.from(s).sort().map(v => ({ value: v, label: v }));
+  }, [tableData]);
+
   const filteredTableData = useMemo(() => {
-    if (districtFilter.length === 0) return tableData;
-    return tableData.filter(r => districtFilter.includes(String(r.district)));
-  }, [tableData, districtFilter]);
+    return tableData.filter(r => {
+      const distOk = districtFilter.length === 0 || districtFilter.includes(String(r.district));
+      const srcOk = sourceFilter.length === 0 || sourceFilter.includes(String(r.source));
+      const typeOk = complaintTypeFilter.length === 0 || complaintTypeFilter.includes(String(r.complaintType));
+      const statOk = statusFilter.length === 0 || statusFilter.includes(String(r.status));
+      const dateOk = (!fromDate || new Date(r.date) >= new Date(fromDate)) && (!toDate || new Date(r.date) <= new Date(toDate));
+      return distOk && srcOk && typeOk && statOk && dateOk;
+    });
+  }, [tableData, districtFilter, sourceFilter, complaintTypeFilter, statusFilter, fromDate, toDate]);
 
   const cols: Column<typeof tableData[0]>[] = [
     { key: 'regNum', label: 'Reg. No.', sortable: true },
@@ -85,7 +113,7 @@ export const PendingPage = () => {
           backdropFilter: 'blur(12px)', display: 'flex', flexWrap: 'wrap', gap: '16px', alignItems: 'flex-end',
           position: 'relative', zIndex: 1000
         }}>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginBottom: '2px' }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginBottom: '8px' }}>
             {tabs.map(t => (
               <Link
                 key={t.id}
@@ -103,26 +131,83 @@ export const PendingPage = () => {
               </Link>
             ))}
           </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', width: '100%' }}>
+            {/* Date Range */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <span style={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.7px', color: '#64748b' }}>
+                Date Range
+              </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <input 
+                  type="date" 
+                  value={fromDate}
+                  onChange={e => setFromDate(e.target.value)}
+                  style={{
+                    padding: '6px 10px', borderRadius: '8px', background: 'rgba(15,23,42,0.9)', 
+                    color: '#e2e8f0', border: '1px solid rgba(255,255,255,0.1)', fontSize: '12.5px',
+                    outline: 'none', cursor: 'pointer'
+                  }} 
+                />
+                <span style={{ color: '#475569' }}>-</span>
+                <input 
+                  type="date" 
+                  value={toDate}
+                  onChange={e => setToDate(e.target.value)}
+                  style={{
+                    padding: '6px 10px', borderRadius: '8px', background: 'rgba(15,23,42,0.9)', 
+                    color: '#e2e8f0', border: '1px solid rgba(255,255,255,0.1)', fontSize: '12.5px',
+                    outline: 'none', cursor: 'pointer'
+                  }} 
+                />
+              </div>
+            </div>
 
-          <div style={{ width: '1px', height: '20px', background: 'rgba(255,255,255,0.08)', margin: '0 4px', flexShrink: 0 }} />
+            <MultiSelectFilter
+              label="Source"
+              options={sourceOptions}
+              selected={sourceFilter}
+              onChange={setSourceFilter}
+              placeholder="All Sources"
+              minWidth="160px"
+            />
 
-          <MultiSelectFilter
-            label="District"
-            options={districtOptions}
-            selected={districtFilter}
-            onChange={setDistrictFilter}
-            minWidth="200px"
-          />
-          {districtFilter.length > 0 && (
-            <button
-              onClick={() => setDistrictFilter([])}
-              style={{ padding: '6px 12px', borderRadius: '6px', fontSize: '11px', background: 'rgba(239,68,68,0.1)', color: '#fca5a5', border: '1px solid rgba(239,68,68,0.25)', cursor: 'pointer' }}
-            >
-              ✕ Clear
-            </button>
-          )}
+            <MultiSelectFilter
+              label="District"
+              options={districtOptions}
+              selected={districtFilter}
+              onChange={setDistrictFilter}
+              placeholder="All Districts"
+              minWidth="160px"
+            />
+
+            <MultiSelectFilter
+              label="Complaint Type"
+              options={complaintTypeOptions}
+              selected={complaintTypeFilter}
+              onChange={setComplaintTypeFilter}
+              placeholder="All Types"
+              minWidth="160px"
+            />
+
+            <MultiSelectFilter
+              label="Status"
+              options={statusOptions}
+              selected={statusFilter}
+              onChange={setStatusFilter}
+              placeholder="All Status"
+              minWidth="160px"
+            />
+
+            {(districtFilter.length > 0 || sourceFilter.length > 0 || complaintTypeFilter.length > 0 || statusFilter.length > 0) && (
+              <button
+                onClick={() => { setDistrictFilter([]); setSourceFilter([]); setComplaintTypeFilter([]); setStatusFilter([]); }}
+                style={{ padding: '6px 12px', borderRadius: '6px', fontSize: '11px', background: 'rgba(239,68,68,0.1)', color: '#fca5a5', border: '1px solid rgba(239,68,68,0.25)', cursor: 'pointer', alignSelf: 'flex-end', marginBottom: '2px' }}
+              >
+                ✕ Clear All
+              </button>
+            )}
+          </div>
         </div>
-
         {/* Data Table */}
         <DataTable
           title={`${tabs.find(t => t.id === type)?.label} Records${districtFilter.length > 0 ? ` · Filtered (${filteredTableData.length})` : ''}`}

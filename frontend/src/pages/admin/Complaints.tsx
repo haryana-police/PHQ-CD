@@ -64,7 +64,7 @@ export const ComplaintsPage = () => {
     e.target.value = '';
   };
 
-  type ComplaintRow = { regNum: string; district: string; name: string; mobile: string; date: string; status: string; id: unknown; };
+  type ComplaintRow = { regNum: string; district: string; name: string; mobile: string; date: string; status: string; source: string; complaintType: string; id: unknown; };
 
   const tableData: ComplaintRow[] = complaints.map((c: Record<string, unknown>) => ({
     regNum: String(c.complRegNum || '-'),
@@ -73,6 +73,8 @@ export const ComplaintsPage = () => {
     mobile: String(c.mobile || '-'),
     date: c.complRegDt ? new Date(String(c.complRegDt)).toLocaleDateString() : '-',
     status: String(c.statusOfComplaint || 'Pending'),
+    source: String(c.complaintSource || 'General Complaints'),
+    complaintType: String(c.typeOfComplaint || c.incidentType || 'Other'),
     id: c.id,
   }));
 
@@ -86,28 +88,25 @@ export const ComplaintsPage = () => {
     return Array.from(unique).filter(Boolean).sort().map(v => ({ value: v, label: v }));
   }, [tableData]);
 
-  const sourceOptions = [
-    { value: 'All Sources', label: 'All Sources' },
-    { value: 'General Complaints', label: 'General Complaints' },
-    { value: 'Women Safety', label: 'Women Safety' },
-    { value: 'CCTNS / FIR', label: 'CCTNS / FIR' },
-  ];
+  const sourceOptions = useMemo(() => {
+    const unique = new Set(tableData.map((r: ComplaintRow) => r.source));
+    return Array.from(unique).filter(Boolean).sort().map(v => ({ value: v, label: v }));
+  }, [tableData]);
 
-  const complaintTypeOptions = [
-    // Mock data until dynamic API is added
-    { value: 'Theft', label: 'Theft' },
-    { value: 'Harassment', label: 'Harassment' },
-    { value: 'Cyber Crime', label: 'Cyber Crime' },
-    { value: 'Fraud', label: 'Fraud' },
-  ];
+  const complaintTypeOptions = useMemo(() => {
+    const unique = new Set(tableData.map((r: ComplaintRow) => r.complaintType));
+    return Array.from(unique).filter(Boolean).sort().map(v => ({ value: v, label: v }));
+  }, [tableData]);
 
   const filteredTableData = useMemo(() => {
     return tableData.filter((r: ComplaintRow) => {
       const distOk = districtFilter.length === 0 || districtFilter.includes(r.district);
       const statOk = statusFilter.length === 0 || statusFilter.includes(r.status);
-      return distOk && statOk;
+      const srcOk = sourceFilter.length === 0 || sourceFilter.includes(r.source) || sourceFilter.includes('All Sources');
+      const typeOk = complaintTypeFilter.length === 0 || complaintTypeFilter.includes(r.complaintType) || complaintTypeFilter.includes('All Types');
+      return distOk && statOk && srcOk && typeOk;
     });
-  }, [tableData, districtFilter, statusFilter]);
+  }, [tableData, districtFilter, statusFilter, sourceFilter, complaintTypeFilter]);
 
   const cols: Column<typeof tableData[0]>[] = [
     { key: 'regNum', label: 'Reg. No.', sortable: true },
@@ -178,7 +177,6 @@ export const ComplaintsPage = () => {
             onChange={setSourceFilter}
             placeholder="All Sources"
             minWidth="160px"
-            singleSelect={true}
           />
 
           <MultiSelectFilter

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Layout } from '@/components/layout/Layout';
 import { usePendencyMatrix, useDisposalMatrix } from '@/hooks/useData';
+import { MultiSelectFilter } from '@/components/common/MultiSelectFilter';
 
 const CY = new Date().getFullYear();
 const YEARS = Array.from({ length: CY - 2014 + 1 }, (_, i) => CY - i);
@@ -76,12 +77,25 @@ export const PendencyDisposalMatrixPage = () => {
   const [sortCol, setSortCol] = useState<SortCol>('district');
   const [sortDesc, setSortDesc] = useState(false);
 
+  // Filters
+  const [districtFilter, setDistrictFilter] = useState<string[]>([]);
+  const [sourceFilter, setSourceFilter] = useState<string[]>([]);
+  const [complaintTypeFilter, setComplaintTypeFilter] = useState<string[]>([]);
+  const [statusFilter, setStatusFilter] = useState<string[]>([]);
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
+
   const { data: pData, isLoading: pLoading } = usePendencyMatrix(year);
   const { data: dData, isLoading: dLoading } = useDisposalMatrix(year);
 
-  const pRows: any[] = pData?.data?.rows ?? [];
-  const dRows: any[] = dData?.data?.rows ?? [];
+  const pRows: any[] = (pData?.data?.rows ?? []).filter((r: any) => districtFilter.length === 0 || districtFilter.includes(r.district));
+  const dRows: any[] = (dData?.data?.rows ?? []).filter((r: any) => districtFilter.length === 0 || districtFilter.includes(r.district));
   
+  const districtOptions = Array.from(new Set([...(pData?.data?.rows ?? []), ...(dData?.data?.rows ?? [])].map((r: any) => r.district))).filter(Boolean).sort().map(d => ({ value: d as string, label: d as string }));
+  const sourceOptions = [{ value: 'All Sources', label: 'All Sources' }, { value: 'General Complaints', label: 'General Complaints' }, { value: 'Women Safety', label: 'Women Safety' }, { value: 'CCTNS / FIR', label: 'CCTNS / FIR' }];
+  const complaintTypeOptions = [{ value: 'All Types', label: 'All Types' }, { value: 'Theft', label: 'Theft' }, { value: 'Harassment', label: 'Harassment' }, { value: 'Cyber Crime', label: 'Cyber Crime' }, { value: 'Fraud', label: 'Fraud' }];
+  const statusOptions = [{ value: 'All Status', label: 'All Status' }, { value: 'Pending', label: 'Pending' }, { value: 'Disposed', label: 'Disposed' }];
+
   const handleSort = (col: SortCol) => {
     if (sortCol === col) {
       setSortDesc(!sortDesc);
@@ -176,19 +190,64 @@ export const PendencyDisposalMatrixPage = () => {
           </div>
         </div>
 
-        {/* ── Tab switcher ────────────────────────────────────────────── */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', alignItems: 'center', marginBottom: '18px' }}>
+          <div style={{
+            display: 'flex', gap: '6px',
+            background: 'rgba(19,32,53,0.5)', borderRadius: '10px',
+            padding: '6px', width: 'fit-content',
+            border: '1px solid rgba(255,255,255,0.06)',
+          }}>
+            <button style={tabStyle(tab === 'pendency')} onClick={() => setTab('pendency')}>
+              ⏳ Pendency Matrix
+            </button>
+            <button style={tabStyle(tab === 'disposal')} onClick={() => setTab('disposal')}>
+              ✅ Disposal Matrix
+            </button>
+          </div>
+        </div>
+
+        {/* ── Filters ─────────────────────────────────────────────────── */}
         <div style={{
-          display: 'flex', gap: '6px', marginBottom: '18px',
-          background: 'rgba(19,32,53,0.5)', borderRadius: '10px',
-          padding: '6px', width: 'fit-content',
-          border: '1px solid rgba(255,255,255,0.06)',
+          background: 'rgba(19,32,53,0.6)', border: '1px solid rgba(255,255,255,0.07)',
+          borderRadius: '12px', padding: '12px 16px', marginBottom: '20px',
+          backdropFilter: 'blur(12px)', display: 'flex', flexWrap: 'wrap', gap: '16px', alignItems: 'flex-end',
+          position: 'relative', zIndex: 1000
         }}>
-          <button style={tabStyle(tab === 'pendency')} onClick={() => setTab('pendency')}>
-            ⏳ Pendency Matrix
-          </button>
-          <button style={tabStyle(tab === 'disposal')} onClick={() => setTab('disposal')}>
-            ✅ Disposal Matrix
-          </button>
+          {/* Date Range */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <span style={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.7px', color: '#64748b' }}>
+              Date Range
+            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <input 
+                type="date" 
+                value={fromDate}
+                onChange={e => setFromDate(e.target.value)}
+                style={{ padding: '6px 10px', borderRadius: '8px', background: 'rgba(15,23,42,0.9)', color: '#e2e8f0', border: '1px solid rgba(255,255,255,0.1)', fontSize: '12.5px', outline: 'none', cursor: 'pointer' }} 
+              />
+              <span style={{ color: '#475569' }}>-</span>
+              <input 
+                type="date" 
+                value={toDate}
+                onChange={e => setToDate(e.target.value)}
+                style={{ padding: '6px 10px', borderRadius: '8px', background: 'rgba(15,23,42,0.9)', color: '#e2e8f0', border: '1px solid rgba(255,255,255,0.1)', fontSize: '12.5px', outline: 'none', cursor: 'pointer' }} 
+              />
+            </div>
+          </div>
+
+          <MultiSelectFilter label="Source" options={sourceOptions} selected={sourceFilter} onChange={setSourceFilter} placeholder="All Sources" minWidth="160px" />
+          <MultiSelectFilter label="District" options={districtOptions} selected={districtFilter} onChange={setDistrictFilter} placeholder="All Districts" minWidth="160px" />
+          <MultiSelectFilter label="Complaint Type" options={complaintTypeOptions} selected={complaintTypeFilter} onChange={setComplaintTypeFilter} placeholder="All Types" minWidth="160px" />
+          <MultiSelectFilter label="Status" options={statusOptions} selected={statusFilter} onChange={setStatusFilter} placeholder="All Status" minWidth="160px" />
+
+          {(districtFilter.length > 0 || sourceFilter.length > 0 || complaintTypeFilter.length > 0 || statusFilter.length > 0) && (
+            <button
+              onClick={() => { setDistrictFilter([]); setSourceFilter([]); setComplaintTypeFilter([]); setStatusFilter([]); }}
+              style={{ padding: '6px 12px', borderRadius: '6px', fontSize: '11px', background: 'rgba(239,68,68,0.1)', color: '#fca5a5', border: '1px solid rgba(239,68,68,0.25)', cursor: 'pointer', marginBottom: '2px' }}
+            >
+              ✕ Clear All
+            </button>
+          )}
         </div>
 
         {/* ── KPI summary cards ───────────────────────────────────────── */}

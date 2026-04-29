@@ -73,15 +73,17 @@ export const WomenSafetyPage = () => {
   const records = data?.data?.data || [];
   const pagination = data?.data?.pagination;
 
-  type WomenSafetyRow = { regNum: string; name: string; mobile: string; incidentType: string; date: string; status: string; id: unknown; };
+  type WomenSafetyRow = { regNum: string; district: string; name: string; mobile: string; incidentType: string; date: string; status: string; source: string; id: unknown; };
 
   const tableData: WomenSafetyRow[] = records.map((r: Record<string, unknown>) => ({
     regNum: String(r.complRegNum || '-'),
+    district: String((r.district as Record<string, unknown>)?.name || r.addressDistrict || '-'),
     name: `${r.firstName || ''} ${r.lastName || ''}`.trim() || '-',
     mobile: String(r.mobile || '-'),
     incidentType: String(r.incidentType || '-'),
     date: r.complRegDt ? new Date(String(r.complRegDt)).toLocaleDateString() : '-',
     status: String(r.statusOfComplaint || 'Pending'),
+    source: String(r.complaintSource || 'Women Safety'),
     id: r.id,
   }));
 
@@ -96,22 +98,22 @@ export const WomenSafetyPage = () => {
   }, [tableData]);
 
   const districtOptions = useMemo(() => {
-    // Ideally from r.district if it existed in WomenSafetyRow, using mock or available
-    return [];
+    const s = new Set(tableData.map((r: WomenSafetyRow) => r.district).filter(Boolean));
+    return Array.from(s).sort().map(v => ({ value: v, label: v }));
   }, [tableData]);
 
-  const sourceOptions = [
-    { value: 'All Sources', label: 'All Sources' },
-    { value: 'General Complaints', label: 'General Complaints' },
-    { value: 'Women Safety', label: 'Women Safety' },
-    { value: 'CCTNS / FIR', label: 'CCTNS / FIR' },
-  ];
+  const sourceOptions = useMemo(() => {
+    const s = new Set(tableData.map((r: WomenSafetyRow) => r.source).filter(Boolean));
+    return Array.from(s).sort().map(v => ({ value: v, label: v }));
+  }, [tableData]);
 
   const filteredData = useMemo(() => tableData.filter((r: WomenSafetyRow) => {
-    const incOk = incidentFilter.length === 0 || incidentFilter.includes(r.incidentType);
-    const statOk = statusFilter.length === 0 || statusFilter.includes(r.status);
-    return incOk && statOk;
-  }), [tableData, incidentFilter, statusFilter]);
+    const incOk = incidentFilter.length === 0 || incidentFilter.includes(r.incidentType) || incidentFilter.includes('All Types');
+    const statOk = statusFilter.length === 0 || statusFilter.includes(r.status) || statusFilter.includes('All Status');
+    const distOk = districtFilter.length === 0 || districtFilter.includes(r.district) || districtFilter.includes('All Districts');
+    const srcOk = sourceFilter.length === 0 || sourceFilter.includes(r.source) || sourceFilter.includes('All Sources');
+    return incOk && statOk && distOk && srcOk;
+  }), [tableData, incidentFilter, statusFilter, districtFilter, sourceFilter]);
 
   const cols: Column<typeof tableData[0]>[] = [
     { key: 'regNum', label: 'Reg. No.', sortable: true },
@@ -183,7 +185,6 @@ export const WomenSafetyPage = () => {
             onChange={setSourceFilter}
             placeholder="All Sources"
             minWidth="160px"
-            singleSelect={true}
           />
 
           <MultiSelectFilter

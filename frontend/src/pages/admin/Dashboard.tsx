@@ -227,7 +227,6 @@ export const DashboardPage = () => {
               onChange={setSourceFilter}
               placeholder="All Sources"
               minWidth="180px"
-              singleSelect={true}
             />
 
             <MultiSelectFilter
