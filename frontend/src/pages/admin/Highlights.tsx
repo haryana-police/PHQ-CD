@@ -35,18 +35,24 @@ export const HighlightsPage = () => {
 
   const filters = useMemo(() => ({
     year,
+    fromDate: fromDate || undefined,
+    toDate:   toDate   || undefined,
     district: districtFilter.length > 0 ? districtFilter : undefined,
     source:   sourceFilter.length > 0   ? sourceFilter   : undefined,
     complaintType: complaintTypeFilter.length > 0 ? complaintTypeFilter : undefined,
-  }), [year, districtFilter, sourceFilter, complaintTypeFilter]);
+  }), [year, fromDate, toDate, districtFilter, sourceFilter, complaintTypeFilter]);
 
-  const buildQS = (extra?: Record<string, string>) => {
+  const buildQS = () => {
     const p = new URLSearchParams();
-    p.set('year', String(year));
+    if (fromDate && toDate) {
+      p.set('fromDate', fromDate);
+      p.set('toDate', toDate);
+    } else {
+      p.set('year', String(year));
+    }
     if (districtFilter.length > 0)      p.set('district',      districtFilter.join(','));
     if (sourceFilter.length > 0)        p.set('source',        sourceFilter.join(','));
     if (complaintTypeFilter.length > 0) p.set('complaintType', complaintTypeFilter.join(','));
-    if (extra) Object.entries(extra).forEach(([k,v]) => p.set(k, v));
     return p.toString();
   };
 
@@ -68,8 +74,9 @@ export const HighlightsPage = () => {
     staleTime: 5 * 60 * 1000,
   });
 
-  const highlights = (hd?.data?.rows ?? hd?.data ?? []) as Record<string, unknown>[];
-  const natures    = (nd?.data?.rows ?? nd?.data ?? []) as Record<string, unknown>[];
+  const highlights = (hd?.data?.rows ?? (Array.isArray(hd?.data) ? hd?.data : [])) as Record<string, unknown>[];
+  const natures    = (nd?.data?.rows ?? (Array.isArray(nd?.data) ? nd?.data : [])) as Record<string, unknown>[];
+
 
   const allTopRows = highlights.map((r, i) => ({
     rank: i + 1,
@@ -121,8 +128,14 @@ export const HighlightsPage = () => {
     return arr;
   }, [allNatureRows, natureChartSort]);
 
-  const topRows = showAllCategories ? allTopRows : allTopRows.slice(0, PREVIEW_COUNT);
-  const natureRows = showAllNature ? allNatureRows : allNatureRows.slice(0, PREVIEW_COUNT);
+  // Tables show the FILTERED rows (applying categoryFilter/natureFilter client-side on top of server-filtered data)
+  const topRows    = (categoryFilter.length > 0
+    ? allTopRows.filter(r => categoryFilter.includes(r.name))
+    : (showAllCategories ? allTopRows : allTopRows.slice(0, PREVIEW_COUNT)));
+
+  const natureRows = (natureFilter.length > 0
+    ? sortedNatureRows.filter(r => natureFilter.includes(r.name))
+    : (showAllNature ? sortedNatureRows : sortedNatureRows.slice(0, PREVIEW_COUNT)));
 
   const categoryOptions = useMemo(
     () => allTopRows.map(r => ({ value: r.name, label: r.name })),

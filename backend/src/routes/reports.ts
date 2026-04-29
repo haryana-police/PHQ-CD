@@ -214,14 +214,17 @@ export const reportRoutes = async (fastify: FastifyInstance) => {
   // ── Nature of Incident
   fastify.get('/reports/nature-incident', { preHandler: [authenticate] }, async (request, reply) => {
     try {
-      const { year, fromDate, toDate, district } = request.query as Record<string, string>;
+      const { year, fromDate, toDate, district, source, complaintType } = request.query as Record<string, string>;
       const yearNum = year ? parseInt(year) : new Date().getFullYear();
       const datePart = fromDate && toDate
         ? `c."complRegDt" >= '${fromDate}' AND c."complRegDt" <= '${toDate}'`
         : yearWhere(yearNum);
-      const districtFilter = district
-        ? `AND dm."DistrictName" IN (${district.split(',').map(d => `'${d.trim().replace(/'/g, "''")}'`).join(',')})`
-        : '';
+
+      const extra: string[] = [];
+      if (district) extra.push(`dm."DistrictName" IN (${district.split(',').map(d => `'${d.trim().replace(/'/g, "''")}'`).join(',')})`);
+      if (source)   extra.push(`c."complaintSource" IN (${source.split(',').map(s => `'${s.trim().replace(/'/g, "''")}'`).join(',')})`);
+      if (complaintType) extra.push(`c."typeOfComplaint" IN (${complaintType.split(',').map(t => `'${t.trim().replace(/'/g, "''")}'`).join(',')})`);
+      const extraWhere = extra.length ? `AND ${extra.join(' AND ')}` : '';
 
       const data = await prisma.$queryRawUnsafe<any[]>(`
         SELECT COALESCE(c."classOfIncident",'Unknown') AS natureOfIncident,
@@ -231,13 +234,15 @@ export const reportRoutes = async (fastify: FastifyInstance) => {
         FROM "Complaint" c
         JOIN "District_Master" dm ON dm.id = c."resolvedDistrictId"
         WHERE dm."isPoliceDistrict" = true AND c."classOfIncident" IS NOT NULL AND c."classOfIncident" != ''
-          AND ${datePart} ${districtFilter}
+          AND ${datePart} ${extraWhere}
         GROUP BY c."classOfIncident" ORDER BY total DESC
       `);
 
       return sendSuccess(reply, { year: yearNum, rows: data.map((r: any) => ({ natureOfIncident: r.natureofincident, total: Number(r.total), pending: Number(r.pending), disposed: Number(r.disposed) })) });
     } catch (e) { return sendError(reply, 'Failed to load nature-of-incident report'); }
   });
+
+
 
   // ── Type Against
   fastify.get('/reports/type-against', { preHandler: [authenticate] }, async (request, reply) => {
@@ -368,14 +373,21 @@ export const reportRoutes = async (fastify: FastifyInstance) => {
     } catch (e) { return sendError(reply, 'Failed to load branch-wise report'); }
   });
 
-  // ── Highlights
+  // ── Highlights (top categories by classOfIncident)
   fastify.get('/reports/highlights', { preHandler: [authenticate] }, async (request, reply) => {
     try {
-      const { year, district } = request.query as Record<string, string>;
+      const { year, fromDate, toDate, district, source, complaintType } = request.query as Record<string, string>;
       const yearNum = year ? parseInt(year) : new Date().getFullYear();
-      const districtFilter = district
-        ? `AND dm."DistrictName" IN (${district.split(',').map(d => `'${d.trim().replace(/'/g, "''")}'`).join(',')})`
-        : '';
+
+      const datePart = fromDate && toDate
+        ? `c."complRegDt" >= '${fromDate}' AND c."complRegDt" <= '${toDate}'`
+        : `c."complRegDt" >= '${yearNum}-01-01' AND c."complRegDt" < '${yearNum + 1}-01-01'`;
+
+      const extra: string[] = [];
+      if (district) extra.push(`dm."DistrictName" IN (${district.split(',').map(d => `'${d.trim().replace(/'/g, "''")}'`).join(',')})`);
+      if (source)   extra.push(`c."complaintSource" IN (${source.split(',').map(s => `'${s.trim().replace(/'/g, "''")}'`).join(',')})`);
+      if (complaintType) extra.push(`c."typeOfComplaint" IN (${complaintType.split(',').map(t => `'${t.trim().replace(/'/g, "''")}'`).join(',')})`);
+      const extraWhere = extra.length ? `AND ${extra.join(' AND ')}` : '';
 
       const data = await prisma.$queryRawUnsafe<any[]>(`
         SELECT COALESCE(c."classOfIncident",'Unknown') AS category, COUNT(*) AS count
@@ -383,13 +395,14 @@ export const reportRoutes = async (fastify: FastifyInstance) => {
         JOIN "District_Master" dm ON dm.id = c."resolvedDistrictId"
         WHERE dm."isPoliceDistrict" = true
           AND c."classOfIncident" IS NOT NULL AND c."classOfIncident" != ''
-          AND c."complRegDt" >= '${yearNum}-01-01' AND c."complRegDt" < '${yearNum + 1}-01-01'
-          ${districtFilter}
+          AND ${datePart} ${extraWhere}
         GROUP BY c."classOfIncident" ORDER BY count DESC
       `);
-      return sendSuccess(reply, data.map((r: any) => ({ category: r.category, count: Number(r.count) })));
+      return sendSuccess(reply, { year: yearNum, rows: data.map((r: any) => ({ category: r.category, count: Number(r.count) })) });
     } catch (e) { return sendError(reply, 'Failed to load highlights report'); }
   });
+
+
 
   // ── Action Taken
   fastify.get('/reports/action-taken', { preHandler: [authenticate] }, async (request, reply) => {

@@ -22,6 +22,14 @@ function buildMatrixWhere(q: Record<string, string>): string {
     const names = q.district.split(',').map(d => `'${d.trim().replace(/'/g, "''")}'`).join(',');
     parts.push(`dm."DistrictName" IN (${names})`);
   }
+  if (q.source) {
+    const srcs = q.source.split(',').map(s => `'${s.trim().replace(/'/g, "''")}'`).join(',');
+    parts.push(`c."complaintSource" IN (${srcs})`);
+  }
+  if (q.complaintType) {
+    const types = q.complaintType.split(',').map(t => `'${t.trim().replace(/'/g, "''")}'`).join(',');
+    parts.push(`c."typeOfComplaint" IN (${types})`);
+  }
 
   return parts.join(' AND ');
 }

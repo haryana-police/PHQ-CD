@@ -224,10 +224,12 @@ export const usePending = (type = 'all') =>
 // Matrix
 // ─────────────────────────────────────────────────────────────────────────────
 export interface MatrixFilters {
-  year?:      number;
-  fromDate?:  string;
-  toDate?:    string;
-  district?:  string[];
+  year?:          number;
+  fromDate?:      string;
+  toDate?:        string;
+  district?:      string[];
+  source?:        string[];
+  complaintType?: string[];
 }
 
 export const usePendencyMatrix = (filters: MatrixFilters = {}) =>
