@@ -4,17 +4,19 @@ import { sendSuccess, sendError } from '../utils/response.js';
 import { authenticate } from '../middleware/auth.js';
 
 /**
- * Official 22 Haryana districts — all chart/summary data is scoped to these only.
- * This prevents non-Haryana entries (forwarded complaints) from polluting the charts.
+ * 22 canonical Haryana police districts — names match EXACTLY as stored in addressDistrict.
+ * "addressDistrict" = the police district HANDLING the complaint (not complainant's home).
+ * HANSI = tehsil of HISAR; DABWALI = tehsil of SIRSA — excluded as sub-district.
+ * UPPER() applied in filter to collapse any casing variants in data.
  */
 const HARYANA_DISTRICTS = [
   'AMBALA','BHIWANI','CHARKHI DADRI','FARIDABAD','FATEHABAD',
   'GURUGRAM','HISAR','JHAJJAR','JIND','KAITHAL','KARNAL',
   'KURUKSHETRA','MAHENDERGARH','NUH','PALWAL','PANCHKULA',
-  'PANIPAT','REWARI','ROHTAK','SIRSA','SONIPAT','YAMUNANAGAR',
-  'YAMUNA NAGAR','MEWAT','GURGAON',
+  'PANIPAT','REWARI','ROHTAK','SIRSA','SONIPAT','YAMUNA NAGAR',
 ];
 const HARYANA_IN = HARYANA_DISTRICTS.map(d => `'${d}'`).join(', ');
+// UPPER() on both sides ensures casing variants collapse correctly
 const HARYANA_FILTER = `UPPER(LTRIM(RTRIM(COALESCE("addressDistrict",'')))) IN (${HARYANA_IN})`;
 
 export const dashboardRoutes = async (fastify: FastifyInstance) => {

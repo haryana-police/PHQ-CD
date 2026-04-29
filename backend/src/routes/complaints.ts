@@ -17,6 +17,19 @@ function setCached(key: string, data: unknown) {
   cache.set(key, { data, expiresAt: Date.now() + CACHE_TTL_MS });
 }
 
+/**
+ * Official 22 Haryana police districts — mirrors the same constant in dashboard.ts.
+ * Complaints are fetched per police-office from the Haryana Police API; "addressDistrict"
+ * in the Complaint table maps to the HANDLING police district (not complainant's home address).
+ * We restrict dropdowns to these 22 to match what the chart/summary queries actually show.
+ */
+const HARYANA_DISTRICTS = [
+  'AMBALA','BHIWANI','CHARKHI DADRI','FARIDABAD','FATEHABAD',
+  'GURUGRAM','HISAR','JHAJJAR','JIND','KAITHAL','KARNAL',
+  'KURUKSHETRA','MAHENDERGARH','NUH','PALWAL','PANCHKULA',
+  'PANIPAT','REWARI','ROHTAK','SIRSA','SONIPAT','YAMUNA NAGAR',
+].sort();
+
 export const complaintRoutes = async (fastify: FastifyInstance) => {
   // ── Distinct filter options (fast raw SQL SELECT DISTINCT + cached)
   fastify.get('/complaints/filter-options', {
@@ -27,13 +40,10 @@ export const complaintRoutes = async (fastify: FastifyInstance) => {
     if (cached) return sendSuccess(reply, cached);
 
     try {
-      // Single raw query to get all distinct values at once — much faster than 4 separate findMany+distinct
-      const [districtRows, sourceRows, typeRows, statusRows] = await Promise.all([
-        prisma.$queryRaw<{ val: string }[]>`
-          SELECT DISTINCT "addressDistrict" AS val
-          FROM "Complaint"
-          WHERE "addressDistrict" IS NOT NULL AND "addressDistrict" <> ''
-          ORDER BY val`,
+      // District list: use the authoritative 22 Haryana police districts (same as chart queries).
+      // We don't SELECT DISTINCT for districts because that returns non-Haryana values
+      // (NEW DELHI, ALWAR, CHANDIGARH etc. — forwarded complaints) which pollute the dropdown.
+      const [sourceRows, typeRows, statusRows] = await Promise.all([
         prisma.$queryRaw<{ val: string }[]>`
           SELECT DISTINCT "complaintSource" AS val
           FROM "Complaint"
@@ -52,7 +62,8 @@ export const complaintRoutes = async (fastify: FastifyInstance) => {
       ]);
 
       const result = {
-        districts: districtRows.map(r => r.val),
+        // Authoritative 22 Haryana police-district list — consistent with all chart data
+        districts: HARYANA_DISTRICTS,
         sources: sourceRows.map(r => r.val),
         types: typeRows.map(r => r.val),
         statuses: statusRows.map(r => r.val),
