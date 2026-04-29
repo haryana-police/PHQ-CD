@@ -5,19 +5,34 @@ import { authenticate } from '../middleware/auth.js';
 
 /**
  * Pendency and Disposal Matrix — all queries JOIN District_Master via resolvedDistrictId.
- * No hardcoded district lists — district scope comes from DB (isPoliceDistrict = true).
+ * Accepts: year, fromDate, toDate, district (comma-separated names)
  */
+
+function buildMatrixWhere(q: Record<string, string>): string {
+  const parts: string[] = [];
+
+  if (q.fromDate && q.toDate) {
+    parts.push(`c."complRegDt" >= '${q.fromDate}' AND c."complRegDt" <= '${q.toDate}'`);
+  } else {
+    const y = q.year ? parseInt(q.year) : new Date().getFullYear();
+    parts.push(`c."complRegDt" >= '${y}-01-01' AND c."complRegDt" < '${y + 1}-01-01'`);
+  }
+
+  if (q.district) {
+    const names = q.district.split(',').map(d => `'${d.trim().replace(/'/g, "''")}'`).join(',');
+    parts.push(`dm."DistrictName" IN (${names})`);
+  }
+
+  return parts.join(' AND ');
+}
+
 export const matrixRoutes = async (fastify: FastifyInstance) => {
 
-  fastify.get('/matrix/pendency', {
-    preHandler: [authenticate],
-  }, async (request, reply) => {
+  fastify.get('/matrix/pendency', { preHandler: [authenticate] }, async (request, reply) => {
     try {
-      const { year } = request.query as Record<string, string>;
-      const yearNum = year ? parseInt(year) : new Date().getFullYear();
-
-      const yearStart = `${yearNum}-01-01T00:00:00.000Z`;
-      const yearEnd   = `${yearNum + 1}-01-01T00:00:00.000Z`;
+      const q = request.query as Record<string, string>;
+      const yearNum = q.year ? parseInt(q.year) : new Date().getFullYear();
+      const where = buildMatrixWhere(q);
 
       const rows = await prisma.$queryRawUnsafe<any[]>(`
         SELECT
@@ -53,20 +68,19 @@ export const matrixRoutes = async (fastify: FastifyInstance) => {
 
         FROM "Complaint" c
         JOIN "District_Master" dm ON dm.id = c."resolvedDistrictId"
-        WHERE dm."isPoliceDistrict" = true
-          AND c."complRegDt" >= '${yearStart}' AND c."complRegDt" < '${yearEnd}'
+        WHERE dm."isPoliceDistrict" = true AND ${where}
         GROUP BY dm."DistrictName"
         ORDER BY totalPending DESC
       `);
 
       const totals = rows.reduce(
         (acc: any, r: any) => {
-          acc.within7      += Number(r.within7      || 0);
-          acc.within15     += Number(r.within15     || 0);
-          acc.within30     += Number(r.within30     || 0);
-          acc.over30       += Number(r.over30       || 0);
-          acc.totalPending += Number(r.totalpending || 0);
-          acc.totalReceived+= Number(r.totalreceived|| 0);
+          acc.within7       += Number(r.within7       || 0);
+          acc.within15      += Number(r.within15      || 0);
+          acc.within30      += Number(r.within30      || 0);
+          acc.over30        += Number(r.over30        || 0);
+          acc.totalPending  += Number(r.totalpending  || 0);
+          acc.totalReceived += Number(r.totalreceived || 0);
           return acc;
         },
         { within7: 0, within15: 0, within30: 0, over30: 0, totalPending: 0, totalReceived: 0 }
@@ -76,12 +90,12 @@ export const matrixRoutes = async (fastify: FastifyInstance) => {
         year: yearNum,
         rows: rows.map((r: any) => ({
           district:      r.district,
-          within7:       Number(r.within7      || 0),
-          within15:      Number(r.within15     || 0),
-          within30:      Number(r.within30     || 0),
-          over30:        Number(r.over30       || 0),
-          totalPending:  Number(r.totalpending || 0),
-          totalReceived: Number(r.totalreceived|| 0),
+          within7:       Number(r.within7       || 0),
+          within15:      Number(r.within15      || 0),
+          within30:      Number(r.within30      || 0),
+          over30:        Number(r.over30        || 0),
+          totalPending:  Number(r.totalpending  || 0),
+          totalReceived: Number(r.totalreceived || 0),
         })),
         totals,
       });
@@ -92,15 +106,11 @@ export const matrixRoutes = async (fastify: FastifyInstance) => {
     }
   });
 
-  fastify.get('/matrix/disposal', {
-    preHandler: [authenticate],
-  }, async (request, reply) => {
+  fastify.get('/matrix/disposal', { preHandler: [authenticate] }, async (request, reply) => {
     try {
-      const { year } = request.query as Record<string, string>;
-      const yearNum = year ? parseInt(year) : new Date().getFullYear();
-
-      const yearStart = `${yearNum}-01-01T00:00:00.000Z`;
-      const yearEnd   = `${yearNum + 1}-01-01T00:00:00.000Z`;
+      const q = request.query as Record<string, string>;
+      const yearNum = q.year ? parseInt(q.year) : new Date().getFullYear();
+      const where = buildMatrixWhere(q);
 
       const rows = await prisma.$queryRawUnsafe<any[]>(`
         SELECT
@@ -147,8 +157,7 @@ export const matrixRoutes = async (fastify: FastifyInstance) => {
 
         FROM "Complaint" c
         JOIN "District_Master" dm ON dm.id = c."resolvedDistrictId"
-        WHERE dm."isPoliceDistrict" = true
-          AND c."complRegDt" >= '${yearStart}' AND c."complRegDt" < '${yearEnd}'
+        WHERE dm."isPoliceDistrict" = true AND ${where}
         GROUP BY dm."DistrictName"
         ORDER BY totalDisposed DESC
       `);

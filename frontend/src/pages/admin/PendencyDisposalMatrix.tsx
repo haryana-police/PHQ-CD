@@ -77,14 +77,24 @@ export const PendencyDisposalMatrixPage = () => {
   const [sortCol, setSortCol] = useState<SortCol>('district');
   const [sortDesc, setSortDesc] = useState(false);
 
-  // Filters — district only (aggregated data, source/type not available per district row)
+  // Filters — district and year passed to API (aggregated data)
   const [districtFilter, setDistrictFilter] = useState<string[]>([]);
+  const [fromDate, setFromDate] = useState('');
+  const [toDate,   setToDate]   = useState('');
 
-  const { data: pData, isLoading: pLoading } = usePendencyMatrix(year);
-  const { data: dData, isLoading: dLoading } = useDisposalMatrix(year);
+  const matrixFilters = {
+    year:      fromDate ? undefined : year,
+    fromDate:  fromDate || undefined,
+    toDate:    toDate   || undefined,
+    district:  districtFilter.length > 0 ? districtFilter : undefined,
+  };
 
-  const pRows: any[] = (pData?.data?.rows ?? []).filter((r: any) => districtFilter.length === 0 || districtFilter.includes(r.district));
-  const dRows: any[] = (dData?.data?.rows ?? []).filter((r: any) => districtFilter.length === 0 || districtFilter.includes(r.district));
+  const { data: pData, isLoading: pLoading } = usePendencyMatrix(matrixFilters);
+  const { data: dData, isLoading: dLoading } = useDisposalMatrix(matrixFilters);
+
+  // No client-side filtering needed — server already applies district filter
+  const pRows: any[] = pData?.data?.rows ?? [];
+  const dRows: any[] = dData?.data?.rows ?? [];
 
 
   const handleSort = (col: SortCol) => {
@@ -197,14 +207,15 @@ export const PendencyDisposalMatrixPage = () => {
           </div>
         </div>
 
-        {/* ── Global Filter Bar — ABOVE KPI cards ── */}
+        {/* ── Global Filter Bar — all filters passed to API ── */}
         <GlobalFilterBar
+          fromDate={fromDate} toDate={toDate}
+          onFromDateChange={setFromDate} onToDateChange={setToDate}
           districtFilter={districtFilter}
           onDistrictChange={setDistrictFilter}
-          showDate={false}
           showSource={false}
           showComplaintType={false}
-          onClearAll={() => setDistrictFilter([])}
+          onClearAll={() => { setDistrictFilter([]); setFromDate(''); setToDate(''); }}
         />
 
         {/* ── KPI summary cards ───────────────────────────────────────── */}

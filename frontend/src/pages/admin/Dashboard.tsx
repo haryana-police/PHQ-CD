@@ -7,7 +7,6 @@ import { Select } from '@/components/common/Select';
 import { GlobalFilterBar } from '@/components/common/GlobalFilterBar';
 
 const CY = new Date().getFullYear();
-const DEFAULT_YEAR = CY;
 const YEARS = Array.from({ length: CY - 2014 + 1 }, (_, i) => CY - i);
 
 // ── KPI Card ──────────────────────────────────────────────────────────────
@@ -40,34 +39,44 @@ const YearSelect = ({ value, onChange }: { value: number; onChange: (y: number) 
 );
 
 const DASHBOARD_SORT_OPTIONS = [
-  { label: 'Total Reg', value: 'Total Reg' },
-  { label: 'Total Pending', value: 'Total Pending' },
-  { label: 'Total Disposed', value: 'Total Disposed' },
-  { label: 'Total % (from state total)', value: 'Total %' },
-  { label: 'Pending % (from district total)', value: 'Pending %' },
+  { label: 'Total Reg',                   value: 'Total Reg' },
+  { label: 'Total Pending',               value: 'Total Pending' },
+  { label: 'Total Disposed',              value: 'Total Disposed' },
+  { label: 'Total % (from state total)',  value: 'Total %' },
+  { label: 'Pending % (from district total)',  value: 'Pending %' },
   { label: 'Disposed % (from district total)', value: 'Disposed %' },
 ];
 
 export const DashboardPage = () => {
-  const [year, setYear] = useState(DEFAULT_YEAR);
+  const [year, setYear]             = useState(CY);
   const [districtSort, setDistrictSort] = useState('Total Reg');
 
   // ── Unified filter state
-  const [districtFilter, setDistrictFilter] = useState<string[]>([]);
-  const [sourceFilter, setSourceFilter] = useState<string[]>([]);
+  const [districtFilter,      setDistrictFilter]      = useState<string[]>([]);
+  const [sourceFilter,        setSourceFilter]        = useState<string[]>([]);
   const [complaintTypeFilter, setComplaintTypeFilter] = useState<string[]>([]);
   const [fromDate, setFromDate] = useState('');
-  const [toDate, setToDate] = useState('');
+  const [toDate,   setToDate]   = useState('');
 
-  const { data: sumData, isLoading: sl } = useDashboardSummary(year);
-  const { data: distData, isLoading: dl } = useDistrictChart(year);
-  const { data: monthData, isLoading: ml } = useMonthWiseData(year);
+  // ── All filters passed to every API hook — React Query re-fetches on any change
+  const filters = useMemo(() => ({
+    year:          fromDate ? undefined : year,
+    fromDate:      fromDate || undefined,
+    toDate:        toDate   || undefined,
+    district:      districtFilter.length      > 0 ? districtFilter      : undefined,
+    source:        sourceFilter.length        > 0 ? sourceFilter        : undefined,
+    complaintType: complaintTypeFilter.length > 0 ? complaintTypeFilter : undefined,
+  }), [year, fromDate, toDate, districtFilter, sourceFilter, complaintTypeFilter]);
 
-  const s = sumData?.data;
-  const districts = ((distData?.data || []) as { district: string; totalComplaints: number; pending: number; disposed: number }[]);
+  const { data: sumData,   isLoading: sl } = useDashboardSummary(filters);
+  const { data: distData,  isLoading: dl } = useDistrictChart(filters);
+  const { data: monthData, isLoading: ml } = useMonthWiseData(filters);
+
+  const s        = sumData?.data;
+  const districts = ((distData?.data || []) as { district: string; totalComplaints: number; pending: number; disposed: number; prevYearTotal: number }[]);
   const months    = ((monthData?.data || []) as { month: string; total: number; pending: number; disposed: number }[]);
 
-  const distRows = districts.map(d => ({ district: d.district, total: d.totalComplaints, pending: d.pending, disposed: d.disposed, prevTotal: 0 }));
+  const distRows = districts.map(d => ({ district: d.district, total: d.totalComplaints, pending: d.pending, disposed: d.disposed, prevTotal: d.prevYearTotal }));
 
   const sortedDistRows = useMemo(() => {
     const arr = [...distRows];
@@ -91,16 +100,12 @@ export const DashboardPage = () => {
     return arr;
   }, [distRows, districtSort]);
 
-  // Client-side filter on aggregated district rows (district filter only — source/type not in aggregated API)
-  const filteredDistRows = useMemo(() => {
-    if (districtFilter.length === 0) return sortedDistRows;
-    return sortedDistRows.filter(r => districtFilter.includes(r.district));
-  }, [sortedDistRows, districtFilter]);
-
   const clearAll = () => {
     setDistrictFilter([]); setSourceFilter([]); setComplaintTypeFilter([]);
     setFromDate(''); setToDate('');
   };
+
+  const activeFilters = districtFilter.length + sourceFilter.length + complaintTypeFilter.length + (fromDate ? 1 : 0);
 
   return (
     <Layout>
@@ -109,7 +114,10 @@ export const DashboardPage = () => {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
           <div>
             <h1 style={{ fontSize: '1.2rem', fontWeight: 800, color: '#f1f5f9', margin: 0, letterSpacing: '-0.3px' }}>Dashboard Overview</h1>
-            <p style={{ margin: '3px 0 0', fontSize: '12px', color: '#475569' }}>Real-time complaint monitoring · Haryana Police</p>
+            <p style={{ margin: '3px 0 0', fontSize: '12px', color: '#475569' }}>
+              Real-time complaint monitoring · Haryana Police
+              {activeFilters > 0 && <span style={{ color: '#6366f1', marginLeft: 8 }}>· {activeFilters} filter{activeFilters > 1 ? 's' : ''} active</span>}
+            </p>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <span style={{ fontSize: '12px', color: '#475569' }}>Year:</span>
@@ -117,7 +125,7 @@ export const DashboardPage = () => {
           </div>
         </div>
 
-        {/* ── Global Filter Bar — ABOVE KPI cards ── */}
+        {/* ── Global Filter Bar ── */}
         <GlobalFilterBar
           fromDate={fromDate} toDate={toDate}
           onFromDateChange={setFromDate} onToDateChange={setToDate}
@@ -127,7 +135,7 @@ export const DashboardPage = () => {
           onClearAll={clearAll}
         />
 
-        {/* ── KPI Cards ── */}
+        {/* ── KPI Cards — data reflects active filters ── */}
         {sl ? (
           <div className="stats-grid">
             {Array.from({ length: 6 }).map((_, i) => (
@@ -157,12 +165,12 @@ export const DashboardPage = () => {
           </>
         )}
 
-        {/* ── Charts ── */}
+        {/* ── Charts — both reflect active filters ── */}
         <div className="charts-grid">
           <ChartCard
-            title={`District-wise · ${year}${districtFilter.length > 0 ? ` · ${districtFilter.length} districts` : ''}`}
-            option={getDistrictBarOptions(filteredDistRows, { horizontal: true })}
-            alternativeOptions={{ grouped: getYoYBarOptions(filteredDistRows, year) }}
+            title={`District-wise · ${fromDate ? `${fromDate} → ${toDate}` : year}${districtFilter.length > 0 ? ` · ${districtFilter.length} districts` : ''}`}
+            option={getDistrictBarOptions(sortedDistRows, { horizontal: true })}
+            alternativeOptions={{ grouped: getYoYBarOptions(sortedDistRows, year) }}
             sortOptions={DASHBOARD_SORT_OPTIONS}
             currentSort={districtSort}
             onSortChange={setDistrictSort}
@@ -170,7 +178,7 @@ export const DashboardPage = () => {
             height="320px"
           />
           <ChartCard
-            title={`Monthly Trend · ${year}`}
+            title={`Monthly Trend · ${fromDate ? `${fromDate} → ${toDate}` : year}`}
             option={getDurationLineOptions(months, year)}
             isLoading={ml}
             height="320px"

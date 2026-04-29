@@ -33,20 +33,39 @@ export const HighlightsPage = () => {
   const [districtFilter, setDistrictFilter] = useState<string[]>([]);
   const [complaintTypeFilter, setComplaintTypeFilter] = useState<string[]>([]);
 
+  const filters = useMemo(() => ({
+    year,
+    district: districtFilter.length > 0 ? districtFilter : undefined,
+    source:   sourceFilter.length > 0   ? sourceFilter   : undefined,
+    complaintType: complaintTypeFilter.length > 0 ? complaintTypeFilter : undefined,
+  }), [year, districtFilter, sourceFilter, complaintTypeFilter]);
+
+  const buildQS = (extra?: Record<string, string>) => {
+    const p = new URLSearchParams();
+    p.set('year', String(year));
+    if (districtFilter.length > 0)      p.set('district',      districtFilter.join(','));
+    if (sourceFilter.length > 0)        p.set('source',        sourceFilter.join(','));
+    if (complaintTypeFilter.length > 0) p.set('complaintType', complaintTypeFilter.join(','));
+    if (extra) Object.entries(extra).forEach(([k,v]) => p.set(k, v));
+    return p.toString();
+  };
+
   const { data: hd, isLoading: hl } = useQuery({
-    queryKey: ['reports', 'highlights', year],
+    queryKey: ['reports', 'highlights', filters],
     queryFn: async () => {
-      const r = await fetch(`/api/reports/highlights?year=${year}`, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
+      const r = await fetch(`/api/reports/highlights?${buildQS()}`, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
       return r.json();
     },
+    staleTime: 5 * 60 * 1000,
   });
 
   const { data: nd, isLoading: nl } = useQuery({
-    queryKey: ['reports', 'nature', year],
+    queryKey: ['reports', 'nature', filters],
     queryFn: async () => {
-      const r = await fetch(`/api/reports/nature-incident?year=${year}`, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
+      const r = await fetch(`/api/reports/nature-incident?${buildQS()}`, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
       return r.json();
     },
+    staleTime: 5 * 60 * 1000,
   });
 
   const highlights = (hd?.data?.rows ?? hd?.data ?? []) as Record<string, unknown>[];

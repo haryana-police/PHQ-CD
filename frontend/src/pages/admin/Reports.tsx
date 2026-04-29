@@ -139,17 +139,16 @@ export const ReportsPage = () => {
   const [customTo,   setCustomTo]     = useState('');
   const [chartSort, setChartSort] = useState('Total Reg');
   const [itemFilter, setItemFilter] = useState<string[]>([]);
-  const [sourceFilter, setSourceFilter] = useState<string[]>([]);
+  const [districtFilter,      setDistrictFilter]      = useState<string[]>([]);
+  const [sourceFilter,        setSourceFilter]        = useState<string[]>([]);
   const [complaintTypeFilter, setComplaintTypeFilter] = useState<string[]>([]);
 
-  // Reset item filter when report tab changes
-  useEffect(() => { setItemFilter([]); }, [type]);
+  // Reset item/district filter when report tab changes
+  useEffect(() => { setItemFilter([]); setDistrictFilter([]); }, [type]);
 
 
-
-  // Build API URL
-  const apiUrl = useMemo(() => {
-    const base = `/api/reports/${type}`;
+  // Build API URL — includes ALL active filters so server does the real filtering
+  const apiFilters = useMemo(() => {
     const p = new URLSearchParams();
     if (periodMode === 'year') {
       p.set('year', String(selectedYear));
@@ -159,13 +158,16 @@ export const ReportsPage = () => {
     } else {
       p.set('year', String(selectedYear));
     }
-    return `${base}?${p}`;
-  }, [type, periodMode, selectedYear, customFrom, customTo]);
+    if (districtFilter.length > 0)      p.set('district',      districtFilter.join(','));
+    if (sourceFilter.length > 0)        p.set('source',        sourceFilter.join(','));
+    if (complaintTypeFilter.length > 0) p.set('complaintType', complaintTypeFilter.join(','));
+    return p.toString();
+  }, [type, periodMode, selectedYear, customFrom, customTo, districtFilter, sourceFilter, complaintTypeFilter]);
 
   const { data, isLoading } = useQuery({
-    queryKey: ['reports', type, periodMode, selectedYear, customFrom, customTo],
+    queryKey: ['reports', type, apiFilters],
     queryFn: async () => {
-      const r = await fetch(apiUrl, {
+      const r = await fetch(`/api/reports/${type}?${apiFilters}`, {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
       });
       return r.json();
@@ -209,7 +211,7 @@ export const ReportsPage = () => {
     return arr;
   }, [raw, chartSort]);
 
-  // Multi-select item filter (filters rows by the current tab's name key)
+  // Multi-select item filter (client-side — filters rows by the current tab's name key)
   const tab = TABS.find(t => t.id === type)!;
 
   const filterOptions = useMemo(() =>
@@ -220,25 +222,19 @@ export const ReportsPage = () => {
     [raw, tab]
   );
 
-  // Apply active filters to a row array (item + source + complaintType)
-  const applyFilters = (arr: Record<string, unknown>[]) =>
-    arr.filter(r => {
-      const rowName = String(r[tab?.nameKey] ?? r.district ?? '');
-      const itemOk = itemFilter.length === 0 || itemFilter.includes(rowName);
-      const src = String(r.complaintSource ?? r.source ?? '');
-      const srcOk = sourceFilter.length === 0 || !src || sourceFilter.includes(src);
-      const ctype = String(r.typeOfComplaint ?? r.complaintType ?? '');
-      const ctypeOk = complaintTypeFilter.length === 0 || !ctype || complaintTypeFilter.includes(ctype);
-      return itemOk && srcOk && ctypeOk;
-    });
+  // Item filter is client-side (tab-specific row name); source/type/district go to API
+  const applyItemFilter = (arr: Record<string, unknown>[]) =>
+    itemFilter.length === 0
+      ? arr
+      : arr.filter(r => itemFilter.includes(String(r[tab?.nameKey] ?? r.district ?? '')));
 
-  const filteredRawForChart = useMemo(() => applyFilters(sortedRawForChart),
+  const filteredRawForChart = useMemo(() => applyItemFilter(sortedRawForChart),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [sortedRawForChart, itemFilter, sourceFilter, complaintTypeFilter, tab]);
+    [sortedRawForChart, itemFilter, tab]);
 
-  const filteredRaw = useMemo(() => applyFilters(raw),
+  const filteredRaw = useMemo(() => applyItemFilter(raw),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [raw, itemFilter, sourceFilter, complaintTypeFilter, tab]);
+    [raw, itemFilter, tab]);
 
   // Summary (use filteredRaw so KPIs reflect filter)
   const total = filteredRaw.reduce((s, r) => s + Number(r.total ?? r.count ?? 0), 0);
@@ -322,18 +318,18 @@ export const ReportsPage = () => {
     <Layout>
       <div className="page-content">
 
-        {/* ── Global Filter Bar — ABOVE period controls ── */}
+        {/* ── Global Filter Bar — ALL filters passed to API ── */}
         <GlobalFilterBar
+          districtFilter={districtFilter} onDistrictChange={setDistrictFilter}
           sourceFilter={sourceFilter} onSourceChange={setSourceFilter}
           complaintTypeFilter={complaintTypeFilter} onComplaintTypeChange={setComplaintTypeFilter}
           showDate={false}
-          showDistrict={false}
           extraLabel={tab.label}
           extraOptions={filterOptions}
           extraSelected={itemFilter}
           onExtraChange={setItemFilter}
-          showExtra={filterOptions.length > 0}
-          onClearAll={() => { setItemFilter([]); setSourceFilter([]); setComplaintTypeFilter([]); }}
+          showExtra={filterOptions.length > 0 && type !== 'district' && type !== 'date-wise'}
+          onClearAll={() => { setItemFilter([]); setDistrictFilter([]); setSourceFilter([]); setComplaintTypeFilter([]); }}
         />
 
         {/* ── Period Controls ─────────────────────────────────────────────── */}

@@ -3,7 +3,7 @@
  * Fetches real, distinct values from /api/complaints/filter-options (30-min cache).
  * Renders: Date Range | Source | District | Complaint Type | [optional extra filter] | Clear All
  */
-import { useQuery } from '@tanstack/react-query';
+import { useFilterOptions } from '@/hooks/useData';
 import { MultiSelectFilter } from './MultiSelectFilter';
 
 const INPUT_STYLE: React.CSSProperties = {
@@ -74,22 +74,12 @@ export const GlobalFilterBar = ({
   showExtra = false,
   onClearAll,
 }: GlobalFilterBarProps) => {
-  // Fetch dynamic options once — shared across all usages (same key → same cache)
-  const { data: filterOpts } = useQuery({
-    queryKey: ['global-filter-options'],
-    queryFn: async () => {
-      const r = await fetch('/api/complaints/filter-options', {
-        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
-      });
-      return r.json();
-    },
-    staleTime: 30 * 60 * 1000,
-    gcTime: 30 * 60 * 1000,
-  });
+  const filterOpts = useFilterOptions();
 
-  const districtOptions = (filterOpts?.data?.districts ?? []).map((v: string) => ({ value: v, label: v }));
-  const sourceOptions   = (filterOpts?.data?.sources   ?? []).map((v: string) => ({ value: v, label: v }));
-  const typeOptions     = (filterOpts?.data?.types     ?? []).map((v: string) => ({ value: v, label: v }));
+  const districtOptions = (filterOpts.data?.districts ?? []).map((v: string) => ({ value: v, label: v }));
+  const sourceOptions   = (filterOpts.data?.sources   ?? []).map((v: string) => ({ value: v, label: v }));
+  const typeOptions     = (filterOpts.data?.types     ?? []).map((v: string) => ({ value: v, label: v }));
+
 
   const hasAnyFilter =
     (fromDate && onFromDateChange) || (toDate && onToDateChange) ||
