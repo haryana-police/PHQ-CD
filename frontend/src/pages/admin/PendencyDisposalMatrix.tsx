@@ -77,24 +77,18 @@ export const PendencyDisposalMatrixPage = () => {
   const [sortCol, setSortCol] = useState<SortCol>('district');
   const [sortDesc, setSortDesc] = useState(false);
 
-  // Filters
+  // Filters — district only (aggregated data, source/type not available per district row)
   const [districtFilter, setDistrictFilter] = useState<string[]>([]);
-  const [sourceFilter, setSourceFilter] = useState<string[]>([]);
-  const [complaintTypeFilter, setComplaintTypeFilter] = useState<string[]>([]);
-  const [statusFilter, setStatusFilter] = useState<string[]>([]);
-  const [fromDate, setFromDate] = useState('');
-  const [toDate, setToDate] = useState('');
 
   const { data: pData, isLoading: pLoading } = usePendencyMatrix(year);
   const { data: dData, isLoading: dLoading } = useDisposalMatrix(year);
 
+  const allRows = [...(pData?.data?.rows ?? []), ...(dData?.data?.rows ?? [])];
   const pRows: any[] = (pData?.data?.rows ?? []).filter((r: any) => districtFilter.length === 0 || districtFilter.includes(r.district));
   const dRows: any[] = (dData?.data?.rows ?? []).filter((r: any) => districtFilter.length === 0 || districtFilter.includes(r.district));
-  
-  const districtOptions = Array.from(new Set([...(pData?.data?.rows ?? []), ...(dData?.data?.rows ?? [])].map((r: any) => r.district))).filter(Boolean).sort().map(d => ({ value: d as string, label: d as string }));
-  const sourceOptions = [{ value: 'All Sources', label: 'All Sources' }, { value: 'General Complaints', label: 'General Complaints' }, { value: 'Women Safety', label: 'Women Safety' }, { value: 'CCTNS / FIR', label: 'CCTNS / FIR' }];
-  const complaintTypeOptions = [{ value: 'All Types', label: 'All Types' }, { value: 'Theft', label: 'Theft' }, { value: 'Harassment', label: 'Harassment' }, { value: 'Cyber Crime', label: 'Cyber Crime' }, { value: 'Fraud', label: 'Fraud' }];
-  const statusOptions = [{ value: 'All Status', label: 'All Status' }, { value: 'Pending', label: 'Pending' }, { value: 'Disposed', label: 'Disposed' }];
+
+  // District options from real API data
+  const districtOptions = Array.from(new Set(allRows.map((r: any) => r.district))).filter(Boolean).sort().map(d => ({ value: d as string, label: d as string }));
 
   const handleSort = (col: SortCol) => {
     if (sortCol === col) {
@@ -213,39 +207,13 @@ export const PendencyDisposalMatrixPage = () => {
           backdropFilter: 'blur(12px)', display: 'flex', flexWrap: 'wrap', gap: '16px', alignItems: 'flex-end',
           position: 'relative', zIndex: 1000
         }}>
-          {/* Date Range */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <span style={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.7px', color: '#64748b' }}>
-              Date Range
-            </span>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <input 
-                type="date" 
-                value={fromDate}
-                onChange={e => setFromDate(e.target.value)}
-                style={{ padding: '6px 10px', borderRadius: '8px', background: 'rgba(15,23,42,0.9)', color: '#e2e8f0', border: '1px solid rgba(255,255,255,0.1)', fontSize: '12.5px', outline: 'none', cursor: 'pointer' }} 
-              />
-              <span style={{ color: '#475569' }}>-</span>
-              <input 
-                type="date" 
-                value={toDate}
-                onChange={e => setToDate(e.target.value)}
-                style={{ padding: '6px 10px', borderRadius: '8px', background: 'rgba(15,23,42,0.9)', color: '#e2e8f0', border: '1px solid rgba(255,255,255,0.1)', fontSize: '12.5px', outline: 'none', cursor: 'pointer' }} 
-              />
-            </div>
-          </div>
-
-          <MultiSelectFilter label="Source" options={sourceOptions} selected={sourceFilter} onChange={setSourceFilter} placeholder="All Sources" minWidth="160px" />
-          <MultiSelectFilter label="District" options={districtOptions} selected={districtFilter} onChange={setDistrictFilter} placeholder="All Districts" minWidth="160px" />
-          <MultiSelectFilter label="Complaint Type" options={complaintTypeOptions} selected={complaintTypeFilter} onChange={setComplaintTypeFilter} placeholder="All Types" minWidth="160px" />
-          <MultiSelectFilter label="Status" options={statusOptions} selected={statusFilter} onChange={setStatusFilter} placeholder="All Status" minWidth="160px" />
-
-          {(districtFilter.length > 0 || sourceFilter.length > 0 || complaintTypeFilter.length > 0 || statusFilter.length > 0) && (
+          <MultiSelectFilter label="District" options={districtOptions} selected={districtFilter} onChange={setDistrictFilter} placeholder="All Districts" minWidth="180px" />
+          {districtFilter.length > 0 && (
             <button
-              onClick={() => { setDistrictFilter([]); setSourceFilter([]); setComplaintTypeFilter([]); setStatusFilter([]); }}
+              onClick={() => setDistrictFilter([])}
               style={{ padding: '6px 12px', borderRadius: '6px', fontSize: '11px', background: 'rgba(239,68,68,0.1)', color: '#fca5a5', border: '1px solid rgba(239,68,68,0.25)', cursor: 'pointer', marginBottom: '2px' }}
             >
-              ✕ Clear All
+              ✕ Clear
             </button>
           )}
         </div>

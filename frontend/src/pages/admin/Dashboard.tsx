@@ -60,12 +60,6 @@ export const DashboardPage = () => {
   const [year, setYear] = useState(DEFAULT_YEAR);
   const [districtSort, setDistrictSort] = useState('Total Reg');
   const [districtFilter, setDistrictFilter] = useState<string[]>([]);
-  const [sourceFilter, setSourceFilter] = useState<string[]>([]);
-  const [complaintTypeFilter, setComplaintTypeFilter] = useState<string[]>([]);
-
-  // We are keeping 'year' for API compatibility but UI can use Date Range logic in the future
-  const [fromDate, setFromDate] = useState('');
-  const [toDate, setToDate] = useState('');
 
   const { data: sumData, isLoading: sl } = useDashboardSummary(year);
   const { data: distData, isLoading: dl } = useDistrictChart(year);
@@ -114,25 +108,12 @@ export const DashboardPage = () => {
     return sortedDistRows.filter(r => districtFilter.includes(r.district));
   }, [sortedDistRows, districtFilter]);
 
+  // District options derived from real API response rows
   const districtOptions = useMemo(
-    () => distRows.map(r => ({ value: r.district, label: r.district })),
+    () => distRows.map(r => ({ value: r.district, label: r.district })).filter(o => o.value),
     [distRows]
   );
 
-  const sourceOptions = [
-    { value: 'All Sources', label: 'All Sources' },
-    { value: 'General Complaints', label: 'General Complaints' },
-    { value: 'Women Safety', label: 'Women Safety' },
-    { value: 'CCTNS / FIR', label: 'CCTNS / FIR' },
-  ];
-
-  const complaintTypeOptions = [
-    // Mock data until dynamic API is added
-    { value: 'Theft', label: 'Theft' },
-    { value: 'Harassment', label: 'Harassment' },
-    { value: 'Cyber Crime', label: 'Cyber Crime' },
-    { value: 'Fraud', label: 'Fraud' },
-  ];
 
   return (
     <Layout>
@@ -181,54 +162,14 @@ export const DashboardPage = () => {
           </>
         )}
 
-        {/* Filter Bar (Matches Screenshot) */}
+        {/* Filter Bar — District filter derived from real API data */}
         <div style={{ marginBottom: '18px' }}>
           <div style={{
             background: 'rgba(19,32,53,0.6)', border: '1px solid rgba(255,255,255,0.07)',
             borderRadius: '12px', padding: '12px 16px',
             backdropFilter: 'blur(12px)', display: 'flex', flexWrap: 'wrap', gap: '16px', alignItems: 'flex-end',
-            position: 'relative', zIndex: 1000 // Ensure dropdowns can overlap charts
+            position: 'relative', zIndex: 1000,
           }}>
-            
-            {/* Date Range */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <span style={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.7px', color: '#64748b' }}>
-                Date Range
-              </span>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <input 
-                  type="date" 
-                  value={fromDate}
-                  onChange={e => setFromDate(e.target.value)}
-                  style={{
-                    padding: '6px 10px', borderRadius: '8px', background: 'rgba(15,23,42,0.9)', 
-                    color: '#e2e8f0', border: '1px solid rgba(255,255,255,0.1)', fontSize: '12.5px',
-                    outline: 'none', cursor: 'pointer'
-                  }} 
-                />
-                <span style={{ color: '#475569' }}>-</span>
-                <input 
-                  type="date" 
-                  value={toDate}
-                  onChange={e => setToDate(e.target.value)}
-                  style={{
-                    padding: '6px 10px', borderRadius: '8px', background: 'rgba(15,23,42,0.9)', 
-                    color: '#e2e8f0', border: '1px solid rgba(255,255,255,0.1)', fontSize: '12.5px',
-                    outline: 'none', cursor: 'pointer'
-                  }} 
-                />
-              </div>
-            </div>
-
-            <MultiSelectFilter
-              label="Source"
-              options={sourceOptions}
-              selected={sourceFilter}
-              onChange={setSourceFilter}
-              placeholder="All Sources"
-              minWidth="180px"
-            />
-
             <MultiSelectFilter
               label="District"
               options={districtOptions}
@@ -237,24 +178,14 @@ export const DashboardPage = () => {
               placeholder="All Districts"
               minWidth="180px"
             />
-
-            <MultiSelectFilter
-              label="Complaint Type"
-              options={complaintTypeOptions}
-              selected={complaintTypeFilter}
-              onChange={setComplaintTypeFilter}
-              placeholder="All Types"
-              minWidth="180px"
-            />
-            {(districtFilter.length > 0 || sourceFilter.length > 0 || complaintTypeFilter.length > 0) && (
+            {districtFilter.length > 0 && (
               <button
-                onClick={() => { setDistrictFilter([]); setSourceFilter([]); setComplaintTypeFilter([]); }}
+                onClick={() => setDistrictFilter([])}
                 style={{ padding: '6px 12px', borderRadius: '6px', fontSize: '11px', background: 'rgba(239,68,68,0.1)', color: '#fca5a5', border: '1px solid rgba(239,68,68,0.25)', cursor: 'pointer' }}
               >
-                ✕ Clear All
+                ✕ Clear
               </button>
             )}
-
           </div>
         </div>
         <div className="charts-grid">
