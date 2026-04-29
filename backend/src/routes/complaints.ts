@@ -3,7 +3,69 @@ import { prisma } from '../config/database.js';
 import { sendSuccess, sendError, sendNotFound } from '../utils/response.js';
 import { authenticate } from '../middleware/auth.js';
 
+// ── In-memory cache: { key -> { data, expiresAt } }
+const cache = new Map<string, { data: unknown; expiresAt: number }>();
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+function getCached<T>(key: string): T | null {
+  const entry = cache.get(key);
+  if (entry && entry.expiresAt > Date.now()) return entry.data as T;
+  cache.delete(key);
+  return null;
+}
+function setCached(key: string, data: unknown) {
+  cache.set(key, { data, expiresAt: Date.now() + CACHE_TTL_MS });
+}
+
 export const complaintRoutes = async (fastify: FastifyInstance) => {
+  // ── Distinct filter options (fast raw SQL SELECT DISTINCT + cached)
+  fastify.get('/complaints/filter-options', {
+    preHandler: [authenticate],
+  }, async (_request, reply) => {
+    const CACHE_KEY = 'complaints:filter-options';
+    const cached = getCached<object>(CACHE_KEY);
+    if (cached) return sendSuccess(reply, cached);
+
+    try {
+      // Single raw query to get all distinct values at once — much faster than 4 separate findMany+distinct
+      const [districtRows, sourceRows, typeRows, statusRows] = await Promise.all([
+        prisma.$queryRaw<{ val: string }[]>`
+          SELECT DISTINCT "addressDistrict" AS val
+          FROM "Complaint"
+          WHERE "addressDistrict" IS NOT NULL AND "addressDistrict" <> ''
+          ORDER BY val`,
+        prisma.$queryRaw<{ val: string }[]>`
+          SELECT DISTINCT "complaintSource" AS val
+          FROM "Complaint"
+          WHERE "complaintSource" IS NOT NULL AND "complaintSource" <> ''
+          ORDER BY val`,
+        prisma.$queryRaw<{ val: string }[]>`
+          SELECT DISTINCT "typeOfComplaint" AS val
+          FROM "Complaint"
+          WHERE "typeOfComplaint" IS NOT NULL AND "typeOfComplaint" <> ''
+          ORDER BY val`,
+        prisma.$queryRaw<{ val: string }[]>`
+          SELECT DISTINCT "statusOfComplaint" AS val
+          FROM "Complaint"
+          WHERE "statusOfComplaint" IS NOT NULL AND "statusOfComplaint" <> ''
+          ORDER BY val`,
+      ]);
+
+      const result = {
+        districts: districtRows.map(r => r.val),
+        sources: sourceRows.map(r => r.val),
+        types: typeRows.map(r => r.val),
+        statuses: statusRows.map(r => r.val),
+      };
+
+      setCached(CACHE_KEY, result);
+      return sendSuccess(reply, result);
+    } catch (error) {
+      console.error('[complaints filter-options] error:', error);
+      return sendError(reply, 'Failed to fetch filter options');
+    }
+  });
+
   fastify.get('/complaints', {
     preHandler: [authenticate],
   }, async (request, reply) => {
@@ -38,64 +100,38 @@ export const complaintRoutes = async (fastify: FastifyInstance) => {
         }
       }
 
-      // Multi-value district filter (comma-separated)
       if (district) {
         const districts = district.split(',').map(d => d.trim()).filter(Boolean);
-        if (districts.length === 1) {
-          where.addressDistrict = { contains: districts[0] };
-        } else if (districts.length > 1) {
-          where.addressDistrict = { in: districts };
-        }
+        if (districts.length === 1) where.addressDistrict = districts[0];
+        else where.addressDistrict = { in: districts };
       }
 
-      // Multi-value source filter
       if (source) {
         const sources = source.split(',').map(s => s.trim()).filter(Boolean);
-        if (sources.length === 1) {
-          where.complaintSource = sources[0];
-        } else if (sources.length > 1) {
-          where.complaintSource = { in: sources };
-        }
+        if (sources.length === 1) where.complaintSource = sources[0];
+        else where.complaintSource = { in: sources };
       }
 
-      // Multi-value complaint type filter
       if (complaintType) {
         const types = complaintType.split(',').map(t => t.trim()).filter(Boolean);
-        if (types.length === 1) {
-          where.typeOfComplaint = types[0];
-        } else if (types.length > 1) {
-          where.typeOfComplaint = { in: types };
-        }
+        if (types.length === 1) where.typeOfComplaint = types[0];
+        else where.typeOfComplaint = { in: types };
       }
 
-      // Status filter
       if (status) {
         const statuses = status.split(',').map(s => s.trim()).filter(Boolean);
-        if (statuses.length === 1) {
-          where.statusOfComplaint = { contains: statuses[0] };
-        } else if (statuses.length > 1) {
-          where.OR = statuses.map(s => ({ statusOfComplaint: { contains: s } }));
-        }
+        if (statuses.length === 1) where.statusOfComplaint = { contains: statuses[0] };
+        else where.OR = statuses.map(s => ({ statusOfComplaint: { contains: s } }));
       }
 
       const [complaints, total] = await prisma.$transaction([
-        prisma.complaint.findMany({
-          where,
-          skip,
-          take: limitNum,
-          orderBy: { id: 'desc' },
-        }),
+        prisma.complaint.findMany({ where, skip, take: limitNum, orderBy: { id: 'desc' } }),
         prisma.complaint.count({ where }),
       ]);
 
       return sendSuccess(reply, {
         data: complaints,
-        pagination: {
-          page: pageNum,
-          limit: limitNum,
-          total,
-          totalPages: Math.ceil(total / limitNum),
-        },
+        pagination: { page: pageNum, limit: limitNum, total, totalPages: Math.ceil(total / limitNum) },
       });
     } catch (error) {
       console.error('[complaints list] error:', error);
@@ -103,53 +139,7 @@ export const complaintRoutes = async (fastify: FastifyInstance) => {
     }
   });
 
-  // Distinct filter options endpoint — used to dynamically populate dropdowns
-  fastify.get('/complaints/filter-options', {
-    preHandler: [authenticate],
-  }, async (_request, reply) => {
-    try {
-      const [districtRows, sourceRows, typeRows, statusRows] = await prisma.$transaction([
-        prisma.complaint.findMany({
-          select: { addressDistrict: true },
-          distinct: ['addressDistrict'],
-          where: { addressDistrict: { not: null } },
-          orderBy: { addressDistrict: 'asc' },
-        }),
-        prisma.complaint.findMany({
-          select: { complaintSource: true },
-          distinct: ['complaintSource'],
-          where: { complaintSource: { not: null } },
-          orderBy: { complaintSource: 'asc' },
-        }),
-        prisma.complaint.findMany({
-          select: { typeOfComplaint: true },
-          distinct: ['typeOfComplaint'],
-          where: { typeOfComplaint: { not: null } },
-          orderBy: { typeOfComplaint: 'asc' },
-        }),
-        prisma.complaint.findMany({
-          select: { statusOfComplaint: true },
-          distinct: ['statusOfComplaint'],
-          where: { statusOfComplaint: { not: null } },
-          orderBy: { statusOfComplaint: 'asc' },
-        }),
-      ]);
-
-      return sendSuccess(reply, {
-        districts: districtRows.map(r => r.addressDistrict).filter(Boolean),
-        sources: sourceRows.map(r => r.complaintSource).filter(Boolean),
-        types: typeRows.map(r => r.typeOfComplaint).filter(Boolean),
-        statuses: statusRows.map(r => r.statusOfComplaint).filter(Boolean),
-      });
-    } catch (error) {
-      console.error('[complaints filter-options] error:', error);
-      return sendError(reply, 'Failed to fetch filter options');
-    }
-  });
-
-  fastify.get('/complaints/:id', {
-    preHandler: [authenticate],
-  }, async (request, reply) => {
+  fastify.get('/complaints/:id', { preHandler: [authenticate] }, async (request, reply) => {
     const { id } = request.params as Record<string, string>;
     const complaintId = parseInt(id);
     if (isNaN(complaintId)) return sendError(reply, 'Invalid complaint ID', 400);
@@ -158,17 +148,13 @@ export const complaintRoutes = async (fastify: FastifyInstance) => {
     return sendSuccess(reply, complaint);
   });
 
-  fastify.post('/complaints', {
-    preHandler: [authenticate],
-  }, async (request, reply) => {
+  fastify.post('/complaints', { preHandler: [authenticate] }, async (request, reply) => {
     const data = request.body as Record<string, any>;
     const result = await prisma.complaint.create({ data });
     return sendSuccess(reply, { id: result.id }, 'Complaint created successfully');
   });
 
-  fastify.put('/complaints/:id', {
-    preHandler: [authenticate],
-  }, async (request, reply) => {
+  fastify.put('/complaints/:id', { preHandler: [authenticate] }, async (request, reply) => {
     const { id } = request.params as Record<string, string>;
     const data = request.body as Record<string, any>;
     const complaintId = parseInt(id);
@@ -179,9 +165,7 @@ export const complaintRoutes = async (fastify: FastifyInstance) => {
     return sendSuccess(reply, null, 'Complaint updated successfully');
   });
 
-  fastify.delete('/complaints/:id', {
-    preHandler: [authenticate],
-  }, async (request, reply) => {
+  fastify.delete('/complaints/:id', { preHandler: [authenticate] }, async (request, reply) => {
     const { id } = request.params as Record<string, string>;
     const complaintId = parseInt(id);
     if (isNaN(complaintId)) return sendError(reply, 'Invalid complaint ID', 400);

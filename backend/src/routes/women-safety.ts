@@ -3,43 +3,58 @@ import { prisma } from '../config/database.js';
 import { sendSuccess, sendNotFound } from '../utils/response.js';
 import { authenticate } from '../middleware/auth.js';
 
+// ── In-memory cache
+const cache = new Map<string, { data: unknown; expiresAt: number }>();
+const CACHE_TTL_MS = 5 * 60 * 1000;
+function getCached<T>(key: string): T | null {
+  const e = cache.get(key);
+  if (e && e.expiresAt > Date.now()) return e.data as T;
+  cache.delete(key);
+  return null;
+}
+function setCached(key: string, data: unknown) {
+  cache.set(key, { data, expiresAt: Date.now() + CACHE_TTL_MS });
+}
+
 export const womenSafetyRoutes = async (fastify: FastifyInstance) => {
-  // Filter options for dynamic dropdowns
+  // ── Fast filter options with raw SQL + cache
   fastify.get('/women-safety/filter-options', {
     preHandler: [authenticate],
   }, async (_request, reply) => {
-    const [districtRows, sourceRows, incidentRows, statusRows] = await prisma.$transaction([
-      prisma.womenSafety.findMany({
-        select: { addressDistrict: true },
-        distinct: ['addressDistrict'],
-        where: { addressDistrict: { not: null } },
-        orderBy: { addressDistrict: 'asc' },
-      }),
-      prisma.womenSafety.findMany({
-        select: { complaintSource: true },
-        distinct: ['complaintSource'],
-        where: { complaintSource: { not: null } },
-        orderBy: { complaintSource: 'asc' },
-      }),
-      prisma.womenSafety.findMany({
-        select: { incidentType: true },
-        distinct: ['incidentType'],
-        where: { incidentType: { not: null } },
-        orderBy: { incidentType: 'asc' },
-      }),
-      prisma.womenSafety.findMany({
-        select: { statusOfComplaint: true },
-        distinct: ['statusOfComplaint'],
-        where: { statusOfComplaint: { not: null } },
-        orderBy: { statusOfComplaint: 'asc' },
-      }),
+    const CACHE_KEY = 'women-safety:filter-options';
+    const cached = getCached<object>(CACHE_KEY);
+    if (cached) return sendSuccess(reply, cached);
+
+    // WomenSafety district is via districtId→District relation, fetch district names via join
+    const [districtRows, sourceRows, incidentRows, statusRows] = await Promise.all([
+      prisma.$queryRaw<{ val: string }[]>`
+        SELECT DISTINCT d."name" AS val
+        FROM "WomenSafety" w
+        JOIN "District" d ON d."id" = w."districtId"
+        WHERE d."name" IS NOT NULL
+        ORDER BY val`,
+      prisma.$queryRaw<{ val: string }[]>`
+        SELECT DISTINCT "complaintSource" AS val FROM "WomenSafety"
+        WHERE "complaintSource" IS NOT NULL AND "complaintSource" <> ''
+        ORDER BY val`,
+      prisma.$queryRaw<{ val: string }[]>`
+        SELECT DISTINCT "incidentType" AS val FROM "WomenSafety"
+        WHERE "incidentType" IS NOT NULL AND "incidentType" <> ''
+        ORDER BY val`,
+      prisma.$queryRaw<{ val: string }[]>`
+        SELECT DISTINCT "statusOfComplaint" AS val FROM "WomenSafety"
+        WHERE "statusOfComplaint" IS NOT NULL AND "statusOfComplaint" <> ''
+        ORDER BY val`,
     ]);
-    return sendSuccess(reply, {
-      districts: districtRows.map(r => r.addressDistrict).filter(Boolean),
-      sources: sourceRows.map(r => r.complaintSource).filter(Boolean),
-      incidentTypes: incidentRows.map(r => r.incidentType).filter(Boolean),
-      statuses: statusRows.map(r => r.statusOfComplaint).filter(Boolean),
-    });
+
+    const result = {
+      districts: districtRows.map(r => r.val),
+      sources: sourceRows.map(r => r.val),
+      incidentTypes: incidentRows.map(r => r.val),
+      statuses: statusRows.map(r => r.val),
+    };
+    setCached(CACHE_KEY, result);
+    return sendSuccess(reply, result);
   });
 
   fastify.get('/women-safety', {
@@ -75,28 +90,25 @@ export const womenSafetyRoutes = async (fastify: FastifyInstance) => {
         }
       }
 
+      // District filter via relation (join on district name)
       if (district) {
         const districts = district.split(',').map(d => d.trim()).filter(Boolean);
-        if (districts.length === 1) where.addressDistrict = { contains: districts[0] };
-        else if (districts.length > 1) where.addressDistrict = { in: districts };
+        where.district = { name: districts.length === 1 ? districts[0] : { in: districts } };
       }
 
       if (source) {
         const sources = source.split(',').map(s => s.trim()).filter(Boolean);
-        if (sources.length === 1) where.complaintSource = sources[0];
-        else if (sources.length > 1) where.complaintSource = { in: sources };
+        where.complaintSource = sources.length === 1 ? sources[0] : { in: sources };
       }
 
       if (incidentType) {
         const types = incidentType.split(',').map(t => t.trim()).filter(Boolean);
-        if (types.length === 1) where.incidentType = types[0];
-        else if (types.length > 1) where.incidentType = { in: types };
+        where.incidentType = types.length === 1 ? types[0] : { in: types };
       }
 
       if (status) {
         const statuses = status.split(',').map(s => s.trim()).filter(Boolean);
-        if (statuses.length === 1) where.statusOfComplaint = { contains: statuses[0] };
-        else where.statusOfComplaint = { in: statuses };
+        where.statusOfComplaint = statuses.length === 1 ? { contains: statuses[0] } : { in: statuses };
       }
 
       const [records, total] = await prisma.$transaction([
@@ -105,18 +117,14 @@ export const womenSafetyRoutes = async (fastify: FastifyInstance) => {
           skip,
           take: limitNum,
           orderBy: { complRegDt: 'desc' },
+          include: { district: { select: { name: true } } },
         }),
         prisma.womenSafety.count({ where }),
       ]);
 
       return sendSuccess(reply, {
         data: records,
-        pagination: {
-          page: pageNum,
-          limit: limitNum,
-          total,
-          totalPages: Math.ceil(total / limitNum),
-        },
+        pagination: { page: pageNum, limit: limitNum, total, totalPages: Math.ceil(total / limitNum) },
       });
     } catch (error) {
       console.error('[women-safety list] error:', error);
@@ -124,35 +132,27 @@ export const womenSafetyRoutes = async (fastify: FastifyInstance) => {
     }
   });
 
-  fastify.get('/women-safety/:id', {
-    preHandler: [authenticate],
-  }, async (request, reply) => {
+  fastify.get('/women-safety/:id', { preHandler: [authenticate] }, async (request, reply) => {
     const { id } = request.params as Record<string, string>;
     const record = await prisma.womenSafety.findUnique({ where: { id: parseInt(id) } });
     if (!record) return sendNotFound(reply, 'Record not found');
     return sendSuccess(reply, record);
   });
 
-  fastify.post('/women-safety', {
-    preHandler: [authenticate],
-  }, async (request, reply) => {
+  fastify.post('/women-safety', { preHandler: [authenticate] }, async (request, reply) => {
     const data = request.body as Record<string, any>;
     const record = await prisma.womenSafety.create({ data });
     return sendSuccess(reply, record, 'Record created');
   });
 
-  fastify.put('/women-safety/:id', {
-    preHandler: [authenticate],
-  }, async (request, reply) => {
+  fastify.put('/women-safety/:id', { preHandler: [authenticate] }, async (request, reply) => {
     const { id } = request.params as Record<string, string>;
     const data = request.body as Record<string, any>;
     const record = await prisma.womenSafety.update({ where: { id: parseInt(id) }, data });
     return sendSuccess(reply, record, 'Record updated');
   });
 
-  fastify.delete('/women-safety/:id', {
-    preHandler: [authenticate],
-  }, async (request, reply) => {
+  fastify.delete('/women-safety/:id', { preHandler: [authenticate] }, async (request, reply) => {
     const { id } = request.params as Record<string, string>;
     await prisma.womenSafety.delete({ where: { id: parseInt(id) } });
     return sendSuccess(reply, null, 'Record deleted');

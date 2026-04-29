@@ -71,7 +71,10 @@ model Complaint {
   @@index([complRegDt])
   @@index([statusOfComplaint])
   @@index([addressDistrict])
+  @@index([complaintSource])
+  @@index([typeOfComplaint])
   @@index([complRegDt, statusOfComplaint])
+  @@index([addressDistrict, statusOfComplaint])
 }
 
 model WomenSafety {
@@ -100,6 +103,11 @@ model WomenSafety {
   disposalDate    DateTime?
   createdAt         DateTime   @default(now())
   updatedAt         DateTime   @updatedAt
+
+  @@index([complRegDt])
+  @@index([complaintSource])
+  @@index([incidentType])
+  @@index([statusOfComplaint])
 }
 
 model CCTNSComplaint {

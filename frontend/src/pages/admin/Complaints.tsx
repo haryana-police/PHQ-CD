@@ -29,7 +29,7 @@ export const ComplaintsPage = () => {
       });
       return r.json();
     },
-    staleTime: 10 * 60 * 1000,
+    staleTime: 30 * 60 * 1000, gcTime: 30 * 60 * 1000,
   });
 
   const districtOptions = (filterOpts?.data?.districts ?? []).map((v: string) => ({ value: v, label: v }));
