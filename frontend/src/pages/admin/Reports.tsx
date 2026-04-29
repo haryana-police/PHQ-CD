@@ -9,7 +9,7 @@ import {
   getYoYBarOptions,
 } from '@/components/charts/Charts';
 import { Select } from '@/components/common/Select';
-import { MultiSelectFilter } from '@/components/common/MultiSelectFilter';
+import { GlobalFilterBar } from '@/components/common/GlobalFilterBar';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const CY = new Date().getFullYear();           // 2026
@@ -140,35 +140,12 @@ export const ReportsPage = () => {
   const [chartSort, setChartSort] = useState('Total Reg');
   const [itemFilter, setItemFilter] = useState<string[]>([]);
   const [sourceFilter, setSourceFilter] = useState<string[]>([]);
-  const [districtFilter, setDistrictFilter] = useState<string[]>([]);
   const [complaintTypeFilter, setComplaintTypeFilter] = useState<string[]>([]);
-  const [fromDate, setFromDate] = useState('');
-  const [toDate, setToDate] = useState('');
 
   // Reset item filter when report tab changes
   useEffect(() => { setItemFilter([]); }, [type]);
 
-  const sourceOptions = [
-    { value: 'General Complaints', label: 'General Complaints' },
-    { value: 'Women Safety', label: 'Women Safety' },
-    { value: 'CCTNS / FIR', label: 'CCTNS / FIR' },
-  ];
 
-  const complaintTypeOptions = [
-    { value: 'Theft', label: 'Theft' },
-    { value: 'Harassment', label: 'Harassment' },
-    { value: 'Cyber Crime', label: 'Cyber Crime' },
-    { value: 'Fraud', label: 'Fraud' },
-  ];
-
-  // Sync fromDate/toDate into custom period mode
-  useEffect(() => {
-    if (fromDate && toDate) {
-      setCustomFrom(fromDate);
-      setCustomTo(toDate);
-      setPeriodMode('custom');
-    }
-  }, [fromDate, toDate]);
 
   // Build API URL
   const apiUrl = useMemo(() => {
@@ -201,15 +178,6 @@ export const ReportsPage = () => {
     if (!d) return [];
     return Array.isArray(d) ? d : (Array.isArray(d.rows) ? d.rows : []);
   }, [data]);
-
-  // District options derived from raw API data (dynamic)
-  const districtOptions = useMemo(() => {
-    const names = raw
-      .map(r => String(r.district ?? ''))
-      .filter(Boolean);
-    const unique = Array.from(new Set(names)).sort();
-    return unique.map(v => ({ value: v, label: v }));
-  }, [raw]);
 
   const sortedRawForChart = useMemo(() => {
     const arr = [...raw];
@@ -252,30 +220,25 @@ export const ReportsPage = () => {
     [raw, tab]
   );
 
-  // Helper to apply all active filters to a row array
-  const applyFilters = (arr: Record<string, unknown>[]) => {
-    return arr.filter(r => {
+  // Apply active filters to a row array (item + source + complaintType)
+  const applyFilters = (arr: Record<string, unknown>[]) =>
+    arr.filter(r => {
       const rowName = String(r[tab?.nameKey] ?? r.district ?? '');
-      // Tab item filter (e.g. select specific districts)
       const itemOk = itemFilter.length === 0 || itemFilter.includes(rowName);
-      // District filter (applicable when tab is district or has a district field)
-      const dist = String(r.district ?? r[tab?.nameKey] ?? '');
-      const distOk = districtFilter.length === 0 || districtFilter.includes(dist);
-      // Source filter on complaintSource field if present
       const src = String(r.complaintSource ?? r.source ?? '');
       const srcOk = sourceFilter.length === 0 || !src || sourceFilter.includes(src);
-      // Complaint type filter on typeOfComplaint field if present
       const ctype = String(r.typeOfComplaint ?? r.complaintType ?? '');
       const ctypeOk = complaintTypeFilter.length === 0 || !ctype || complaintTypeFilter.includes(ctype);
-      return itemOk && distOk && srcOk && ctypeOk;
+      return itemOk && srcOk && ctypeOk;
     });
-  };
 
   const filteredRawForChart = useMemo(() => applyFilters(sortedRawForChart),
-    [sortedRawForChart, itemFilter, districtFilter, sourceFilter, complaintTypeFilter, tab]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [sortedRawForChart, itemFilter, sourceFilter, complaintTypeFilter, tab]);
 
   const filteredRaw = useMemo(() => applyFilters(raw),
-    [raw, itemFilter, districtFilter, sourceFilter, complaintTypeFilter, tab]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [raw, itemFilter, sourceFilter, complaintTypeFilter, tab]);
 
   // Summary (use filteredRaw so KPIs reflect filter)
   const total = filteredRaw.reduce((s, r) => s + Number(r.total ?? r.count ?? 0), 0);
@@ -359,98 +322,19 @@ export const ReportsPage = () => {
     <Layout>
       <div className="page-content">
 
-        {/* ── Filter Bar ────────────────────────────────────────────────── */}
-        <div style={{
-          background: 'rgba(19,32,53,0.6)',
-          border: '1px solid rgba(255,255,255,0.07)',
-          borderRadius: '12px',
-          padding: '12px 16px',
-          marginBottom: '10px',
-          backdropFilter: 'blur(12px)',
-          display: 'flex', flexWrap: 'wrap', gap: '12px', alignItems: 'flex-end',
-          position: 'relative', zIndex: 1000
-        }}>
-          {/* Date Range */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <span style={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.7px', color: '#64748b' }}>
-              Date Range
-            </span>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <input
-                type="date"
-                value={fromDate}
-                onChange={e => setFromDate(e.target.value)}
-                style={{
-                  padding: '6px 10px', borderRadius: '8px', background: 'rgba(15,23,42,0.9)',
-                  color: '#e2e8f0', border: '1px solid rgba(255,255,255,0.1)', fontSize: '12.5px',
-                  outline: 'none', cursor: 'pointer', colorScheme: 'dark',
-                }}
-              />
-              <span style={{ color: '#475569' }}>-</span>
-              <input
-                type="date"
-                value={toDate}
-                onChange={e => setToDate(e.target.value)}
-                style={{
-                  padding: '6px 10px', borderRadius: '8px', background: 'rgba(15,23,42,0.9)',
-                  color: '#e2e8f0', border: '1px solid rgba(255,255,255,0.1)', fontSize: '12.5px',
-                  outline: 'none', cursor: 'pointer', colorScheme: 'dark',
-                }}
-              />
-            </div>
-          </div>
-
-          <MultiSelectFilter
-            label="Source"
-            options={sourceOptions}
-            selected={sourceFilter}
-            onChange={setSourceFilter}
-            placeholder="All Sources"
-            minWidth="160px"
-          />
-
-          <MultiSelectFilter
-            label="District"
-            options={districtOptions}
-            selected={districtFilter}
-            onChange={setDistrictFilter}
-            placeholder="All Districts"
-            minWidth="160px"
-          />
-
-          <MultiSelectFilter
-            label="Complaint Type"
-            options={complaintTypeOptions}
-            selected={complaintTypeFilter}
-            onChange={setComplaintTypeFilter}
-            placeholder="All Types"
-            minWidth="160px"
-          />
-
-          {filterOptions.length > 0 && (
-            <MultiSelectFilter
-              label={tab.label}
-              options={filterOptions}
-              selected={itemFilter}
-              onChange={setItemFilter}
-              placeholder={`All ${tab.label}s`}
-              minWidth="200px"
-            />
-          )}
-
-          {(itemFilter.length > 0 || sourceFilter.length > 0 || districtFilter.length > 0 || complaintTypeFilter.length > 0 || fromDate || toDate) && (
-            <button
-              onClick={() => { setItemFilter([]); setSourceFilter([]); setDistrictFilter([]); setComplaintTypeFilter([]); setFromDate(''); setToDate(''); }}
-              style={{
-                padding: '6px 12px', borderRadius: '6px', fontSize: '11px',
-                background: 'rgba(239,68,68,0.1)', color: '#fca5a5',
-                border: '1px solid rgba(239,68,68,0.25)', cursor: 'pointer',
-              }}
-            >
-              ✕ Unselect All
-            </button>
-          )}
-        </div>
+        {/* ── Global Filter Bar — ABOVE period controls ── */}
+        <GlobalFilterBar
+          sourceFilter={sourceFilter} onSourceChange={setSourceFilter}
+          complaintTypeFilter={complaintTypeFilter} onComplaintTypeChange={setComplaintTypeFilter}
+          showDate={false}
+          showDistrict={false}
+          extraLabel={tab.label}
+          extraOptions={filterOptions}
+          extraSelected={itemFilter}
+          onExtraChange={setItemFilter}
+          showExtra={filterOptions.length > 0}
+          onClearAll={() => { setItemFilter([]); setSourceFilter([]); setComplaintTypeFilter([]); }}
+        />
 
         {/* ── Period Controls ─────────────────────────────────────────────── */}
         <div style={{

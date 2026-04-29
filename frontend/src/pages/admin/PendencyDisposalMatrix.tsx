@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Layout } from '@/components/layout/Layout';
 import { usePendencyMatrix, useDisposalMatrix } from '@/hooks/useData';
-import { MultiSelectFilter } from '@/components/common/MultiSelectFilter';
+import { GlobalFilterBar } from '@/components/common/GlobalFilterBar';
 
 const CY = new Date().getFullYear();
 const YEARS = Array.from({ length: CY - 2014 + 1 }, (_, i) => CY - i);
@@ -83,12 +83,9 @@ export const PendencyDisposalMatrixPage = () => {
   const { data: pData, isLoading: pLoading } = usePendencyMatrix(year);
   const { data: dData, isLoading: dLoading } = useDisposalMatrix(year);
 
-  const allRows = [...(pData?.data?.rows ?? []), ...(dData?.data?.rows ?? [])];
   const pRows: any[] = (pData?.data?.rows ?? []).filter((r: any) => districtFilter.length === 0 || districtFilter.includes(r.district));
   const dRows: any[] = (dData?.data?.rows ?? []).filter((r: any) => districtFilter.length === 0 || districtFilter.includes(r.district));
 
-  // District options from real API data
-  const districtOptions = Array.from(new Set(allRows.map((r: any) => r.district))).filter(Boolean).sort().map(d => ({ value: d as string, label: d as string }));
 
   const handleSort = (col: SortCol) => {
     if (sortCol === col) {
@@ -200,23 +197,15 @@ export const PendencyDisposalMatrixPage = () => {
           </div>
         </div>
 
-        {/* ── Filters ─────────────────────────────────────────────────── */}
-        <div style={{
-          background: 'rgba(19,32,53,0.6)', border: '1px solid rgba(255,255,255,0.07)',
-          borderRadius: '12px', padding: '12px 16px', marginBottom: '20px',
-          backdropFilter: 'blur(12px)', display: 'flex', flexWrap: 'wrap', gap: '16px', alignItems: 'flex-end',
-          position: 'relative', zIndex: 1000
-        }}>
-          <MultiSelectFilter label="District" options={districtOptions} selected={districtFilter} onChange={setDistrictFilter} placeholder="All Districts" minWidth="180px" />
-          {districtFilter.length > 0 && (
-            <button
-              onClick={() => setDistrictFilter([])}
-              style={{ padding: '6px 12px', borderRadius: '6px', fontSize: '11px', background: 'rgba(239,68,68,0.1)', color: '#fca5a5', border: '1px solid rgba(239,68,68,0.25)', cursor: 'pointer', marginBottom: '2px' }}
-            >
-              ✕ Clear
-            </button>
-          )}
-        </div>
+        {/* ── Global Filter Bar — ABOVE KPI cards ── */}
+        <GlobalFilterBar
+          districtFilter={districtFilter}
+          onDistrictChange={setDistrictFilter}
+          showDate={false}
+          showSource={false}
+          showComplaintType={false}
+          onClearAll={() => setDistrictFilter([])}
+        />
 
         {/* ── KPI summary cards ───────────────────────────────────────── */}
         {tab === 'pendency' ? (

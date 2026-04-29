@@ -4,7 +4,7 @@ import { ChartCard } from '@/components/charts/ChartCard';
 import { getDistrictBarOptions, getDurationLineOptions, getYoYBarOptions } from '@/components/charts/Charts';
 import { useDashboardSummary, useDistrictChart, useMonthWiseData } from '@/hooks/useData';
 import { Select } from '@/components/common/Select';
-import { MultiSelectFilter } from '@/components/common/MultiSelectFilter';
+import { GlobalFilterBar } from '@/components/common/GlobalFilterBar';
 
 const CY = new Date().getFullYear();
 const DEFAULT_YEAR = CY;
@@ -25,26 +25,18 @@ const KpiCard = ({ label, value, gradient, icon, sub }: KpiProps) => (
     onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-3px)'; e.currentTarget.style.boxShadow = '0 14px 32px rgba(0,0,0,0.4)'; }}
     onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = '0 8px 24px rgba(0,0,0,0.3)'; }}
   >
-    {/* Background icon watermark */}
     <div style={{ position: 'absolute', right: '-4px', top: '50%', transform: 'translateY(-50%)', opacity: 0.12, color: '#fff' }}>
       <div style={{ transform: 'scale(2.8)' }}>{icon}</div>
     </div>
     <div style={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.8px', opacity: 0.8, color: '#fff', marginBottom: '8px' }}>{label}</div>
     <div style={{ fontSize: '26px', fontWeight: 800, color: '#fff', letterSpacing: '-0.5px' }}>{value.toLocaleString()}</div>
     {sub && <div style={{ fontSize: '11px', opacity: 0.7, color: '#fff', marginTop: '4px' }}>{sub}</div>}
-    {/* Shine overlay */}
     <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: 'linear-gradient(135deg, rgba(255,255,255,0.15) 0%, transparent 60%)', pointerEvents: 'none' }} />
   </div>
 );
 
-// ── Year Selector ─────────────────────────────────────────────────────────
 const YearSelect = ({ value, onChange }: { value: number; onChange: (y: number) => void }) => (
-  <Select
-    value={value}
-    onChange={onChange}
-    options={YEARS.map(y => ({ value: y, label: String(y) }))}
-    width="100px"
-  />
+  <Select value={value} onChange={onChange} options={YEARS.map(y => ({ value: y, label: String(y) }))} width="100px" />
 );
 
 const DASHBOARD_SORT_OPTIONS = [
@@ -53,13 +45,19 @@ const DASHBOARD_SORT_OPTIONS = [
   { label: 'Total Disposed', value: 'Total Disposed' },
   { label: 'Total % (from state total)', value: 'Total %' },
   { label: 'Pending % (from district total)', value: 'Pending %' },
-  { label: 'Disposed % (from district total)', value: 'Disposed %' }
+  { label: 'Disposed % (from district total)', value: 'Disposed %' },
 ];
 
 export const DashboardPage = () => {
   const [year, setYear] = useState(DEFAULT_YEAR);
   const [districtSort, setDistrictSort] = useState('Total Reg');
+
+  // ── Unified filter state
   const [districtFilter, setDistrictFilter] = useState<string[]>([]);
+  const [sourceFilter, setSourceFilter] = useState<string[]>([]);
+  const [complaintTypeFilter, setComplaintTypeFilter] = useState<string[]>([]);
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
 
   const { data: sumData, isLoading: sl } = useDashboardSummary(year);
   const { data: distData, isLoading: dl } = useDistrictChart(year);
@@ -74,65 +72,62 @@ export const DashboardPage = () => {
   const sortedDistRows = useMemo(() => {
     const arr = [...distRows];
     switch (districtSort) {
-      case 'Total Pending':
-        arr.sort((a, b) => b.pending - a.pending);
-        break;
-      case 'Total Disposed':
-        arr.sort((a, b) => b.disposed - a.disposed);
-        break;
+      case 'Total Pending':  arr.sort((a, b) => b.pending - a.pending);  break;
+      case 'Total Disposed': arr.sort((a, b) => b.disposed - a.disposed); break;
       case 'Pending %':
         arr.sort((a, b) => {
           const pA = a.total > 0 ? a.pending / a.total : 0;
           const pB = b.total > 0 ? b.pending / b.total : 0;
           return pB - pA;
-        });
-        break;
+        }); break;
       case 'Disposed %':
         arr.sort((a, b) => {
           const dA = a.total > 0 ? a.disposed / a.total : 0;
           const dB = b.total > 0 ? b.disposed / b.total : 0;
           return dB - dA;
-        });
-        break;
-      case 'Total Reg':
-      case 'Total %':
-      default:
-        arr.sort((a, b) => b.total - a.total);
+        }); break;
+      default: arr.sort((a, b) => b.total - a.total);
     }
     return arr;
   }, [distRows, districtSort]);
 
-  // Apply multi-select filter after sort
+  // Client-side filter on aggregated district rows (district filter only — source/type not in aggregated API)
   const filteredDistRows = useMemo(() => {
     if (districtFilter.length === 0) return sortedDistRows;
     return sortedDistRows.filter(r => districtFilter.includes(r.district));
   }, [sortedDistRows, districtFilter]);
 
-  // District options derived from real API response rows
-  const districtOptions = useMemo(
-    () => distRows.map(r => ({ value: r.district, label: r.district })).filter(o => o.value),
-    [distRows]
-  );
-
+  const clearAll = () => {
+    setDistrictFilter([]); setSourceFilter([]); setComplaintTypeFilter([]);
+    setFromDate(''); setToDate('');
+  };
 
   return (
     <Layout>
       <div className="page-content">
-        {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', flexWrap: 'wrap', gap: '10px' }}>
+        {/* ── Header ── */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
           <div>
             <h1 style={{ fontSize: '1.2rem', fontWeight: 800, color: '#f1f5f9', margin: 0, letterSpacing: '-0.3px' }}>Dashboard Overview</h1>
-            <p style={{ margin: '3px 0 0', fontSize: '12px', color: '#475569' }}>
-              Real-time complaint monitoring · Haryana Police
-            </p>
+            <p style={{ margin: '3px 0 0', fontSize: '12px', color: '#475569' }}>Real-time complaint monitoring · Haryana Police</p>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <span style={{ fontSize: '12px', color: '#475569' }}>Filter year:</span>
+            <span style={{ fontSize: '12px', color: '#475569' }}>Year:</span>
             <YearSelect value={year} onChange={setYear} />
           </div>
         </div>
 
-        {/* KPI Cards */}
+        {/* ── Global Filter Bar — ABOVE KPI cards ── */}
+        <GlobalFilterBar
+          fromDate={fromDate} toDate={toDate}
+          onFromDateChange={setFromDate} onToDateChange={setToDate}
+          districtFilter={districtFilter} onDistrictChange={setDistrictFilter}
+          sourceFilter={sourceFilter} onSourceChange={setSourceFilter}
+          complaintTypeFilter={complaintTypeFilter} onComplaintTypeChange={setComplaintTypeFilter}
+          onClearAll={clearAll}
+        />
+
+        {/* ── KPI Cards ── */}
         {sl ? (
           <div className="stats-grid">
             {Array.from({ length: 6 }).map((_, i) => (
@@ -162,35 +157,10 @@ export const DashboardPage = () => {
           </>
         )}
 
-        {/* Filter Bar — District filter derived from real API data */}
-        <div style={{ marginBottom: '18px' }}>
-          <div style={{
-            background: 'rgba(19,32,53,0.6)', border: '1px solid rgba(255,255,255,0.07)',
-            borderRadius: '12px', padding: '12px 16px',
-            backdropFilter: 'blur(12px)', display: 'flex', flexWrap: 'wrap', gap: '16px', alignItems: 'flex-end',
-            position: 'relative', zIndex: 1000,
-          }}>
-            <MultiSelectFilter
-              label="District"
-              options={districtOptions}
-              selected={districtFilter}
-              onChange={setDistrictFilter}
-              placeholder="All Districts"
-              minWidth="180px"
-            />
-            {districtFilter.length > 0 && (
-              <button
-                onClick={() => setDistrictFilter([])}
-                style={{ padding: '6px 12px', borderRadius: '6px', fontSize: '11px', background: 'rgba(239,68,68,0.1)', color: '#fca5a5', border: '1px solid rgba(239,68,68,0.25)', cursor: 'pointer' }}
-              >
-                ✕ Clear
-              </button>
-            )}
-          </div>
-        </div>
+        {/* ── Charts ── */}
         <div className="charts-grid">
           <ChartCard
-            title={`District-wise · ${year}`}
+            title={`District-wise · ${year}${districtFilter.length > 0 ? ` · ${districtFilter.length} districts` : ''}`}
             option={getDistrictBarOptions(filteredDistRows, { horizontal: true })}
             alternativeOptions={{ grouped: getYoYBarOptions(filteredDistRows, year) }}
             sortOptions={DASHBOARD_SORT_OPTIONS}

@@ -5,7 +5,7 @@ import { ChartCard } from '@/components/charts/ChartCard';
 import { DataTable, Column } from '@/components/data/DataTable';
 import { getHorizontalSingleBarOptions, getGroupedBarOptions } from '@/components/charts/Charts';
 import { Select } from '@/components/common/Select';
-import { MultiSelectFilter } from '@/components/common/MultiSelectFilter';
+import { GlobalFilterBar } from '@/components/common/GlobalFilterBar';
 
 const CY = new Date().getFullYear();
 const PREVIEW_COUNT = 8;
@@ -32,23 +32,6 @@ export const HighlightsPage = () => {
   const [sourceFilter, setSourceFilter] = useState<string[]>([]);
   const [districtFilter, setDistrictFilter] = useState<string[]>([]);
   const [complaintTypeFilter, setComplaintTypeFilter] = useState<string[]>([]);
-
-  const sourceOptions = [
-    { value: 'All Sources', label: 'All Sources' },
-    { value: 'General Complaints', label: 'General Complaints' },
-    { value: 'Women Safety', label: 'Women Safety' },
-    { value: 'CCTNS / FIR', label: 'CCTNS / FIR' },
-  ];
-
-  const complaintTypeOptions = [
-    { value: 'Theft', label: 'Theft' },
-    { value: 'Harassment', label: 'Harassment' },
-    { value: 'Cyber Crime', label: 'Cyber Crime' },
-    { value: 'Fraud', label: 'Fraud' },
-  ];
-  
-  // Empty mock for district until backend provides it in highlights
-  const districtOptions: {value: string, label: string}[] = [];
 
   const { data: hd, isLoading: hl } = useQuery({
     queryKey: ['reports', 'highlights', year],
@@ -126,10 +109,6 @@ export const HighlightsPage = () => {
     () => allTopRows.map(r => ({ value: r.name, label: r.name })),
     [allTopRows]
   );
-  const natureOptions = useMemo(
-    () => allNatureRows.map(r => ({ value: r.name, label: r.name })),
-    [allNatureRows]
-  );
 
   const filteredTopRows = useMemo(() => {
     let rows = [...allTopRows];
@@ -174,91 +153,24 @@ export const HighlightsPage = () => {
             width="100px"
           />
         </div>
-          {/* Filter bar */}
-        <div style={{
-          background: 'rgba(19,32,53,0.6)', border: '1px solid rgba(255,255,255,0.07)',
-          borderRadius: '12px', padding: '12px 16px', marginBottom: '10px',
-          backdropFilter: 'blur(12px)', display: 'flex', flexWrap: 'wrap', gap: '16px', alignItems: 'flex-end',
-          position: 'relative', zIndex: 1000
-        }}>
-          {/* Date Range */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <span style={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.7px', color: '#64748b' }}>
-              Date Range
-            </span>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <input 
-                type="date" 
-                value={fromDate}
-                onChange={e => setFromDate(e.target.value)}
-                style={{
-                  padding: '6px 10px', borderRadius: '8px', background: 'rgba(15,23,42,0.9)', 
-                  color: '#e2e8f0', border: '1px solid rgba(255,255,255,0.1)', fontSize: '12.5px',
-                  outline: 'none', cursor: 'pointer'
-                }} 
-              />
-              <span style={{ color: '#475569' }}>-</span>
-              <input 
-                type="date" 
-                value={toDate}
-                onChange={e => setToDate(e.target.value)}
-                style={{
-                  padding: '6px 10px', borderRadius: '8px', background: 'rgba(15,23,42,0.9)', 
-                  color: '#e2e8f0', border: '1px solid rgba(255,255,255,0.1)', fontSize: '12.5px',
-                  outline: 'none', cursor: 'pointer'
-                }} 
-              />
-            </div>
-          </div>
-          <MultiSelectFilter
-            label="Source"
-            options={sourceOptions}
-            selected={sourceFilter}
-            onChange={setSourceFilter}
-            placeholder="All Sources"
-            minWidth="160px"
-          />
-          <MultiSelectFilter
-            label="District"
-            options={districtOptions}
-            selected={districtFilter}
-            onChange={setDistrictFilter}
-            placeholder="All Districts"
-            minWidth="160px"
-          />
-          <MultiSelectFilter
-            label="Complaint Type"
-            options={complaintTypeOptions}
-            selected={complaintTypeFilter}
-            onChange={setComplaintTypeFilter}
-            placeholder="All Types"
-            minWidth="160px"
-          />
-          <MultiSelectFilter
-            label="Category"
-            options={categoryOptions}
-            selected={categoryFilter}
-            onChange={setCategoryFilter}
-            placeholder="All Categories"
-            minWidth="160px"
-          />
-          <MultiSelectFilter
-            label="Incident Type"
-            options={natureOptions}
-            selected={natureFilter}
-            onChange={setNatureFilter}
-            placeholder="All Incident Types"
-            minWidth="160px"
-          />
-          {(categoryFilter.length > 0 || natureFilter.length > 0 || sourceFilter.length > 0 || districtFilter.length > 0 || complaintTypeFilter.length > 0) && (
-            <button
-              onClick={() => { setCategoryFilter([]); setNatureFilter([]); setSourceFilter([]); setDistrictFilter([]); setComplaintTypeFilter([]); }}
-              style={{ padding: '6px 12px', borderRadius: '6px', fontSize: '11px', background: 'rgba(239,68,68,0.1)', color: '#fca5a5', border: '1px solid rgba(239,68,68,0.25)', cursor: 'pointer' }}
-            >
-              ✕ Unselect All
-            </button>
-          )}
-        </div>
+        {/* ── Global Filter Bar — ABOVE charts ── */}
+        <GlobalFilterBar
+          fromDate={fromDate} toDate={toDate}
+          onFromDateChange={setFromDate} onToDateChange={setToDate}
+          districtFilter={districtFilter} onDistrictChange={setDistrictFilter}
+          sourceFilter={sourceFilter} onSourceChange={setSourceFilter}
+          complaintTypeFilter={complaintTypeFilter} onComplaintTypeChange={setComplaintTypeFilter}
+          extraLabel="Category"
+          extraOptions={categoryOptions}
+          extraSelected={categoryFilter}
+          onExtraChange={setCategoryFilter}
+          showExtra={categoryOptions.length > 0}
+          onClearAll={() => {
+            setCategoryFilter([]); setNatureFilter([]);
+            setSourceFilter([]); setDistrictFilter([]);
+            setComplaintTypeFilter([]); setFromDate(''); setToDate('');
+          }}
+        />
           {/* Charts */}
         <div className="charts-grid">
           <ChartCard title={`Top Categories · ${year}`} isLoading={hl}
