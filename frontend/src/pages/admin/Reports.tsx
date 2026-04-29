@@ -161,6 +161,15 @@ export const ReportsPage = () => {
     { value: 'Fraud', label: 'Fraud' },
   ];
 
+  // Sync fromDate/toDate into custom period mode
+  useEffect(() => {
+    if (fromDate && toDate) {
+      setCustomFrom(fromDate);
+      setCustomTo(toDate);
+      setPeriodMode('custom');
+    }
+  }, [fromDate, toDate]);
+
   // Build API URL
   const apiUrl = useMemo(() => {
     const base = `/api/reports/${type}`;
@@ -243,21 +252,30 @@ export const ReportsPage = () => {
     [raw, tab]
   );
 
-  const filteredRawForChart = useMemo(() => {
-    if (itemFilter.length === 0) return sortedRawForChart;
-    return sortedRawForChart.filter(r => {
-      const name = String(r[tab?.nameKey] ?? r.district ?? '');
-      return itemFilter.includes(name);
+  // Helper to apply all active filters to a row array
+  const applyFilters = (arr: Record<string, unknown>[]) => {
+    return arr.filter(r => {
+      const rowName = String(r[tab?.nameKey] ?? r.district ?? '');
+      // Tab item filter (e.g. select specific districts)
+      const itemOk = itemFilter.length === 0 || itemFilter.includes(rowName);
+      // District filter (applicable when tab is district or has a district field)
+      const dist = String(r.district ?? r[tab?.nameKey] ?? '');
+      const distOk = districtFilter.length === 0 || districtFilter.includes(dist);
+      // Source filter on complaintSource field if present
+      const src = String(r.complaintSource ?? r.source ?? '');
+      const srcOk = sourceFilter.length === 0 || !src || sourceFilter.includes(src);
+      // Complaint type filter on typeOfComplaint field if present
+      const ctype = String(r.typeOfComplaint ?? r.complaintType ?? '');
+      const ctypeOk = complaintTypeFilter.length === 0 || !ctype || complaintTypeFilter.includes(ctype);
+      return itemOk && distOk && srcOk && ctypeOk;
     });
-  }, [sortedRawForChart, itemFilter, tab]);
+  };
 
-  const filteredRaw = useMemo(() => {
-    if (itemFilter.length === 0) return raw;
-    return raw.filter(r => {
-      const name = String(r[tab?.nameKey] ?? r.district ?? '');
-      return itemFilter.includes(name);
-    });
-  }, [raw, itemFilter, tab]);
+  const filteredRawForChart = useMemo(() => applyFilters(sortedRawForChart),
+    [sortedRawForChart, itemFilter, districtFilter, sourceFilter, complaintTypeFilter, tab]);
+
+  const filteredRaw = useMemo(() => applyFilters(raw),
+    [raw, itemFilter, districtFilter, sourceFilter, complaintTypeFilter, tab]);
 
   // Summary (use filteredRaw so KPIs reflect filter)
   const total = filteredRaw.reduce((s, r) => s + Number(r.total ?? r.count ?? 0), 0);

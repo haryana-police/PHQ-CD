@@ -60,7 +60,7 @@ export const DashboardPage = () => {
   const [year, setYear] = useState(DEFAULT_YEAR);
   const [districtSort, setDistrictSort] = useState('Total Reg');
   const [districtFilter, setDistrictFilter] = useState<string[]>([]);
-  const [sourceFilter, setSourceFilter] = useState<string[]>(['All Sources']);
+  const [sourceFilter, setSourceFilter] = useState<string[]>([]);
   const [complaintTypeFilter, setComplaintTypeFilter] = useState<string[]>([]);
 
   // We are keeping 'year' for API compatibility but UI can use Date Range logic in the future

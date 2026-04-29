@@ -131,14 +131,17 @@ export const HighlightsPage = () => {
     [allNatureRows]
   );
 
-  const filteredTopRows = useMemo(
-    () => categoryFilter.length === 0 ? allTopRows.slice(0, 10) : allTopRows.filter(r => categoryFilter.includes(r.name)).slice(0, 20),
-    [allTopRows, categoryFilter]
-  );
-  const filteredNatureRows = useMemo(
-    () => natureFilter.length === 0 ? sortedNatureRows.slice(0, 10) : sortedNatureRows.filter(r => natureFilter.includes(r.name)).slice(0, 20),
-    [sortedNatureRows, natureFilter]
-  );
+  const filteredTopRows = useMemo(() => {
+    let rows = [...allTopRows];
+    if (categoryFilter.length > 0) rows = rows.filter(r => categoryFilter.includes(r.name));
+    return rows.slice(0, categoryFilter.length > 0 ? 50 : 10);
+  }, [allTopRows, categoryFilter]);
+
+  const filteredNatureRows = useMemo(() => {
+    let rows = [...sortedNatureRows];
+    if (natureFilter.length > 0) rows = rows.filter(r => natureFilter.includes(r.name));
+    return rows.slice(0, natureFilter.length > 0 ? 50 : 10);
+  }, [sortedNatureRows, natureFilter]);
 
   const catCols: Column<typeof allTopRows[0]>[] = [
     { key: 'rank', label: '#', width: '50px', align: 'center' },

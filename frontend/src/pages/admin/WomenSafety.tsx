@@ -14,7 +14,7 @@ export const WomenSafetyPage = () => {
   const [incidentFilter, setIncidentFilter] = useState<string[]>([]);
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
   const [districtFilter, setDistrictFilter] = useState<string[]>([]);
-  const [sourceFilter, setSourceFilter] = useState<string[]>(['Women Safety']);
+  const [sourceFilter, setSourceFilter] = useState<string[]>([]);
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
   const search = '';
@@ -73,7 +73,7 @@ export const WomenSafetyPage = () => {
   const records = data?.data?.data || [];
   const pagination = data?.data?.pagination;
 
-  type WomenSafetyRow = { regNum: string; district: string; name: string; mobile: string; incidentType: string; date: string; status: string; source: string; id: unknown; };
+  type WomenSafetyRow = { regNum: string; district: string; name: string; mobile: string; incidentType: string; rawDate: string; date: string; status: string; source: string; id: unknown; };
 
   const tableData: WomenSafetyRow[] = records.map((r: Record<string, unknown>) => ({
     regNum: String(r.complRegNum || '-'),
@@ -81,6 +81,7 @@ export const WomenSafetyPage = () => {
     name: `${r.firstName || ''} ${r.lastName || ''}`.trim() || '-',
     mobile: String(r.mobile || '-'),
     incidentType: String(r.incidentType || '-'),
+    rawDate: r.complRegDt ? String(r.complRegDt).slice(0, 10) : '',
     date: r.complRegDt ? new Date(String(r.complRegDt)).toLocaleDateString() : '-',
     status: String(r.statusOfComplaint || 'Pending'),
     source: String(r.complaintSource || 'Women Safety'),
@@ -108,12 +109,13 @@ export const WomenSafetyPage = () => {
   }, [tableData]);
 
   const filteredData = useMemo(() => tableData.filter((r: WomenSafetyRow) => {
-    const incOk = incidentFilter.length === 0 || incidentFilter.includes(r.incidentType) || incidentFilter.includes('All Types');
-    const statOk = statusFilter.length === 0 || statusFilter.includes(r.status) || statusFilter.includes('All Status');
-    const distOk = districtFilter.length === 0 || districtFilter.includes(r.district) || districtFilter.includes('All Districts');
-    const srcOk = sourceFilter.length === 0 || sourceFilter.includes(r.source) || sourceFilter.includes('All Sources');
-    return incOk && statOk && distOk && srcOk;
-  }), [tableData, incidentFilter, statusFilter, districtFilter, sourceFilter]);
+    const incOk = incidentFilter.length === 0 || incidentFilter.includes(r.incidentType);
+    const statOk = statusFilter.length === 0 || statusFilter.includes(r.status);
+    const distOk = districtFilter.length === 0 || districtFilter.includes(r.district);
+    const srcOk = sourceFilter.length === 0 || sourceFilter.includes(r.source);
+    const dateOk = (!fromDate || r.rawDate >= fromDate) && (!toDate || r.rawDate <= toDate);
+    return incOk && statOk && distOk && srcOk && dateOk;
+  }), [tableData, incidentFilter, statusFilter, districtFilter, sourceFilter, fromDate, toDate]);
 
   const cols: Column<typeof tableData[0]>[] = [
     { key: 'regNum', label: 'Reg. No.', sortable: true },

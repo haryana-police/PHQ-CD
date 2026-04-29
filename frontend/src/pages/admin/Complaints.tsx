@@ -16,7 +16,7 @@ export const ComplaintsPage = () => {
   const [toDate, setToDate] = useState('');
   const [districtFilter, setDistrictFilter] = useState<string[]>([]);
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
-  const [sourceFilter, setSourceFilter] = useState<string[]>(['All Sources']);
+  const [sourceFilter, setSourceFilter] = useState<string[]>([]);
   const [complaintTypeFilter, setComplaintTypeFilter] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -64,13 +64,14 @@ export const ComplaintsPage = () => {
     e.target.value = '';
   };
 
-  type ComplaintRow = { regNum: string; district: string; name: string; mobile: string; date: string; status: string; source: string; complaintType: string; id: unknown; };
+  type ComplaintRow = { regNum: string; district: string; name: string; mobile: string; rawDate: string; date: string; status: string; source: string; complaintType: string; id: unknown; };
 
   const tableData: ComplaintRow[] = complaints.map((c: Record<string, unknown>) => ({
     regNum: String(c.complRegNum || '-'),
     district: String((c.district as Record<string, unknown>)?.name || c.addressDistrict || '-'),
     name: `${c.firstName || ''} ${c.lastName || ''}`.trim() || '-',
     mobile: String(c.mobile || '-'),
+    rawDate: c.complRegDt ? String(c.complRegDt).slice(0, 10) : '',
     date: c.complRegDt ? new Date(String(c.complRegDt)).toLocaleDateString() : '-',
     status: String(c.statusOfComplaint || 'Pending'),
     source: String(c.complaintSource || 'General Complaints'),
@@ -102,11 +103,12 @@ export const ComplaintsPage = () => {
     return tableData.filter((r: ComplaintRow) => {
       const distOk = districtFilter.length === 0 || districtFilter.includes(r.district);
       const statOk = statusFilter.length === 0 || statusFilter.includes(r.status);
-      const srcOk = sourceFilter.length === 0 || sourceFilter.includes(r.source) || sourceFilter.includes('All Sources');
-      const typeOk = complaintTypeFilter.length === 0 || complaintTypeFilter.includes(r.complaintType) || complaintTypeFilter.includes('All Types');
-      return distOk && statOk && srcOk && typeOk;
+      const srcOk = sourceFilter.length === 0 || sourceFilter.includes(r.source);
+      const typeOk = complaintTypeFilter.length === 0 || complaintTypeFilter.includes(r.complaintType);
+      const dateOk = (!fromDate || r.rawDate >= fromDate) && (!toDate || r.rawDate <= toDate);
+      return distOk && statOk && srcOk && typeOk && dateOk;
     });
-  }, [tableData, districtFilter, statusFilter, sourceFilter, complaintTypeFilter]);
+  }, [tableData, districtFilter, statusFilter, sourceFilter, complaintTypeFilter, fromDate, toDate]);
 
   const cols: Column<typeof tableData[0]>[] = [
     { key: 'regNum', label: 'Reg. No.', sortable: true },
