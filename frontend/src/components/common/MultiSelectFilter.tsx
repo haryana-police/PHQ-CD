@@ -38,7 +38,7 @@ export const MultiSelectFilter = ({
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  const allSelected = selected.length === 0 || selected.length === options.length;
+  const allSelected = selected.length === options.length && options.length > 0;
   const filtered = options.filter(o =>
     o.label.toLowerCase().includes(search.toLowerCase())
   );
@@ -55,19 +55,18 @@ export const MultiSelectFilter = ({
     }
 
     if (selected.includes(val)) {
-      const next = selected.filter(v => v !== val);
-      onChange(next);
+      onChange(selected.filter(v => v !== val));
     } else {
       onChange([...selected, val]);
     }
   };
 
-  const selectAll = () => onChange([]);
-  const unselectAll = () => onChange(options.map(o => o.value));
+  const selectAll = () => onChange(options.map(o => o.value));
+  const unselectAll = () => onChange([]);
 
   const displayLabel = () => {
     if (selected.length === 0 || selected.length === options.length)
-      return `All ${label}s`;
+      return placeholder || `All ${label}s`;
     if (selected.length === 1)
       return options.find(o => o.value === selected[0])?.label ?? selected[0];
     return `${selected.length} ${label}s selected`;
@@ -204,8 +203,6 @@ export const MultiSelectFilter = ({
               ) : (
                 filtered.map(opt => {
                   const isExplicitlySelected = selected.includes(opt.value);
-                  const displayCheck = selected.length === 0 || isExplicitlySelected;
-
                   return (
                     <div
                       key={opt.value}
@@ -213,7 +210,7 @@ export const MultiSelectFilter = ({
                       style={{
                         display: 'flex', alignItems: 'center', gap: '9px',
                         padding: '8px 12px', fontSize: '12.5px', cursor: 'pointer',
-                        color: displayCheck ? '#e2e8f0' : '#64748b',
+                        color: isExplicitlySelected ? '#e2e8f0' : '#64748b',
                         background: isExplicitlySelected ? 'rgba(99,102,241,0.1)' : 'transparent',
                         transition: 'background 0.1s',
                       }}
@@ -228,12 +225,12 @@ export const MultiSelectFilter = ({
                       {!singleSelect ? (
                         <div style={{
                           width: '14px', height: '14px', borderRadius: '3px', flexShrink: 0,
-                          border: displayCheck ? '1px solid #6366f1' : '1px solid rgba(255,255,255,0.2)',
-                          background: displayCheck ? '#6366f1' : 'transparent',
+                          border: isExplicitlySelected ? '1px solid #6366f1' : '1px solid rgba(255,255,255,0.2)',
+                          background: isExplicitlySelected ? '#6366f1' : 'transparent',
                           display: 'flex', alignItems: 'center', justifyContent: 'center',
                           transition: 'all 0.15s',
                         }}>
-                          {displayCheck && (
+                          {isExplicitlySelected && (
                             <svg width="9" height="9" viewBox="0 0 12 12" fill="none">
                               <polyline points="2 6 5 9 10 3" stroke="#fff" strokeWidth="2" strokeLinecap="round" />
                             </svg>
