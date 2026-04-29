@@ -139,9 +139,27 @@ export const ReportsPage = () => {
   const [customTo,   setCustomTo]     = useState('');
   const [chartSort, setChartSort] = useState('Total Reg');
   const [itemFilter, setItemFilter] = useState<string[]>([]);
+  const [sourceFilter, setSourceFilter] = useState<string[]>([]);
+  const [districtFilter, setDistrictFilter] = useState<string[]>([]);
+  const [complaintTypeFilter, setComplaintTypeFilter] = useState<string[]>([]);
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
 
   // Reset item filter when report tab changes
   useEffect(() => { setItemFilter([]); }, [type]);
+
+  const sourceOptions = [
+    { value: 'General Complaints', label: 'General Complaints' },
+    { value: 'Women Safety', label: 'Women Safety' },
+    { value: 'CCTNS / FIR', label: 'CCTNS / FIR' },
+  ];
+
+  const complaintTypeOptions = [
+    { value: 'Theft', label: 'Theft' },
+    { value: 'Harassment', label: 'Harassment' },
+    { value: 'Cyber Crime', label: 'Cyber Crime' },
+    { value: 'Fraud', label: 'Fraud' },
+  ];
 
   // Build API URL
   const apiUrl = useMemo(() => {
@@ -174,6 +192,15 @@ export const ReportsPage = () => {
     if (!d) return [];
     return Array.isArray(d) ? d : (Array.isArray(d.rows) ? d.rows : []);
   }, [data]);
+
+  // District options derived from raw API data (dynamic)
+  const districtOptions = useMemo(() => {
+    const names = raw
+      .map(r => String(r.district ?? ''))
+      .filter(Boolean);
+    const unique = Array.from(new Set(names)).sort();
+    return unique.map(v => ({ value: v, label: v }));
+  }, [raw]);
 
   const sortedRawForChart = useMemo(() => {
     const arr = [...raw];
@@ -315,39 +342,97 @@ export const ReportsPage = () => {
       <div className="page-content">
 
         {/* ── Filter Bar ────────────────────────────────────────────────── */}
-        {filterOptions.length > 0 && (
-          <div style={{
-            background: 'rgba(19,32,53,0.6)',
-            border: '1px solid rgba(255,255,255,0.07)',
-            borderRadius: '12px',
-            padding: '12px 16px',
-            marginBottom: '10px',
-            backdropFilter: 'blur(12px)',
-            display: 'flex', flexWrap: 'wrap', gap: '12px', alignItems: 'flex-end',
-            position: 'relative', zIndex: 1000
-          }}>
+        <div style={{
+          background: 'rgba(19,32,53,0.6)',
+          border: '1px solid rgba(255,255,255,0.07)',
+          borderRadius: '12px',
+          padding: '12px 16px',
+          marginBottom: '10px',
+          backdropFilter: 'blur(12px)',
+          display: 'flex', flexWrap: 'wrap', gap: '12px', alignItems: 'flex-end',
+          position: 'relative', zIndex: 1000
+        }}>
+          {/* Date Range */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <span style={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.7px', color: '#64748b' }}>
+              Date Range
+            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <input
+                type="date"
+                value={fromDate}
+                onChange={e => setFromDate(e.target.value)}
+                style={{
+                  padding: '6px 10px', borderRadius: '8px', background: 'rgba(15,23,42,0.9)',
+                  color: '#e2e8f0', border: '1px solid rgba(255,255,255,0.1)', fontSize: '12.5px',
+                  outline: 'none', cursor: 'pointer', colorScheme: 'dark',
+                }}
+              />
+              <span style={{ color: '#475569' }}>-</span>
+              <input
+                type="date"
+                value={toDate}
+                onChange={e => setToDate(e.target.value)}
+                style={{
+                  padding: '6px 10px', borderRadius: '8px', background: 'rgba(15,23,42,0.9)',
+                  color: '#e2e8f0', border: '1px solid rgba(255,255,255,0.1)', fontSize: '12.5px',
+                  outline: 'none', cursor: 'pointer', colorScheme: 'dark',
+                }}
+              />
+            </div>
+          </div>
+
+          <MultiSelectFilter
+            label="Source"
+            options={sourceOptions}
+            selected={sourceFilter}
+            onChange={setSourceFilter}
+            placeholder="All Sources"
+            minWidth="160px"
+          />
+
+          <MultiSelectFilter
+            label="District"
+            options={districtOptions}
+            selected={districtFilter}
+            onChange={setDistrictFilter}
+            placeholder="All Districts"
+            minWidth="160px"
+          />
+
+          <MultiSelectFilter
+            label="Complaint Type"
+            options={complaintTypeOptions}
+            selected={complaintTypeFilter}
+            onChange={setComplaintTypeFilter}
+            placeholder="All Types"
+            minWidth="160px"
+          />
+
+          {filterOptions.length > 0 && (
             <MultiSelectFilter
               label={tab.label}
               options={filterOptions}
               selected={itemFilter}
-              onChange={v => { setItemFilter(v); }}
+              onChange={setItemFilter}
               placeholder={`All ${tab.label}s`}
-              minWidth="220px"
+              minWidth="200px"
             />
-            {itemFilter.length > 0 && (
-              <button
-                onClick={() => setItemFilter([])}
-                style={{
-                  padding: '6px 12px', borderRadius: '6px', fontSize: '11px',
-                  background: 'rgba(239,68,68,0.1)', color: '#fca5a5',
-                  border: '1px solid rgba(239,68,68,0.25)', cursor: 'pointer',
-                }}
-              >
-                ✕ Clear Filter
-              </button>
-            )}
-          </div>
-        )}
+          )}
+
+          {(itemFilter.length > 0 || sourceFilter.length > 0 || districtFilter.length > 0 || complaintTypeFilter.length > 0 || fromDate || toDate) && (
+            <button
+              onClick={() => { setItemFilter([]); setSourceFilter([]); setDistrictFilter([]); setComplaintTypeFilter([]); setFromDate(''); setToDate(''); }}
+              style={{
+                padding: '6px 12px', borderRadius: '6px', fontSize: '11px',
+                background: 'rgba(239,68,68,0.1)', color: '#fca5a5',
+                border: '1px solid rgba(239,68,68,0.25)', cursor: 'pointer',
+              }}
+            >
+              ✕ Unselect All
+            </button>
+          )}
+        </div>
 
         {/* ── Period Controls ─────────────────────────────────────────────── */}
         <div style={{

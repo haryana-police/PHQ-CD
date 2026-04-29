@@ -27,6 +27,29 @@ export const HighlightsPage = () => {
   const [natureFilter, setNatureFilter] = useState<string[]>([]);
   const YEARS = Array.from({ length: CY - 2014 + 1 }, (_, i) => CY - i);
 
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
+  const [sourceFilter, setSourceFilter] = useState<string[]>([]);
+  const [districtFilter, setDistrictFilter] = useState<string[]>([]);
+  const [complaintTypeFilter, setComplaintTypeFilter] = useState<string[]>([]);
+
+  const sourceOptions = [
+    { value: 'All Sources', label: 'All Sources' },
+    { value: 'General Complaints', label: 'General Complaints' },
+    { value: 'Women Safety', label: 'Women Safety' },
+    { value: 'CCTNS / FIR', label: 'CCTNS / FIR' },
+  ];
+
+  const complaintTypeOptions = [
+    { value: 'Theft', label: 'Theft' },
+    { value: 'Harassment', label: 'Harassment' },
+    { value: 'Cyber Crime', label: 'Cyber Crime' },
+    { value: 'Fraud', label: 'Fraud' },
+  ];
+  
+  // Empty mock for district until backend provides it in highlights
+  const districtOptions: {value: string, label: string}[] = [];
+
   const { data: hd, isLoading: hl } = useQuery({
     queryKey: ['reports', 'highlights', year],
     queryFn: async () => {
@@ -155,13 +178,66 @@ export const HighlightsPage = () => {
           backdropFilter: 'blur(12px)', display: 'flex', flexWrap: 'wrap', gap: '16px', alignItems: 'flex-end',
           position: 'relative', zIndex: 1000
         }}>
+          {/* Date Range */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <span style={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.7px', color: '#64748b' }}>
+              Date Range
+            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <input 
+                type="date" 
+                value={fromDate}
+                onChange={e => setFromDate(e.target.value)}
+                style={{
+                  padding: '6px 10px', borderRadius: '8px', background: 'rgba(15,23,42,0.9)', 
+                  color: '#e2e8f0', border: '1px solid rgba(255,255,255,0.1)', fontSize: '12.5px',
+                  outline: 'none', cursor: 'pointer'
+                }} 
+              />
+              <span style={{ color: '#475569' }}>-</span>
+              <input 
+                type="date" 
+                value={toDate}
+                onChange={e => setToDate(e.target.value)}
+                style={{
+                  padding: '6px 10px', borderRadius: '8px', background: 'rgba(15,23,42,0.9)', 
+                  color: '#e2e8f0', border: '1px solid rgba(255,255,255,0.1)', fontSize: '12.5px',
+                  outline: 'none', cursor: 'pointer'
+                }} 
+              />
+            </div>
+          </div>
+          <MultiSelectFilter
+            label="Source"
+            options={sourceOptions}
+            selected={sourceFilter}
+            onChange={setSourceFilter}
+            placeholder="All Sources"
+            minWidth="160px"
+          />
+          <MultiSelectFilter
+            label="District"
+            options={districtOptions}
+            selected={districtFilter}
+            onChange={setDistrictFilter}
+            placeholder="All Districts"
+            minWidth="160px"
+          />
+          <MultiSelectFilter
+            label="Complaint Type"
+            options={complaintTypeOptions}
+            selected={complaintTypeFilter}
+            onChange={setComplaintTypeFilter}
+            placeholder="All Types"
+            minWidth="160px"
+          />
           <MultiSelectFilter
             label="Category"
             options={categoryOptions}
             selected={categoryFilter}
             onChange={setCategoryFilter}
             placeholder="All Categories"
-            minWidth="200px"
+            minWidth="160px"
           />
           <MultiSelectFilter
             label="Incident Type"
@@ -169,14 +245,14 @@ export const HighlightsPage = () => {
             selected={natureFilter}
             onChange={setNatureFilter}
             placeholder="All Incident Types"
-            minWidth="200px"
+            minWidth="160px"
           />
-          {(categoryFilter.length > 0 || natureFilter.length > 0) && (
+          {(categoryFilter.length > 0 || natureFilter.length > 0 || sourceFilter.length > 0 || districtFilter.length > 0 || complaintTypeFilter.length > 0) && (
             <button
-              onClick={() => { setCategoryFilter([]); setNatureFilter([]); }}
+              onClick={() => { setCategoryFilter([]); setNatureFilter([]); setSourceFilter([]); setDistrictFilter([]); setComplaintTypeFilter([]); }}
               style={{ padding: '6px 12px', borderRadius: '6px', fontSize: '11px', background: 'rgba(239,68,68,0.1)', color: '#fca5a5', border: '1px solid rgba(239,68,68,0.25)', cursor: 'pointer' }}
             >
-              ✕ Clear All
+              ✕ Unselect All
             </button>
           )}
         </div>
