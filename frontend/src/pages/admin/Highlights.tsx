@@ -3,7 +3,9 @@ import { useQuery } from '@tanstack/react-query';
 import { Layout } from '@/components/layout/Layout';
 import { ChartCard } from '@/components/charts/ChartCard';
 import { DataTable, Column } from '@/components/data/DataTable';
-import { getHorizontalSingleBarOptions, getGroupedBarOptions, getYoYBarOptions } from '@/components/charts/Charts';
+import { getHorizontalSingleBarOptions, getYoYBarOptions, getYoYStackedBarOptions } from '@/components/charts/Charts';
+
+
 
 
 
@@ -112,9 +114,18 @@ export const HighlightsPage = () => {
   const highlightsPrev  = (hdPrev?.data?.rows ?? (Array.isArray(hdPrev?.data) ? hdPrev?.data : [])) as Record<string, unknown>[];
   const naturesPrev     = (ndPrev?.data?.rows  ?? (Array.isArray(ndPrev?.data)  ? ndPrev?.data  : [])) as Record<string, unknown>[];
 
-  // Lookup maps: category/nature name → prev year count/total
-  const prevCatMap  = Object.fromEntries(highlightsPrev.map(r => [String(r.category), Number(r.count  || 0)]));
-  const prevNatMap  = Object.fromEntries(naturesPrev.map(r   => [String(r.natureOfIncident), Number(r.total || 0)]));
+  // Lookup maps: category/nature name → prev year data
+  const prevCatMap = Object.fromEntries(
+    highlightsPrev.map(r => [String(r.category), Number(r.count || 0)])
+  );
+  // For nature: store pending + disposed separately for grouped-stacked YoY chart
+  const prevNatMap = Object.fromEntries(
+    naturesPrev.map(r => [String(r.natureOfIncident), {
+      total:    Number(r.total    || 0),
+      pending:  Number(r.pending  || 0),
+      disposed: Number(r.disposed || 0),
+    }])
+  );
 
 
   const allTopRows = highlights.map((r, i) => ({
@@ -244,6 +255,8 @@ export const HighlightsPage = () => {
         />
           {/* Charts */}
         <div className="charts-grid">
+
+          {/* LEFT: Top Categories — default horizontal ranking, ⊞ = YoY grouped comparison */}
           <ChartCard
             title={`Top Categories · ${year} vs ${year - 1}`}
             isLoading={hl}
@@ -253,7 +266,7 @@ export const HighlightsPage = () => {
             alternativeOptions={{
               grouped: getYoYBarOptions(
                 filteredTopRows.map(r => ({
-                  district: r.name,
+                  district:  r.name,
                   total:     r.count,
                   prevTotal: prevCatMap[r.name] ?? 0,
                 })),
@@ -261,18 +274,29 @@ export const HighlightsPage = () => {
               ),
             }}
           />
+
+          {/* RIGHT: Nature of Incidents — default = grouped-stacked (Pending+Disposed × 2 years), ≡ = YoY total simple grouped */}
           <ChartCard
             title={`Nature of Incidents · ${year} vs ${year - 1}`}
             isLoading={nl}
             height="300px"
             defaultType="grouped"
-            option={getGroupedBarOptions(filteredNatureRows.map(r => ({ category: r.name, total: r.total, pending: r.pending, disposed: r.disposed })))}
+            option={getYoYStackedBarOptions(
+              filteredNatureRows.map(r => ({
+                category:     r.name,
+                pending:      r.pending,
+                disposed:     r.disposed,
+                prevPending:  prevNatMap[r.name]?.pending  ?? 0,
+                prevDisposed: prevNatMap[r.name]?.disposed ?? 0,
+              })),
+              year
+            )}
             alternativeOptions={{
               horizontal: getYoYBarOptions(
                 filteredNatureRows.map(r => ({
                   district:  r.name,
                   total:     r.total,
-                  prevTotal: prevNatMap[r.name] ?? 0,
+                  prevTotal: prevNatMap[r.name]?.total ?? 0,
                 })),
                 year
               ),
