@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Layout } from '@/components/layout/Layout';
 import { DataTable, Column } from '@/components/data/DataTable';
@@ -30,14 +30,41 @@ export const PendingPage = () => {
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
 
-  const getEndpoint = () => {
-    return ep[type] || ep.all;
+  // ── Fetch distinct filter options from server (once)
+  const { data: filterOpts } = useQuery({
+    queryKey: ['pending-filter-options'],
+    queryFn: async () => {
+      const r = await fetch('/api/pending/filter-options', {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+      });
+      return r.json();
+    },
+    staleTime: 10 * 60 * 1000,
+  });
+
+  const districtOptions = (filterOpts?.data?.districts ?? []).map((v: string) => ({ value: v, label: v }));
+  const sourceOptions = (filterOpts?.data?.sources ?? []).map((v: string) => ({ value: v, label: v }));
+  const complaintTypeOptions = (filterOpts?.data?.types ?? []).map((v: string) => ({ value: v, label: v }));
+
+  // ── Build query string with all active filters
+  const buildParams = () => {
+    const params = new URLSearchParams();
+    if (districtFilter.length > 0) params.set('district', districtFilter.join(','));
+    if (sourceFilter.length > 0) params.set('source', sourceFilter.join(','));
+    if (complaintTypeFilter.length > 0) params.set('complaintType', complaintTypeFilter.join(','));
+    if (fromDate) params.set('fromDate', fromDate);
+    if (toDate) params.set('toDate', toDate);
+    return params.toString();
   };
 
+  const endpoint = ep[type] || ep.all;
+
   const { data, isLoading } = useQuery({
-    queryKey: ['pending', type],
+    queryKey: ['pending', type, districtFilter, sourceFilter, complaintTypeFilter, fromDate, toDate],
     queryFn: async () => {
-      const r = await fetch(getEndpoint(), { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
+      const qs = buildParams();
+      const url = qs ? `${endpoint}?${qs}` : endpoint;
+      const r = await fetch(url, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
       return r.json();
     },
   });
@@ -55,36 +82,9 @@ export const PendingPage = () => {
     complaintType: r.typeOfComplaint || r.incidentType || 'Other',
   }));
 
-  const districtOptions = useMemo(() => {
-    const s = new Set(rows.map(r => String(r.addressDistrict ?? '')).filter(Boolean));
-    return Array.from(s).sort().map(v => ({ value: v, label: v }));
-  }, [rows]);
-
-  const sourceOptions = useMemo(() => {
-    const s = new Set(tableData.map(r => String(r.source)).filter(Boolean));
-    return Array.from(s).sort().map(v => ({ value: v, label: v }));
-  }, [tableData]);
-
-  const complaintTypeOptions = useMemo(() => {
-    const s = new Set(tableData.map(r => String(r.complaintType)).filter(Boolean));
-    return Array.from(s).sort().map(v => ({ value: v, label: v }));
-  }, [tableData]);
-
-  const statusOptions = useMemo(() => {
-    const s = new Set(tableData.map(r => String(r.status)).filter(Boolean));
-    return Array.from(s).sort().map(v => ({ value: v, label: v }));
-  }, [tableData]);
-
-  const filteredTableData = useMemo(() => {
-    return tableData.filter(r => {
-      const distOk = districtFilter.length === 0 || districtFilter.includes(String(r.district));
-      const srcOk = sourceFilter.length === 0 || sourceFilter.includes(String(r.source));
-      const typeOk = complaintTypeFilter.length === 0 || complaintTypeFilter.includes(String(r.complaintType));
-      const statOk = statusFilter.length === 0 || statusFilter.includes(String(r.status));
-      const dateOk = (!fromDate || new Date(r.date) >= new Date(fromDate)) && (!toDate || new Date(r.date) <= new Date(toDate));
-      return distOk && srcOk && typeOk && statOk && dateOk;
-    });
-  }, [tableData, districtFilter, sourceFilter, complaintTypeFilter, statusFilter, fromDate, toDate]);
+  // All filtering is server-side
+  const filteredTableData = tableData;
+  const isFiltered = districtFilter.length > 0 || sourceFilter.length > 0 || complaintTypeFilter.length > 0 || statusFilter.length > 0 || !!fromDate || !!toDate;
 
   const cols: Column<typeof tableData[0]>[] = [
     { key: 'regNum', label: 'Reg. No.', sortable: true },
@@ -189,18 +189,9 @@ export const PendingPage = () => {
               minWidth="160px"
             />
 
-            <MultiSelectFilter
-              label="Status"
-              options={statusOptions}
-              selected={statusFilter}
-              onChange={setStatusFilter}
-              placeholder="All Status"
-              minWidth="160px"
-            />
-
-            {(districtFilter.length > 0 || sourceFilter.length > 0 || complaintTypeFilter.length > 0 || statusFilter.length > 0) && (
+            {isFiltered && (
               <button
-                onClick={() => { setDistrictFilter([]); setSourceFilter([]); setComplaintTypeFilter([]); setStatusFilter([]); }}
+                onClick={() => { setDistrictFilter([]); setSourceFilter([]); setComplaintTypeFilter([]); setStatusFilter([]); setFromDate(''); setToDate(''); }}
                 style={{ padding: '6px 12px', borderRadius: '6px', fontSize: '11px', background: 'rgba(239,68,68,0.1)', color: '#fca5a5', border: '1px solid rgba(239,68,68,0.25)', cursor: 'pointer', alignSelf: 'flex-end', marginBottom: '2px' }}
               >
                 ✕ Clear All
@@ -210,7 +201,7 @@ export const PendingPage = () => {
         </div>
         {/* Data Table */}
         <DataTable
-          title={`${tabs.find(t => t.id === type)?.label} Records${districtFilter.length > 0 ? ` · Filtered (${filteredTableData.length})` : ''}`}
+          title={`${tabs.find(t => t.id === type)?.label} · ${filteredTableData.length} records${isFiltered ? ' (filtered)' : ''}`}
           data={filteredTableData}
           isLoading={isLoading}
           skeletonRows={8}

@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { useRef, useState, useMemo } from 'react';
+import { useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Layout } from '@/components/layout/Layout';
 import { Button } from '@/components/common/Button';
@@ -20,11 +20,43 @@ export const WomenSafetyPage = () => {
   const search = '';
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const { data, isLoading, refetch } = useQuery({
-    queryKey: ['women-safety', page, limit, search],
+  // ── Fetch distinct filter options from server
+  const { data: filterOpts } = useQuery({
+    queryKey: ['women-safety-filter-options'],
     queryFn: async () => {
-      const params = new URLSearchParams({ page: String(page), limit: String(limit), search });
-      const r = await fetch(`/api/women-safety?${params}`, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
+      const r = await fetch('/api/women-safety/filter-options', {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+      });
+      return r.json();
+    },
+    staleTime: 10 * 60 * 1000,
+  });
+
+  const districtOptions = (filterOpts?.data?.districts ?? []).map((v: string) => ({ value: v, label: v }));
+  const sourceOptions = (filterOpts?.data?.sources ?? []).map((v: string) => ({ value: v, label: v }));
+  const incidentOptions = (filterOpts?.data?.incidentTypes ?? []).map((v: string) => ({ value: v, label: v }));
+  const statusOptions = (filterOpts?.data?.statuses ?? []).map((v: string) => ({ value: v, label: v }));
+
+  const handleFilterChange = (setter: (v: any) => void) => (v: any) => { setter(v); setPage(1); };
+
+  // ── Build API params with all active filters
+  const buildParams = () => {
+    const params = new URLSearchParams({ page: String(page), limit: String(limit), search });
+    if (fromDate) params.set('fromDate', fromDate);
+    if (toDate) params.set('toDate', toDate);
+    if (districtFilter.length > 0) params.set('district', districtFilter.join(','));
+    if (sourceFilter.length > 0) params.set('source', sourceFilter.join(','));
+    if (incidentFilter.length > 0) params.set('incidentType', incidentFilter.join(','));
+    if (statusFilter.length > 0) params.set('status', statusFilter.join(','));
+    return params;
+  };
+
+  const { data, isLoading, refetch } = useQuery({
+    queryKey: ['women-safety', page, limit, search, fromDate, toDate, districtFilter, sourceFilter, incidentFilter, statusFilter],
+    queryFn: async () => {
+      const r = await fetch(`/api/women-safety?${buildParams()}`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+      });
       return r.json();
     },
   });
@@ -88,34 +120,11 @@ export const WomenSafetyPage = () => {
     id: r.id,
   }));
 
-  const incidentOptions = useMemo(() => {
-    const s = new Set(tableData.map((r: WomenSafetyRow) => r.incidentType).filter(Boolean));
-    return Array.from(s).sort().map(v => ({ value: v, label: v }));
-  }, [tableData]);
 
-  const statusOptions = useMemo(() => {
-    const s = new Set(tableData.map((r: WomenSafetyRow) => r.status).filter(Boolean));
-    return Array.from(s).sort().map(v => ({ value: v, label: v }));
-  }, [tableData]);
 
-  const districtOptions = useMemo(() => {
-    const s = new Set(tableData.map((r: WomenSafetyRow) => r.district).filter(Boolean));
-    return Array.from(s).sort().map(v => ({ value: v, label: v }));
-  }, [tableData]);
-
-  const sourceOptions = useMemo(() => {
-    const s = new Set(tableData.map((r: WomenSafetyRow) => r.source).filter(Boolean));
-    return Array.from(s).sort().map(v => ({ value: v, label: v }));
-  }, [tableData]);
-
-  const filteredData = useMemo(() => tableData.filter((r: WomenSafetyRow) => {
-    const incOk = incidentFilter.length === 0 || incidentFilter.includes(r.incidentType);
-    const statOk = statusFilter.length === 0 || statusFilter.includes(r.status);
-    const distOk = districtFilter.length === 0 || districtFilter.includes(r.district);
-    const srcOk = sourceFilter.length === 0 || sourceFilter.includes(r.source);
-    const dateOk = (!fromDate || r.rawDate >= fromDate) && (!toDate || r.rawDate <= toDate);
-    return incOk && statOk && distOk && srcOk && dateOk;
-  }), [tableData, incidentFilter, statusFilter, districtFilter, sourceFilter, fromDate, toDate]);
+  // All filtering is done server-side
+  const filteredData = tableData;
+  const isFiltered = incidentFilter.length > 0 || statusFilter.length > 0 || districtFilter.length > 0 || sourceFilter.length > 0 || !!fromDate || !!toDate;
 
   const cols: Column<typeof tableData[0]>[] = [
     { key: 'regNum', label: 'Reg. No.', sortable: true },
@@ -184,7 +193,7 @@ export const WomenSafetyPage = () => {
             label="Source"
             options={sourceOptions}
             selected={sourceFilter}
-            onChange={setSourceFilter}
+            onChange={handleFilterChange(setSourceFilter)}
             placeholder="All Sources"
             minWidth="160px"
           />
@@ -193,7 +202,7 @@ export const WomenSafetyPage = () => {
             label="District"
             options={districtOptions}
             selected={districtFilter}
-            onChange={setDistrictFilter}
+            onChange={handleFilterChange(setDistrictFilter)}
             placeholder="All Districts"
             minWidth="160px"
           />
@@ -202,7 +211,7 @@ export const WomenSafetyPage = () => {
             label="Incident Type"
             options={incidentOptions}
             selected={incidentFilter}
-            onChange={setIncidentFilter}
+            onChange={handleFilterChange(setIncidentFilter)}
             minWidth="160px"
           />
 
@@ -210,12 +219,12 @@ export const WomenSafetyPage = () => {
             label="Status"
             options={statusOptions}
             selected={statusFilter}
-            onChange={setStatusFilter}
+            onChange={handleFilterChange(setStatusFilter)}
             minWidth="160px"
           />
-          {(incidentFilter.length > 0 || statusFilter.length > 0 || districtFilter.length > 0 || sourceFilter.length > 0) && (
+          {isFiltered && (
             <button
-              onClick={() => { setIncidentFilter([]); setStatusFilter([]); setDistrictFilter([]); setSourceFilter([]); }}
+              onClick={() => { setIncidentFilter([]); setStatusFilter([]); setDistrictFilter([]); setSourceFilter([]); setFromDate(''); setToDate(''); setPage(1); }}
               style={{ padding: '6px 12px', borderRadius: '6px', fontSize: '11px', background: 'rgba(239,68,68,0.1)', color: '#fca5a5', border: '1px solid rgba(239,68,68,0.25)', cursor: 'pointer' }}
             >
               ✕ Clear All

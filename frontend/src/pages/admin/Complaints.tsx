@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { useState, useRef, useMemo } from 'react';
+import { useState, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { Layout } from '@/components/layout/Layout';
 import { Button } from '@/components/common/Button';
@@ -20,16 +20,47 @@ export const ComplaintsPage = () => {
   const [complaintTypeFilter, setComplaintTypeFilter] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const { data, isLoading, refetch } = useQuery({
-    queryKey: ['complaints', page, limit, search, fromDate, toDate],
+  // ── Fetch distinct filter options from server
+  const { data: filterOpts } = useQuery({
+    queryKey: ['complaints-filter-options'],
     queryFn: async () => {
-      const params = new URLSearchParams({ page: String(page), limit: String(limit), search });
-      if (fromDate) params.append('fromDate', fromDate);
-      if (toDate) params.append('toDate', toDate);
-      const r = await fetch(`/api/complaints?${params}`, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
+      const r = await fetch('/api/complaints/filter-options', {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+      });
+      return r.json();
+    },
+    staleTime: 10 * 60 * 1000,
+  });
+
+  const districtOptions = (filterOpts?.data?.districts ?? []).map((v: string) => ({ value: v, label: v }));
+  const sourceOptions = (filterOpts?.data?.sources ?? []).map((v: string) => ({ value: v, label: v }));
+  const complaintTypeOptions = (filterOpts?.data?.types ?? []).map((v: string) => ({ value: v, label: v }));
+  const statusOptions = (filterOpts?.data?.statuses ?? []).map((v: string) => ({ value: v, label: v }));
+
+  // ── Build API params including all active filters
+  const buildParams = () => {
+    const params = new URLSearchParams({ page: String(page), limit: String(limit), search });
+    if (fromDate) params.set('fromDate', fromDate);
+    if (toDate) params.set('toDate', toDate);
+    if (districtFilter.length > 0) params.set('district', districtFilter.join(','));
+    if (sourceFilter.length > 0) params.set('source', sourceFilter.join(','));
+    if (complaintTypeFilter.length > 0) params.set('complaintType', complaintTypeFilter.join(','));
+    if (statusFilter.length > 0) params.set('status', statusFilter.join(','));
+    return params;
+  };
+
+  const { data, isLoading, refetch } = useQuery({
+    queryKey: ['complaints', page, limit, search, fromDate, toDate, districtFilter, sourceFilter, complaintTypeFilter, statusFilter],
+    queryFn: async () => {
+      const r = await fetch(`/api/complaints?${buildParams()}`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+      });
       return r.json();
     },
   });
+
+  // Reset page when filters change
+  const handleFilterChange = (setter: (v: any) => void) => (v: any) => { setter(v); setPage(1); };
 
   const complaints = data?.data?.data || [];
   const pagination = data?.data?.pagination;
@@ -79,36 +110,9 @@ export const ComplaintsPage = () => {
     id: c.id,
   }));
 
-  const districtOptions = useMemo(() => {
-    const unique = new Set(tableData.map((r: ComplaintRow) => r.district));
-    return Array.from(unique).filter(Boolean).sort().map(v => ({ value: v, label: v }));
-  }, [tableData]);
-
-  const statusOptions = useMemo(() => {
-    const unique = new Set(tableData.map((r: ComplaintRow) => r.status));
-    return Array.from(unique).filter(Boolean).sort().map(v => ({ value: v, label: v }));
-  }, [tableData]);
-
-  const sourceOptions = useMemo(() => {
-    const unique = new Set(tableData.map((r: ComplaintRow) => r.source));
-    return Array.from(unique).filter(Boolean).sort().map(v => ({ value: v, label: v }));
-  }, [tableData]);
-
-  const complaintTypeOptions = useMemo(() => {
-    const unique = new Set(tableData.map((r: ComplaintRow) => r.complaintType));
-    return Array.from(unique).filter(Boolean).sort().map(v => ({ value: v, label: v }));
-  }, [tableData]);
-
-  const filteredTableData = useMemo(() => {
-    return tableData.filter((r: ComplaintRow) => {
-      const distOk = districtFilter.length === 0 || districtFilter.includes(r.district);
-      const statOk = statusFilter.length === 0 || statusFilter.includes(r.status);
-      const srcOk = sourceFilter.length === 0 || sourceFilter.includes(r.source);
-      const typeOk = complaintTypeFilter.length === 0 || complaintTypeFilter.includes(r.complaintType);
-      const dateOk = (!fromDate || r.rawDate >= fromDate) && (!toDate || r.rawDate <= toDate);
-      return distOk && statOk && srcOk && typeOk && dateOk;
-    });
-  }, [tableData, districtFilter, statusFilter, sourceFilter, complaintTypeFilter, fromDate, toDate]);
+  // All filtering is done server-side — data returned is already the filtered set
+  const filteredTableData = tableData;
+  const isFiltered = districtFilter.length > 0 || sourceFilter.length > 0 || complaintTypeFilter.length > 0 || statusFilter.length > 0 || !!fromDate || !!toDate;
 
   const cols: Column<typeof tableData[0]>[] = [
     { key: 'regNum', label: 'Reg. No.', sortable: true },
@@ -151,7 +155,7 @@ export const ComplaintsPage = () => {
               <input 
                 type="date" 
                 value={fromDate}
-                onChange={e => setFromDate(e.target.value)}
+                onChange={e => { setFromDate(e.target.value); setPage(1); }}
                 style={{
                   padding: '6px 10px', borderRadius: '8px', background: 'rgba(15,23,42,0.9)', 
                   color: '#e2e8f0', border: '1px solid rgba(255,255,255,0.1)', fontSize: '12.5px',
@@ -162,7 +166,7 @@ export const ComplaintsPage = () => {
               <input 
                 type="date" 
                 value={toDate}
-                onChange={e => setToDate(e.target.value)}
+                onChange={e => { setToDate(e.target.value); setPage(1); }}
                 style={{
                   padding: '6px 10px', borderRadius: '8px', background: 'rgba(15,23,42,0.9)', 
                   color: '#e2e8f0', border: '1px solid rgba(255,255,255,0.1)', fontSize: '12.5px',
@@ -176,7 +180,7 @@ export const ComplaintsPage = () => {
             label="Source"
             options={sourceOptions}
             selected={sourceFilter}
-            onChange={setSourceFilter}
+            onChange={handleFilterChange(setSourceFilter)}
             placeholder="All Sources"
             minWidth="160px"
           />
@@ -185,7 +189,7 @@ export const ComplaintsPage = () => {
             label="District"
             options={districtOptions}
             selected={districtFilter}
-            onChange={setDistrictFilter}
+            onChange={handleFilterChange(setDistrictFilter)}
             placeholder="All Districts"
             minWidth="160px"
           />
@@ -194,7 +198,7 @@ export const ComplaintsPage = () => {
             label="Complaint Type"
             options={complaintTypeOptions}
             selected={complaintTypeFilter}
-            onChange={setComplaintTypeFilter}
+            onChange={handleFilterChange(setComplaintTypeFilter)}
             placeholder="All Types"
             minWidth="160px"
           />
@@ -203,13 +207,13 @@ export const ComplaintsPage = () => {
             label="Status"
             options={statusOptions}
             selected={statusFilter}
-            onChange={setStatusFilter}
+            onChange={handleFilterChange(setStatusFilter)}
             placeholder="All Status"
             minWidth="160px"
           />
-          {(districtFilter.length > 0 || statusFilter.length > 0 || sourceFilter.length > 0 || complaintTypeFilter.length > 0) && (
+          {isFiltered && (
             <button
-              onClick={() => { setDistrictFilter([]); setStatusFilter([]); setSourceFilter([]); setComplaintTypeFilter([]); }}
+              onClick={() => { setDistrictFilter([]); setStatusFilter([]); setSourceFilter([]); setComplaintTypeFilter([]); setFromDate(''); setToDate(''); setPage(1); }}
               style={{ padding: '6px 12px', borderRadius: '6px', fontSize: '11px', background: 'rgba(239,68,68,0.1)', color: '#fca5a5', border: '1px solid rgba(239,68,68,0.25)', cursor: 'pointer' }}
             >
               ✕ Clear All
