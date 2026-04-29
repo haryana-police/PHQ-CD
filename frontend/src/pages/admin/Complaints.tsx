@@ -6,6 +6,8 @@ import { Button } from '@/components/common/Button';
 import { DataTable, Column } from '@/components/data/DataTable';
 import { Select } from '@/components/common/Select';
 import { MultiSelectFilter } from '@/components/common/MultiSelectFilter';
+import { useFilterOptions } from '@/hooks/useData';
+
 import * as XLSX from 'xlsx';
 
 export const ComplaintsPage = () => {
@@ -20,22 +22,17 @@ export const ComplaintsPage = () => {
   const [complaintTypeFilter, setComplaintTypeFilter] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // ── Fetch distinct filter options from server
-  const { data: filterOpts } = useQuery({
-    queryKey: ['complaints-filter-options'],
-    queryFn: async () => {
-      const r = await fetch('/api/complaints/filter-options', {
-        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
-      });
-      return r.json();
-    },
-    staleTime: 30 * 60 * 1000, gcTime: 30 * 60 * 1000,
-  });
+  // ── Shared filter options (same cache as GlobalFilterBar)
+  const { data: filterOptsData } = useFilterOptions();
 
-  const districtOptions = (filterOpts?.data?.districts ?? []).map((v: string) => ({ value: v, label: v }));
-  const sourceOptions = (filterOpts?.data?.sources ?? []).map((v: string) => ({ value: v, label: v }));
-  const complaintTypeOptions = (filterOpts?.data?.types ?? []).map((v: string) => ({ value: v, label: v }));
-  const statusOptions = (filterOpts?.data?.statuses ?? []).map((v: string) => ({ value: v, label: v }));
+  const districtOptions       = (filterOptsData?.districts ?? []).map(v => ({ value: v, label: v }));
+  const sourceOptions         = (filterOptsData?.sources   ?? []).map(v => ({ value: v, label: v }));
+  const complaintTypeOptions  = (filterOptsData?.types     ?? []).map(v => ({ value: v, label: v }));
+  const statusOptions: { value: string; label: string }[] = [
+    { value: 'Pending', label: 'Pending' },
+    { value: 'Disposed', label: 'Disposed' },
+  ];
+
 
   // ── Build API params including all active filters
   const buildParams = () => {

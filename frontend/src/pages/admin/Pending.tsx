@@ -4,6 +4,8 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { Layout } from '@/components/layout/Layout';
 import { DataTable, Column } from '@/components/data/DataTable';
 import { MultiSelectFilter } from '@/components/common/MultiSelectFilter';
+import { useFilterOptions } from '@/hooks/useData';
+
 
 const tabs = [
   { id: 'all', label: 'All Pending' },
@@ -30,21 +32,13 @@ export const PendingPage = () => {
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
 
-  // ── Fetch distinct filter options from server (once)
-  const { data: filterOpts } = useQuery({
-    queryKey: ['pending-filter-options'],
-    queryFn: async () => {
-      const r = await fetch('/api/pending/filter-options', {
-        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
-      });
-      return r.json();
-    },
-    staleTime: 30 * 60 * 1000, gcTime: 30 * 60 * 1000,
-  });
+  // ── Shared filter options — same source as GlobalFilterBar (dashboard/filter-options)
+  const { data: filterOptsData } = useFilterOptions();
 
-  const districtOptions = (filterOpts?.data?.districts ?? []).map((v: string) => ({ value: v, label: v }));
-  const sourceOptions = (filterOpts?.data?.sources ?? []).map((v: string) => ({ value: v, label: v }));
-  const complaintTypeOptions = (filterOpts?.data?.types ?? []).map((v: string) => ({ value: v, label: v }));
+  const districtOptions       = (filterOptsData?.districts ?? []).map(v => ({ value: v, label: v }));
+  const sourceOptions         = (filterOptsData?.sources   ?? []).map(v => ({ value: v, label: v }));
+  const complaintTypeOptions  = (filterOptsData?.types     ?? []).map(v => ({ value: v, label: v }));
+
 
   // ── Build query string with all active filters
   const buildParams = () => {

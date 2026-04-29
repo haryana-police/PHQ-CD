@@ -61,7 +61,7 @@ async function buildFilterWhere(query: Record<string, string>) {
 
 export const pendingRoutes = async (fastify: FastifyInstance) => {
 
-  // ── Filter options — districts from District_Master (DB-driven)
+  // ── Filter options — uses dashboard/filter-options pattern (clean SQL)
   fastify.get('/pending/filter-options', {
     preHandler: [authenticate],
   }, async (_request, reply) => {
@@ -69,25 +69,26 @@ export const pendingRoutes = async (fastify: FastifyInstance) => {
     const cached = getCached<object>(CACHE_KEY);
     if (cached) return sendSuccess(reply, cached);
 
+    const PEND_SQL = `(c."statusOfComplaint" IS NULL OR c."statusOfComplaint" = '' OR c."statusOfComplaint" ILIKE 'Pending%')`;
+
     const [districtRows, sourceRows, typeRows] = await Promise.all([
-      // Districts from District_Master — same source as chart queries
-      prisma.$queryRaw<{ val: string }[]>`
+      prisma.$queryRawUnsafe<{ val: string }[]>(`
         SELECT "DistrictName" AS val FROM "District_Master"
-        WHERE "isPoliceDistrict" = true ORDER BY val`,
-      prisma.$queryRaw<{ val: string }[]>`
+        WHERE "isPoliceDistrict" = true ORDER BY val`),
+      prisma.$queryRawUnsafe<{ val: string }[]>(`
         SELECT DISTINCT c."complaintSource" AS val FROM "Complaint" c
         JOIN "District_Master" dm ON dm.id = c."resolvedDistrictId"
         WHERE dm."isPoliceDistrict" = true
           AND c."complaintSource" IS NOT NULL AND c."complaintSource" <> ''
-          AND ${PENDING_STATUS.replace(/c\./g, 'c.')}
-        ORDER BY val`,
-      prisma.$queryRaw<{ val: string }[]>`
+          AND ${PEND_SQL}
+        ORDER BY val`),
+      prisma.$queryRawUnsafe<{ val: string }[]>(`
         SELECT DISTINCT c."typeOfComplaint" AS val FROM "Complaint" c
         JOIN "District_Master" dm ON dm.id = c."resolvedDistrictId"
         WHERE dm."isPoliceDistrict" = true
           AND c."typeOfComplaint" IS NOT NULL AND c."typeOfComplaint" <> ''
-          AND ${PENDING_STATUS.replace(/c\./g, 'c.')}
-        ORDER BY val`,
+          AND ${PEND_SQL}
+        ORDER BY val`),
     ]);
 
     const result = {

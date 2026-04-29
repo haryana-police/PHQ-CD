@@ -5,6 +5,8 @@ import { Button } from '@/components/common/Button';
 import { DataTable, Column } from '@/components/data/DataTable';
 import { Select } from '@/components/common/Select';
 import { MultiSelectFilter } from '@/components/common/MultiSelectFilter';
+import { useFilterOptions } from '@/hooks/useData';
+
 
 export const CCTNSPage = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -27,21 +29,13 @@ export const CCTNSPage = () => {
 
   const handleFilterChange = (setter: (v: any) => void) => (v: any) => { setter(v); setPage(1); };
 
-  // ── Fetch distinct filter options from server
-  const { data: filterOpts } = useQuery({
-    queryKey: ['cctns-filter-options'],
-    queryFn: async () => {
-      const r = await fetch('/api/cctns/filter-options', {
-        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
-      });
-      return r.json();
-    },
-    staleTime: 30 * 60 * 1000,
-    gcTime: 30 * 60 * 1000,
-  });
+  // ── Shared filter options (same cache as GlobalFilterBar)
+  const { data: filterOptsData } = useFilterOptions();
+  const districtOptions = (filterOptsData?.districts ?? []).map(v => ({ value: v, label: v }));
+  // CCTNS categories are fetched from the API response dynamically below
+  const categoryOptions = (filterOptsData?.types ?? []).map(v => ({ value: v, label: v }));
 
-  const districtOptions = (filterOpts?.data?.districts ?? []).map((v: string) => ({ value: v, label: v }));
-  const categoryOptions = (filterOpts?.data?.categories ?? []).map((v: string) => ({ value: v, label: v }));
+
 
   // ── Build query params with all active filters
   const buildParams = () => {
