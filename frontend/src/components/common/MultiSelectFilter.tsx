@@ -20,6 +20,7 @@ export const MultiSelectFilter = ({
   options,
   selected,
   onChange,
+  placeholder,
   minWidth = '160px',
   singleSelect = false,
 }: MultiSelectFilterProps) => {
