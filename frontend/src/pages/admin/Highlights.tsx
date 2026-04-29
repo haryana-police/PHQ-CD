@@ -3,7 +3,8 @@ import { useQuery } from '@tanstack/react-query';
 import { Layout } from '@/components/layout/Layout';
 import { ChartCard } from '@/components/charts/ChartCard';
 import { DataTable, Column } from '@/components/data/DataTable';
-import { getHorizontalSingleBarOptions, getGroupedBarOptions } from '@/components/charts/Charts';
+import { getHorizontalSingleBarOptions, getGroupedBarOptions, getPieOptions, getDistrictBarOptions, COLORS } from '@/components/charts/Charts';
+
 import { Select } from '@/components/common/Select';
 import { GlobalFilterBar } from '@/components/common/GlobalFilterBar';
 
@@ -205,15 +206,43 @@ export const HighlightsPage = () => {
         />
           {/* Charts */}
         <div className="charts-grid">
-          <ChartCard title={`Top Categories · ${year}`} isLoading={hl}
+          <ChartCard
+            title={`Top Categories · ${year}`}
+            isLoading={hl}
+            height="300px"
+            defaultType="horizontal"
             option={getHorizontalSingleBarOptions(filteredTopRows.map(r => ({ name: r.name, value: r.count })))}
-            height="280px" />
-          <ChartCard title={`Nature of Incidents · ${year}`} isLoading={nl}
+            alternativeOptions={{
+              grouped: {
+                tooltip: { trigger: 'axis' as const, backgroundColor: '#0f172a', borderColor: 'rgba(255,255,255,0.08)', textStyle: { color: '#e2e8f0', fontSize: 12 }, extraCssText: 'border-radius:8px;' },
+                legend: { data: ['Count'], bottom: 4, textStyle: { color: '#94a3b8', fontSize: 11 } },
+                grid: { left: '2%', right: '2%', bottom: '14%', top: '4%', containLabel: true },
+                xAxis: { type: 'category' as const, data: filteredTopRows.map(r => r.name), axisLabel: { rotate: 35, fontSize: 10, color: '#94a3b8', interval: 0 }, axisLine: { lineStyle: { color: 'rgba(255,255,255,0.1)' } }, axisTick: { show: false } },
+                yAxis: { type: 'value' as const, axisLabel: { color: '#94a3b8', fontSize: 10 }, splitLine: { lineStyle: { color: 'rgba(255,255,255,0.05)' } }, axisLine: { show: false } },
+                series: [{ name: 'Count', type: 'bar' as const, data: filteredTopRows.map(r => r.count), itemStyle: { color: COLORS.primary, borderRadius: [4,4,0,0] }, barMaxWidth: 32, emphasis: { focus: 'series' as const } }],
+              },
+              pie: getPieOptions(filteredTopRows.slice(0, 10).map(r => ({ name: r.name, value: r.count }))),
+            }}
+          />
+          <ChartCard
+            title={`Nature of Incidents · ${year}`}
+            isLoading={nl}
+            height="300px"
+            defaultType="grouped"
             option={getGroupedBarOptions(filteredNatureRows.map(r => ({ category: r.name, total: r.total, pending: r.pending, disposed: r.disposed })))}
+            alternativeOptions={{
+              horizontal: getDistrictBarOptions(
+                filteredNatureRows.map(r => ({ district: r.name, total: r.total, pending: r.pending, disposed: r.disposed })),
+                { horizontal: true }
+              ),
+              pie: getPieOptions(
+                filteredNatureRows.slice(0, 10).map(r => ({ name: r.name, value: r.total }))
+              ),
+            }}
             sortOptions={HIGHLIGHTS_SORT_OPTIONS}
             currentSort={natureChartSort}
             onSortChange={setNatureChartSort}
-            height="280px" />
+          />
         </div>
 
             {/* Side-by-side adaptive table grid */}
