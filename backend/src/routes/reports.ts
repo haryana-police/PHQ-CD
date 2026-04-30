@@ -17,18 +17,7 @@ function yearWhere(yearNum: number | null): string {
   return `c."complRegDt" >= '${yearNum}-01-01' AND c."complRegDt" < '${yearNum + 1}-01-01'`;
 }
 
-// ── Shared in-memory cache for filter-options (5 min TTL)
-const cache = new Map<string, { data: unknown; expiresAt: number }>();
-const CACHE_TTL = 5 * 60 * 1000;
-function getCached<T>(key: string): T | null {
-  const e = cache.get(key);
-  if (e && e.expiresAt > Date.now()) return e.data as T;
-  cache.delete(key);
-  return null;
-}
-function setCached(key: string, data: unknown) {
-  cache.set(key, { data, expiresAt: Date.now() + CACHE_TTL });
-}
+import { getCached, setCached, getRequestCacheKey } from '../utils/cache.js';
 
 export const reportRoutes = async (fastify: FastifyInstance) => {
 
@@ -75,6 +64,10 @@ export const reportRoutes = async (fastify: FastifyInstance) => {
   // ── District-wise (uses resolvedDistrictId JOIN — no hardcoded list)
   fastify.get('/reports/district', { preHandler: [authenticate] }, async (request, reply) => {
     try {
+      const CACHE_KEY = getRequestCacheKey('reports:district', request.query);
+      const cached = getCached<object>(CACHE_KEY);
+      if (cached) return sendSuccess(reply, cached);
+
       const { year, fromDate, toDate, district, source, complaintType } = request.query as Record<string, string>;
       const yearNum = year ? parseInt(year) : new Date().getFullYear();
 
@@ -121,7 +114,7 @@ export const reportRoutes = async (fastify: FastifyInstance) => {
 
       const prevMap = new Map(prevData.map((r: any) => [r.district, Number(r.total)]));
 
-      return sendSuccess(reply, {
+      const result = {
         year: yearNum,
         rows: data.map((r: any) => ({
           district:  r.district,
@@ -133,7 +126,9 @@ export const reportRoutes = async (fastify: FastifyInstance) => {
             ? Math.round(((Number(r.total) - prevMap.get(r.district)!) / prevMap.get(r.district)!) * 100)
             : null,
         })),
-      });
+      };
+      setCached(CACHE_KEY, result);
+      return sendSuccess(reply, result);
     } catch (e) {
       console.error('[reports/district]', e);
       return sendError(reply, 'Failed to load district report');
@@ -143,6 +138,10 @@ export const reportRoutes = async (fastify: FastifyInstance) => {
   // ── Date-wise (uses resolvedDistrictId JOIN)
   fastify.get('/reports/date-wise', { preHandler: [authenticate] }, async (request, reply) => {
     try {
+      const CACHE_KEY = getRequestCacheKey('reports:date-wise', request.query);
+      const cached = getCached<object>(CACHE_KEY);
+      if (cached) return sendSuccess(reply, cached);
+
       const { fromDate, toDate, year, district, source, complaintType } = request.query as Record<string, string>;
       const yearNum = year ? parseInt(year) : new Date().getFullYear();
 
@@ -176,16 +175,22 @@ export const reportRoutes = async (fastify: FastifyInstance) => {
         GROUP BY dm."DistrictName" ORDER BY total DESC
       `);
 
-      return sendSuccess(reply, {
+      const result = {
         year: yearNum,
         rows: data.map((r: any) => ({ district: r.district, total: Number(r.total), pending: Number(r.pending), disposed: Number(r.disposed) })),
-      });
+      };
+      setCached(CACHE_KEY, result);
+      return sendSuccess(reply, result);
     } catch (e) { return sendError(reply, 'Failed to load date-wise report'); }
   });
 
   // ── Mode of Receipt
   fastify.get('/reports/mode-receipt', { preHandler: [authenticate] }, async (request, reply) => {
     try {
+      const CACHE_KEY = getRequestCacheKey('reports:mode-receipt', request.query);
+      const cached = getCached<object>(CACHE_KEY);
+      if (cached) return sendSuccess(reply, cached);
+
       const { year, fromDate, toDate, district } = request.query as Record<string, string>;
       const yearNum = year ? parseInt(year) : new Date().getFullYear();
       const datePart = fromDate && toDate
@@ -207,13 +212,19 @@ export const reportRoutes = async (fastify: FastifyInstance) => {
         GROUP BY c."receptionMode" ORDER BY total DESC
       `);
 
-      return sendSuccess(reply, { year: yearNum, rows: data.map((r: any) => ({ mode: r.mode, total: Number(r.total), count: Number(r.total), pending: Number(r.pending), disposed: Number(r.disposed) })) });
+      const result = { year: yearNum, rows: data.map((r: any) => ({ mode: r.mode, total: Number(r.total), count: Number(r.total), pending: Number(r.pending), disposed: Number(r.disposed) })) };
+      setCached(CACHE_KEY, result);
+      return sendSuccess(reply, result);
     } catch (e) { return sendError(reply, 'Failed to load mode-of-receipt report'); }
   });
 
   // ── Nature of Incident
   fastify.get('/reports/nature-incident', { preHandler: [authenticate] }, async (request, reply) => {
     try {
+      const CACHE_KEY = getRequestCacheKey('reports:nature-incident', request.query);
+      const cached = getCached<object>(CACHE_KEY);
+      if (cached) return sendSuccess(reply, cached);
+
       const { year, fromDate, toDate, district, source, complaintType } = request.query as Record<string, string>;
       const yearNum = year ? parseInt(year) : new Date().getFullYear();
       const datePart = fromDate && toDate
@@ -238,7 +249,9 @@ export const reportRoutes = async (fastify: FastifyInstance) => {
         GROUP BY c."classOfIncident" ORDER BY total DESC
       `);
 
-      return sendSuccess(reply, { year: yearNum, rows: data.map((r: any) => ({ natureOfIncident: r.natureofincident, total: Number(r.total), pending: Number(r.pending), disposed: Number(r.disposed) })) });
+      const result = { year: yearNum, rows: data.map((r: any) => ({ natureOfIncident: r.natureofincident, total: Number(r.total), pending: Number(r.pending), disposed: Number(r.disposed) })) };
+      setCached(CACHE_KEY, result);
+      return sendSuccess(reply, result);
     } catch (e) { return sendError(reply, 'Failed to load nature-of-incident report'); }
   });
 
@@ -247,6 +260,10 @@ export const reportRoutes = async (fastify: FastifyInstance) => {
   // ── Type Against
   fastify.get('/reports/type-against', { preHandler: [authenticate] }, async (request, reply) => {
     try {
+      const CACHE_KEY = getRequestCacheKey('reports:type-against', request.query);
+      const cached = getCached<object>(CACHE_KEY);
+      if (cached) return sendSuccess(reply, cached);
+
       const { year, fromDate, toDate, district } = request.query as Record<string, string>;
       const yearNum = year ? parseInt(year) : new Date().getFullYear();
       const datePart = fromDate && toDate
@@ -268,13 +285,19 @@ export const reportRoutes = async (fastify: FastifyInstance) => {
         GROUP BY c."respondentCategories" ORDER BY total DESC
       `);
 
-      return sendSuccess(reply, { year: yearNum, rows: data.map((r: any) => ({ typeAgainst: r.typeagainst, total: Number(r.total), pending: Number(r.pending), disposed: Number(r.disposed) })) });
+      const result = { year: yearNum, rows: data.map((r: any) => ({ typeAgainst: r.typeagainst, total: Number(r.total), pending: Number(r.pending), disposed: Number(r.disposed) })) };
+      setCached(CACHE_KEY, result);
+      return sendSuccess(reply, result);
     } catch (e) { return sendError(reply, 'Failed to load type-against report'); }
   });
 
   // ── Status
   fastify.get('/reports/status', { preHandler: [authenticate] }, async (request, reply) => {
     try {
+      const CACHE_KEY = getRequestCacheKey('reports:status', request.query);
+      const cached = getCached<object>(CACHE_KEY);
+      if (cached) return sendSuccess(reply, cached);
+
       const { year, fromDate, toDate, district } = request.query as Record<string, string>;
       const yearNum = year ? parseInt(year) : new Date().getFullYear();
       const datePart = fromDate && toDate
@@ -293,13 +316,19 @@ export const reportRoutes = async (fastify: FastifyInstance) => {
         GROUP BY c."statusOfComplaint" ORDER BY total DESC
       `);
 
-      return sendSuccess(reply, { year: yearNum, rows: data.map((r: any) => ({ status: r.status, total: Number(r.total), count: Number(r.total), pending: r.status?.startsWith('Pending') ? Number(r.total) : 0, disposed: r.status?.startsWith('Disposed') ? Number(r.total) : 0 })) });
+      const result = { year: yearNum, rows: data.map((r: any) => ({ status: r.status, total: Number(r.total), count: Number(r.total), pending: r.status?.startsWith('Pending') ? Number(r.total) : 0, disposed: r.status?.startsWith('Disposed') ? Number(r.total) : 0 })) };
+      setCached(CACHE_KEY, result);
+      return sendSuccess(reply, result);
     } catch (e) { return sendError(reply, 'Failed to load status report'); }
   });
 
   // ── Complaint Source
   fastify.get('/reports/complaint-source', { preHandler: [authenticate] }, async (request, reply) => {
     try {
+      const CACHE_KEY = getRequestCacheKey('reports:complaint-source', request.query);
+      const cached = getCached<object>(CACHE_KEY);
+      if (cached) return sendSuccess(reply, cached);
+
       const { year, fromDate, toDate, district, complaintType } = request.query as Record<string, string>;
       const yearNum = year ? parseInt(year) : new Date().getFullYear();
       const datePart = fromDate && toDate
@@ -322,13 +351,19 @@ export const reportRoutes = async (fastify: FastifyInstance) => {
         GROUP BY c."complaintSource" ORDER BY total DESC
       `);
 
-      return sendSuccess(reply, { year: yearNum, rows: data.map((r: any) => ({ complaintSource: r.complaintsource, total: Number(r.total), pending: Number(r.pending), disposed: Number(r.disposed) })) });
+      const result = { year: yearNum, rows: data.map((r: any) => ({ complaintSource: r.complaintsource, total: Number(r.total), pending: Number(r.pending), disposed: Number(r.disposed) })) };
+      setCached(CACHE_KEY, result);
+      return sendSuccess(reply, result);
     } catch (e) { return sendError(reply, 'Failed to load complaint-source report'); }
   });
 
   // ── Type of Complaint
   fastify.get('/reports/type-complaint', { preHandler: [authenticate] }, async (request, reply) => {
     try {
+      const CACHE_KEY = getRequestCacheKey('reports:type-complaint', request.query);
+      const cached = getCached<object>(CACHE_KEY);
+      if (cached) return sendSuccess(reply, cached);
+
       const { year, fromDate, toDate, district, source } = request.query as Record<string, string>;
       const yearNum = year ? parseInt(year) : new Date().getFullYear();
       const datePart = fromDate && toDate
@@ -351,13 +386,19 @@ export const reportRoutes = async (fastify: FastifyInstance) => {
         GROUP BY c."typeOfComplaint" ORDER BY total DESC
       `);
 
-      return sendSuccess(reply, { year: yearNum, rows: data.map((r: any) => ({ typeOfComplaint: r.typeofcomplaint, total: Number(r.total), pending: Number(r.pending), disposed: Number(r.disposed) })) });
+      const result = { year: yearNum, rows: data.map((r: any) => ({ typeOfComplaint: r.typeofcomplaint, total: Number(r.total), pending: Number(r.pending), disposed: Number(r.disposed) })) };
+      setCached(CACHE_KEY, result);
+      return sendSuccess(reply, result);
     } catch (e) { return sendError(reply, 'Failed to load type-of-complaint report'); }
   });
 
   // ── Branch-wise
   fastify.get('/reports/branch-wise', { preHandler: [authenticate] }, async (request, reply) => {
     try {
+      const CACHE_KEY = getRequestCacheKey('reports:branch-wise', request.query);
+      const cached = getCached<object>(CACHE_KEY);
+      if (cached) return sendSuccess(reply, cached);
+
       const { year, fromDate, toDate } = request.query as Record<string, string>;
       const yearNum = year ? parseInt(year) : new Date().getFullYear();
       const whereClause = fromDate && toDate
@@ -369,13 +410,19 @@ export const reportRoutes = async (fastify: FastifyInstance) => {
           SUM(CASE WHEN "statusOfComplaint" ILIKE 'Disposed%' THEN 1 ELSE 0 END) AS disposed
         FROM "Complaint" ${whereClause} GROUP BY branch ORDER BY total DESC
       `);
-      return sendSuccess(reply, { year: yearNum, rows: data.map((r: any) => ({ branch: r.branch, total: Number(r.total), pending: Number(r.pending), disposed: Number(r.disposed) })) });
+      const result = { year: yearNum, rows: data.map((r: any) => ({ branch: r.branch, total: Number(r.total), pending: Number(r.pending), disposed: Number(r.disposed) })) };
+      setCached(CACHE_KEY, result);
+      return sendSuccess(reply, result);
     } catch (e) { return sendError(reply, 'Failed to load branch-wise report'); }
   });
 
   // ── Highlights (top categories by classOfIncident)
   fastify.get('/reports/highlights', { preHandler: [authenticate] }, async (request, reply) => {
     try {
+      const CACHE_KEY = getRequestCacheKey('reports:highlights', request.query);
+      const cached = getCached<object>(CACHE_KEY);
+      if (cached) return sendSuccess(reply, cached);
+
       const { year, fromDate, toDate, district, source, complaintType } = request.query as Record<string, string>;
       const yearNum = year ? parseInt(year) : new Date().getFullYear();
 
@@ -398,7 +445,9 @@ export const reportRoutes = async (fastify: FastifyInstance) => {
           AND ${datePart} ${extraWhere}
         GROUP BY c."classOfIncident" ORDER BY count DESC
       `);
-      return sendSuccess(reply, { year: yearNum, rows: data.map((r: any) => ({ category: r.category, count: Number(r.count) })) });
+      const result = { year: yearNum, rows: data.map((r: any) => ({ category: r.category, count: Number(r.count) })) };
+      setCached(CACHE_KEY, result);
+      return sendSuccess(reply, result);
     } catch (e) { return sendError(reply, 'Failed to load highlights report'); }
   });
 
@@ -407,6 +456,10 @@ export const reportRoutes = async (fastify: FastifyInstance) => {
   // ── Action Taken
   fastify.get('/reports/action-taken', { preHandler: [authenticate] }, async (request, reply) => {
     try {
+      const CACHE_KEY = getRequestCacheKey('reports:action-taken', request.query);
+      const cached = getCached<object>(CACHE_KEY);
+      if (cached) return sendSuccess(reply, cached);
+
       const { year, fromDate, toDate } = request.query as Record<string, string>;
       const yearNum = year ? parseInt(year) : new Date().getFullYear();
       const whereClause = fromDate && toDate
@@ -418,7 +471,9 @@ export const reportRoutes = async (fastify: FastifyInstance) => {
           SUM(CASE WHEN "statusOfComplaint" ILIKE 'Disposed%' THEN 1 ELSE 0 END) AS disposed
         FROM "Complaint" ${whereClause} GROUP BY actionTaken ORDER BY total DESC LIMIT 30
       `);
-      return sendSuccess(reply, { year: yearNum, rows: data.map((r: any) => ({ actionTaken: r.actiontaken, total: Number(r.total), pending: Number(r.pending), disposed: Number(r.disposed) })) });
+      const result = { year: yearNum, rows: data.map((r: any) => ({ actionTaken: r.actiontaken, total: Number(r.total), pending: Number(r.pending), disposed: Number(r.disposed) })) };
+      setCached(CACHE_KEY, result);
+      return sendSuccess(reply, result);
     } catch (e) { return sendError(reply, 'Failed to load action-taken report'); }
   });
 };

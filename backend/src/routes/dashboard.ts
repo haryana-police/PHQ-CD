@@ -2,6 +2,7 @@ import { FastifyInstance } from 'fastify';
 import { prisma } from '../config/database.js';
 import { sendSuccess, sendError } from '../utils/response.js';
 import { authenticate } from '../middleware/auth.js';
+import { getCached, setCached, getRequestCacheKey } from '../utils/cache.js';
 
 /**
  * All district-scoped queries JOIN "District_Master" via c."resolvedDistrictId"
@@ -41,9 +42,9 @@ function buildExtraWhere(q: Record<string, string>): string {
   return parts.length ? `AND ${parts.join(' AND ')}` : '';
 }
 
-// Shared in-memory cache (5-min TTL) for filter-options
+// Longer TTL for filter-options (15 min — static reference data)
+const FILTER_CACHE_TTL = 15 * 60 * 1000;
 const _filterCache = { data: null as unknown, exp: 0 };
-const CACHE_TTL = 5 * 60 * 1000;
 
 export const dashboardRoutes = async (fastify: FastifyInstance) => {
 
@@ -81,7 +82,7 @@ export const dashboardRoutes = async (fastify: FastifyInstance) => {
         years:     yearRows.map(r => r.val),
       };
       _filterCache.data = data;
-      _filterCache.exp  = Date.now() + CACHE_TTL;
+      _filterCache.exp  = Date.now() + FILTER_CACHE_TTL;
       return sendSuccess(reply, data);
     } catch (e) {
       console.error('[dashboard/filter-options]', e);
@@ -95,6 +96,10 @@ export const dashboardRoutes = async (fastify: FastifyInstance) => {
   fastify.get('/dashboard/summary', { preHandler: [authenticate] }, async (request, reply) => {
     try {
       const q = request.query as Record<string, string>;
+      const CACHE_KEY = getRequestCacheKey('dashboard:summary', q);
+      const cached = getCached<object>(CACHE_KEY);
+      if (cached) return sendSuccess(reply, cached);
+
       const now = new Date();
       const f15 = new Date(now.getTime() - 15 * 86400000).toISOString();
       const f30 = new Date(now.getTime() - 30 * 86400000).toISOString();
@@ -124,14 +129,16 @@ export const dashboardRoutes = async (fastify: FastifyInstance) => {
         WHERE dm."isPoliceDistrict" = true ${extra}
       `);
 
-      return sendSuccess(reply, {
+      const result = {
         totalReceived:          Number(counts.totalreceived  || 0),
         totalDisposed:          Number(counts.totaldisposed  || 0),
         totalPending:           Number(counts.totalpending   || 0),
         pendingOverFifteenDays: Number(counts.pending15      || 0),
         pendingOverOneMonth:    Number(counts.pendingover1   || 0),
         pendingOverTwoMonths:   Number(counts.pendingover2   || 0),
-      });
+      };
+      setCached(CACHE_KEY, result);
+      return sendSuccess(reply, result);
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
       console.error('[dashboard/summary] error:', msg);
@@ -145,6 +152,10 @@ export const dashboardRoutes = async (fastify: FastifyInstance) => {
   fastify.get('/dashboard/district-wise', { preHandler: [authenticate] }, async (request, reply) => {
     try {
       const q = request.query as Record<string, string>;
+      const CACHE_KEY = getRequestCacheKey('dashboard:district-wise', q);
+      const cached = getCached<object>(CACHE_KEY);
+      if (cached) return sendSuccess(reply, cached);
+
       const yearNum = q.year ? parseInt(q.year) : new Date().getFullYear();
 
       // Date part: use fromDate/toDate if present, else year range
@@ -191,14 +202,16 @@ export const dashboardRoutes = async (fastify: FastifyInstance) => {
 
       const prevMap = new Map(prevData.map((d: any) => [d.district, Number(d.totalcomplaints)]));
 
-      return sendSuccess(reply, data.map((d: any) => ({
+      const result = data.map((d: any) => ({
         district:        d.district,
         year:            yearNum,
         totalComplaints: Number(d.totalcomplaints),
         pending:         Number(d.pending),
         disposed:        Number(d.disposed),
         prevYearTotal:   prevMap.get(d.district) || 0,
-      })));
+      }));
+      setCached(CACHE_KEY, result);
+      return sendSuccess(reply, result);
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
       console.error('[dashboard/district-wise] error:', msg);
@@ -212,6 +225,10 @@ export const dashboardRoutes = async (fastify: FastifyInstance) => {
   fastify.get('/dashboard/month-wise', { preHandler: [authenticate] }, async (request, reply) => {
     try {
       const q = request.query as Record<string, string>;
+      const CACHE_KEY = getRequestCacheKey('dashboard:month-wise', q);
+      const cached = getCached<object>(CACHE_KEY);
+      if (cached) return sendSuccess(reply, cached);
+
       const yearNum = q.year ? parseInt(q.year) : new Date().getFullYear();
 
       const datePart = q.fromDate && q.toDate
@@ -265,7 +282,7 @@ export const dashboardRoutes = async (fastify: FastifyInstance) => {
         'July','August','September','October','November','December',
       ];
 
-      return sendSuccess(reply, ALL_MONTHS.map((monthName, idx) => {
+      const result = ALL_MONTHS.map((monthName, idx) => {
         const mNum = idx + 1;
         const curr = currMap.get(mNum);
         return {
@@ -277,7 +294,9 @@ export const dashboardRoutes = async (fastify: FastifyInstance) => {
           disposed:  curr ? Number(curr.disposed) : 0,
           prevTotal: prevMap.get(mNum) || 0,
         };
-      }));
+      });
+      setCached(CACHE_KEY, result);
+      return sendSuccess(reply, result);
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
       console.error('[dashboard/month-wise] error:', msg);
@@ -288,8 +307,13 @@ export const dashboardRoutes = async (fastify: FastifyInstance) => {
   /** Date-wise (custom range) */
   fastify.get('/dashboard/date-wise', { preHandler: [authenticate] }, async (request, reply) => {
     try {
-      const { fromDate, toDate } = request.query as Record<string, string>;
+      const q = request.query as Record<string, string>;
+      const { fromDate, toDate } = q;
       if (!fromDate || !toDate) return sendError(reply, 'fromDate and toDate are required');
+
+      const CACHE_KEY = getRequestCacheKey('dashboard:date-wise', q);
+      const cached = getCached<object>(CACHE_KEY);
+      if (cached) return sendSuccess(reply, cached);
 
       const data = await prisma.$queryRawUnsafe<any[]>(`
         SELECT
@@ -304,12 +328,14 @@ export const dashboardRoutes = async (fastify: FastifyInstance) => {
         GROUP BY dm."DistrictName" ORDER BY TotalComplaints DESC
       `);
 
-      return sendSuccess(reply, data.map((d: any) => ({
+      const result = data.map((d: any) => ({
         district:        d.district,
         totalComplaints: Number(d.totalcomplaints),
         pending:         Number(d.pending),
         disposed:        Number(d.disposed),
-      })));
+      }));
+      setCached(CACHE_KEY, result);
+      return sendSuccess(reply, result);
     } catch (error) {
       console.error('[dashboard/date-wise] error:', error);
       return sendError(reply, 'Failed to load date-wise data');
@@ -320,6 +346,10 @@ export const dashboardRoutes = async (fastify: FastifyInstance) => {
   fastify.get('/dashboard/duration-wise', { preHandler: [authenticate] }, async (request, reply) => {
     try {
       const q = request.query as Record<string, string>;
+      const CACHE_KEY = getRequestCacheKey('dashboard:duration-wise', q);
+      const cached = getCached<object>(CACHE_KEY);
+      if (cached) return sendSuccess(reply, cached);
+
       const yearNum = q.year ? parseInt(q.year) : new Date().getFullYear();
       const extra = buildExtraWhere(q);
 
@@ -335,13 +365,15 @@ export const dashboardRoutes = async (fastify: FastifyInstance) => {
         GROUP BY dm."DistrictName" ORDER BY TotalComplaints DESC
       `);
 
-      return sendSuccess(reply, data.map((d: any) => ({
+      const result = data.map((d: any) => ({
         district:        d.district,
         year:            yearNum,
         totalComplaints: Number(d.totalcomplaints),
         pending:         Number(d.pending),
         disposed:        Number(d.disposed),
-      })));
+      }));
+      setCached(CACHE_KEY, result);
+      return sendSuccess(reply, result);
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
       console.error('[dashboard/duration-wise] error:', msg);

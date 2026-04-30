@@ -2,6 +2,7 @@ import { FastifyInstance } from 'fastify';
 import { prisma } from '../config/database.js';
 import { sendSuccess, sendError } from '../utils/response.js';
 import { authenticate } from '../middleware/auth.js';
+import { getCached, setCached, getRequestCacheKey } from '../utils/cache.js';
 
 /**
  * Pendency and Disposal Matrix — all queries JOIN District_Master via resolvedDistrictId.
@@ -39,6 +40,10 @@ export const matrixRoutes = async (fastify: FastifyInstance) => {
   fastify.get('/matrix/pendency', { preHandler: [authenticate] }, async (request, reply) => {
     try {
       const q = request.query as Record<string, string>;
+      const CACHE_KEY = getRequestCacheKey('matrix:pendency', q);
+      const cached = getCached<object>(CACHE_KEY);
+      if (cached) return sendSuccess(reply, cached);
+
       const yearNum = q.year ? parseInt(q.year) : new Date().getFullYear();
       const where = buildMatrixWhere(q);
 
@@ -94,7 +99,7 @@ export const matrixRoutes = async (fastify: FastifyInstance) => {
         { within7: 0, within15: 0, within30: 0, over30: 0, totalPending: 0, totalReceived: 0 }
       );
 
-      return sendSuccess(reply, {
+      const result = {
         year: yearNum,
         rows: rows.map((r: any) => ({
           district:      r.district,
@@ -106,7 +111,9 @@ export const matrixRoutes = async (fastify: FastifyInstance) => {
           totalReceived: Number(r.totalreceived || 0),
         })),
         totals,
-      });
+      };
+      setCached(CACHE_KEY, result);
+      return sendSuccess(reply, result);
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
       console.error('[matrix/pendency] error:', msg);
@@ -117,6 +124,10 @@ export const matrixRoutes = async (fastify: FastifyInstance) => {
   fastify.get('/matrix/disposal', { preHandler: [authenticate] }, async (request, reply) => {
     try {
       const q = request.query as Record<string, string>;
+      const CACHE_KEY = getRequestCacheKey('matrix:disposal', q);
+      const cached = getCached<object>(CACHE_KEY);
+      if (cached) return sendSuccess(reply, cached);
+
       const yearNum = q.year ? parseInt(q.year) : new Date().getFullYear();
       const where = buildMatrixWhere(q);
 
@@ -199,7 +210,7 @@ export const matrixRoutes = async (fastify: FastifyInstance) => {
         ? Math.round((weightedSum / weightedCount) * 10) / 10
         : null;
 
-      return sendSuccess(reply, {
+      const result = {
         year: yearNum,
         rows: rows.map((r: any) => ({
           district:        r.district,
@@ -212,7 +223,9 @@ export const matrixRoutes = async (fastify: FastifyInstance) => {
           avgDisposalDays: r.avgdisposaldays != null ? Number(r.avgdisposaldays) : null,
         })),
         totals,
-      });
+      };
+      setCached(CACHE_KEY, result);
+      return sendSuccess(reply, result);
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
       console.error('[matrix/disposal] error:', msg);

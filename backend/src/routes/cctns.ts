@@ -3,17 +3,7 @@ import { prisma } from '../config/database.js';
 import { sendSuccess, sendNotFound } from '../utils/response.js';
 import { authenticate } from '../middleware/auth.js';
 
-// ── In-memory cache
-const cache = new Map<string, { data: unknown; expiresAt: number }>();
-const CACHE_TTL_MS = 5 * 60 * 1000;
-function getCached<T>(key: string): T | null {
-  const e = cache.get(key);
-  if (e && e.expiresAt > Date.now()) return e.data as T;
-  cache.delete(key); return null;
-}
-function setCached(key: string, data: unknown) {
-  cache.set(key, { data, expiresAt: Date.now() + CACHE_TTL_MS });
-}
+import { getCached, setCached, getRequestCacheKey } from '../utils/cache.js';
 
 export const cctnsRoutes = async (fastify: FastifyInstance) => {
   // ── Fast filter options

@@ -80,6 +80,14 @@ model Complaint {
   @@index([complRegDt, statusOfComplaint])
   @@index([resolvedDistrictId, statusOfComplaint])
   @@index([addressDistrict, statusOfComplaint])
+  
+  // Dashboard composite indexes
+  @@index([resolvedDistrictId, complRegDt])
+  @@index([complRegDt, classOfIncident])
+  @@index([complRegDt, receptionMode])
+  @@index([complRegDt, typeOfComplaint])
+  @@index([complRegDt, respondentCategories])
+  @@index([complRegDt, complaintSource])
 }
 
 model WomenSafety {
