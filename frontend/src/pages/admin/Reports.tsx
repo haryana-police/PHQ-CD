@@ -1,19 +1,28 @@
 import { useQuery } from '@tanstack/react-query';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { Layout } from '@/components/layout/Layout';
 import { ChartCard } from '@/components/charts/ChartCard';
 import { DataTable, Column } from '@/components/data/DataTable';
 import {
-  getPieOptions, getStackedBarOptions, getDistrictBarOptions,
+  getHorizontalSingleBarOptions, getGroupedBarOptions, getDistrictBarOptions,
   getYoYBarOptions,
 } from '@/components/charts/Charts';
 import { Select } from '@/components/common/Select';
+import { GlobalFilterBar } from '@/components/common/GlobalFilterBar';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const CY = new Date().getFullYear();           // 2026
 const DEFAULT_YEAR = CY;                       // Current year as default
 const YEARS = Array.from({ length: CY - 2014 + 1 }, (_, i) => CY - i);
+
+const REPORTS_SORT_OPTIONS = [
+  { label: 'Total Reg', value: 'Total Reg' },
+  { label: 'Total Pending', value: 'Total Pending' },
+  { label: 'Total Disposed', value: 'Total Disposed' },
+  { label: 'Pending %', value: 'Pending %' },
+  { label: 'Disposed %', value: 'Disposed %' }
+];
 
 const TABS = [
   { id: 'district',         label: 'District',          nameKey: 'district' },
@@ -128,10 +137,18 @@ export const ReportsPage = () => {
   const [selectedYear, setSelectedYear] = useState(DEFAULT_YEAR);
   const [customFrom, setCustomFrom]   = useState('');
   const [customTo,   setCustomTo]     = useState('');
+  const [chartSort, setChartSort] = useState('Total Reg');
+  const [itemFilter, setItemFilter] = useState<string[]>([]);
+  const [districtFilter,      setDistrictFilter]      = useState<string[]>([]);
+  const [sourceFilter,        setSourceFilter]        = useState<string[]>([]);
+  const [complaintTypeFilter, setComplaintTypeFilter] = useState<string[]>([]);
 
-  // Build API URL
-  const apiUrl = useMemo(() => {
-    const base = `/api/reports/${type}`;
+  // Reset item/district filter when report tab changes
+  useEffect(() => { setItemFilter([]); setDistrictFilter([]); }, [type]);
+
+
+  // Build API URL — includes ALL active filters so server does the real filtering
+  const apiFilters = useMemo(() => {
     const p = new URLSearchParams();
     if (periodMode === 'year') {
       p.set('year', String(selectedYear));
@@ -141,13 +158,16 @@ export const ReportsPage = () => {
     } else {
       p.set('year', String(selectedYear));
     }
-    return `${base}?${p}`;
-  }, [type, periodMode, selectedYear, customFrom, customTo]);
+    if (districtFilter.length > 0)      p.set('district',      districtFilter.join(','));
+    if (sourceFilter.length > 0)        p.set('source',        sourceFilter.join(','));
+    if (complaintTypeFilter.length > 0) p.set('complaintType', complaintTypeFilter.join(','));
+    return p.toString();
+  }, [type, periodMode, selectedYear, customFrom, customTo, districtFilter, sourceFilter, complaintTypeFilter]);
 
   const { data, isLoading } = useQuery({
-    queryKey: ['reports', type, periodMode, selectedYear, customFrom, customTo],
+    queryKey: ['reports', type, apiFilters],
     queryFn: async () => {
-      const r = await fetch(apiUrl, {
+      const r = await fetch(`/api/reports/${type}?${apiFilters}`, {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
       });
       return r.json();
@@ -161,13 +181,66 @@ export const ReportsPage = () => {
     return Array.isArray(d) ? d : (Array.isArray(d.rows) ? d.rows : []);
   }, [data]);
 
+  const sortedRawForChart = useMemo(() => {
+    const arr = [...raw];
+    switch (chartSort) {
+      case 'Total Pending':
+        arr.sort((a, b) => Number(b.pending ?? 0) - Number(a.pending ?? 0));
+        break;
+      case 'Total Disposed':
+        arr.sort((a, b) => Number(b.disposed ?? 0) - Number(a.disposed ?? 0));
+        break;
+      case 'Pending %':
+        arr.sort((a, b) => {
+          const tA = Number(a.total ?? a.count ?? 0); const pA = Number(a.pending ?? 0);
+          const tB = Number(b.total ?? b.count ?? 0); const pB = Number(b.pending ?? 0);
+          return (tB > 0 ? pB / tB : 0) - (tA > 0 ? pA / tA : 0);
+        });
+        break;
+      case 'Disposed %':
+        arr.sort((a, b) => {
+          const tA = Number(a.total ?? a.count ?? 0); const dA = Number(a.disposed ?? 0);
+          const tB = Number(b.total ?? b.count ?? 0); const dB = Number(b.disposed ?? 0);
+          return (tB > 0 ? dB / tB : 0) - (tA > 0 ? dA / tA : 0);
+        });
+        break;
+      case 'Total Reg':
+      default:
+        arr.sort((a, b) => Number(b.total ?? b.count ?? 0) - Number(a.total ?? a.count ?? 0));
+    }
+    return arr;
+  }, [raw, chartSort]);
+
+  // Multi-select item filter (client-side — filters rows by the current tab's name key)
   const tab = TABS.find(t => t.id === type)!;
 
-  // Summary
-  const total = raw.reduce((s, r) => s + Number(r.total ?? r.count ?? 0), 0);
-  const pend  = raw.reduce((s, r) => s + Number(r.pending  ?? 0), 0);
-  const disp  = raw.reduce((s, r) => s + Number(r.disposed ?? 0), 0);
-  const prevTotal = raw.reduce((s, r) => s + Number(r.prevTotal ?? 0), 0);
+  const filterOptions = useMemo(() =>
+    raw.map(r => {
+      const name = String(r[tab?.nameKey] ?? r.district ?? '');
+      return { value: name, label: name };
+    }).filter((o, i, a) => o.value && a.findIndex(x => x.value === o.value) === i),
+    [raw, tab]
+  );
+
+  // Item filter is client-side (tab-specific row name); source/type/district go to API
+  const applyItemFilter = (arr: Record<string, unknown>[]) =>
+    itemFilter.length === 0
+      ? arr
+      : arr.filter(r => itemFilter.includes(String(r[tab?.nameKey] ?? r.district ?? '')));
+
+  const filteredRawForChart = useMemo(() => applyItemFilter(sortedRawForChart),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [sortedRawForChart, itemFilter, tab]);
+
+  const filteredRaw = useMemo(() => applyItemFilter(raw),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [raw, itemFilter, tab]);
+
+  // Summary (use filteredRaw so KPIs reflect filter)
+  const total = filteredRaw.reduce((s, r) => s + Number(r.total ?? r.count ?? 0), 0);
+  const pend  = filteredRaw.reduce((s, r) => s + Number(r.pending  ?? 0), 0);
+  const disp  = filteredRaw.reduce((s, r) => s + Number(r.disposed ?? 0), 0);
+  const prevTotal = filteredRaw.reduce((s, r) => s + Number(r.prevTotal ?? 0), 0);
 
   const dispRate = total > 0 ? (disp / total * 100).toFixed(1) : '0.0';
   const pendRate = total > 0 ? (pend / total * 100).toFixed(1) : '0.0';
@@ -180,8 +253,8 @@ export const ReportsPage = () => {
   const showYoY = periodMode === 'year' && type === 'district';
   const activeYear = data?.data?.year ?? selectedYear;
 
-  // Table rows
-  const tableData = raw.map((r, i) => {
+  // Table rows (use filteredRaw)
+  const tableData = filteredRaw.map((r, i) => {
     const tot = Number(r.total ?? r.count ?? 0);
     const p   = Number(r.pending  ?? 0);
     const d   = Number(r.disposed ?? 0);
@@ -210,8 +283,8 @@ export const ReportsPage = () => {
     ] : []),
   ];
 
-  // Chart options
-  const districtData = raw.map(r => ({
+  // Chart options (use filteredRawForChart)
+  const districtData = filteredRawForChart.map(r => ({
     district: String(r[tab.nameKey] ?? r.district ?? ''),
     total:    Number(r.total ?? 0),
     pending:  Number(r.pending  ?? 0),
@@ -219,14 +292,13 @@ export const ReportsPage = () => {
     prevTotal:Number(r.prevTotal ?? 0),
   }));
 
-  const stackedOpt   = getDistrictBarOptions(districtData);
   const horizontalOpt= getDistrictBarOptions(districtData, { horizontal: true });
   const yoyOpt       = getYoYBarOptions(districtData, activeYear);
-  const pieOpt       = getPieOptions(raw.map(r => ({
+  const horizontalSingleOpt = getHorizontalSingleBarOptions(filteredRawForChart.map(r => ({
     name:  String(r[tab.nameKey] ?? r.district ?? ''),
     value: Number(r.total ?? r.count ?? 0),
   })));
-  const stackedCatOpt= getStackedBarOptions(raw.map(r => ({
+  const groupedCatOpt= getGroupedBarOptions(filteredRawForChart.map(r => ({
     category: String(r[tab.nameKey] ?? ''),
     total:    Number(r.total ?? 0),
     pending:  Number(r.pending ?? 0),
@@ -236,17 +308,29 @@ export const ReportsPage = () => {
   const isDistrictType = type === 'district' || type === 'date-wise';
   const isPieType = type === 'mode-receipt' || type === 'status';
 
-  const primaryOption = isDistrictType ? stackedOpt : isPieType ? pieOpt : stackedCatOpt;
+  const primaryOption = isDistrictType ? horizontalOpt : isPieType ? horizontalSingleOpt : groupedCatOpt;
   const altOptions = isDistrictType
-    ? { horizontal: horizontalOpt, grouped: yoyOpt, pie: pieOpt }
-    : isPieType
-    ? { stacked: stackedCatOpt }
-    : { pie: pieOpt };
-  const defaultChartType = isDistrictType ? 'stacked' : isPieType ? 'pie' : 'stacked';
+    ? { grouped: yoyOpt }
+    : {};
+  const defaultChartType = isDistrictType ? 'horizontal' : isPieType ? 'horizontal' : 'grouped';
 
   return (
     <Layout>
       <div className="page-content">
+
+        {/* ── Global Filter Bar — ALL filters passed to API ── */}
+        <GlobalFilterBar
+          districtFilter={districtFilter} onDistrictChange={setDistrictFilter}
+          sourceFilter={sourceFilter} onSourceChange={setSourceFilter}
+          complaintTypeFilter={complaintTypeFilter} onComplaintTypeChange={setComplaintTypeFilter}
+          showDate={false}
+          extraLabel={tab.label}
+          extraOptions={filterOptions}
+          extraSelected={itemFilter}
+          onExtraChange={setItemFilter}
+          showExtra={filterOptions.length > 0 && type !== 'district' && type !== 'date-wise'}
+          onClearAll={() => { setItemFilter([]); setDistrictFilter([]); setSourceFilter([]); setComplaintTypeFilter([]); }}
+        />
 
         {/* ── Period Controls ─────────────────────────────────────────────── */}
         <div style={{
@@ -381,6 +465,9 @@ export const ReportsPage = () => {
                 option={primaryOption as any}
                 alternativeOptions={altOptions as any}
                 defaultType={defaultChartType as any}
+                sortOptions={REPORTS_SORT_OPTIONS}
+                currentSort={chartSort}
+                onSortChange={setChartSort}
                 height="320px"
               />
             </div>

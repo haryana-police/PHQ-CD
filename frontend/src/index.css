@@ -1314,6 +1314,7 @@ select:focus {
   transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   display: flex;
   flex-direction: column;
+  min-width: 0;
 }
 
 @media (max-width: 768px) {
@@ -1331,6 +1332,15 @@ select:focus {
   }
   .page-content {
     padding: 12px 10px;
+  }
+  .header-app-title {
+    display: none;
+  }
+  .header-module-name {
+    display: none !important;
+  }
+  .header-date-time {
+    display: none !important;
   }
 }
 

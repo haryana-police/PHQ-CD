@@ -1,8 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Layout } from '@/components/layout/Layout';
 import { DataTable, Column } from '@/components/data/DataTable';
+import { MultiSelectFilter } from '@/components/common/MultiSelectFilter';
+import { useFilterOptions } from '@/hooks/useData';
+
 
 const tabs = [
   { id: 'all', label: 'All Pending' },
@@ -19,56 +22,43 @@ const ep: Record<string, string> = {
   'over-60': '/api/pending/over-60-days',
 };
 
-const StyledSelect = ({ value, onChange, children }: { value: string; onChange: (v: string) => void; children: React.ReactNode }) => (
-  <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
-    <select
-      value={value}
-      onChange={e => onChange(e.target.value)}
-      style={{
-        appearance: 'none', padding: '7px 32px 7px 12px', borderRadius: '8px',
-        background: 'rgba(15,23,42,0.8)', color: '#e2e8f0', border: '1px solid rgba(255,255,255,0.1)',
-        fontSize: '12.5px', fontWeight: 500, cursor: 'pointer', outline: 'none',
-        backdropFilter: 'blur(8px)', boxShadow: '0 2px 8px rgba(0,0,0,0.3)', minWidth: '160px',
-      }}
-    >
-      {children}
-    </select>
-    <svg style={{ position: 'absolute', right: '10px', pointerEvents: 'none', color: '#64748b' }} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="6 9 12 15 18 9"/></svg>
-  </div>
-);
-
 export const PendingPage = () => {
   const [sp] = useSearchParams();
   const type = sp.get('type') || 'all';
-  const [branch, setBranch] = useState('');
-  const [branches, setBranches] = useState<string[]>([]);
+  const [districtFilter, setDistrictFilter] = useState<string[]>([]);
+  const [sourceFilter, setSourceFilter] = useState<string[]>([]);
+  const [complaintTypeFilter, setComplaintTypeFilter] = useState<string[]>([]);
+  const [statusFilter, setStatusFilter] = useState<string[]>([]);
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
 
-  const { data: branchesData } = useQuery({
-    queryKey: ['pending', 'branches'],
-    queryFn: async () => {
-      const r = await fetch('/api/pending/branches', { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
-      return r.json();
-    },
-    enabled: type === 'branch',
-  });
+  // ── Shared filter options — same source as GlobalFilterBar (dashboard/filter-options)
+  const { data: filterOptsData } = useFilterOptions();
 
-  useEffect(() => {
-    if (branchesData?.data) {
-      setBranches(branchesData.data);
-    }
-  }, [branchesData]);
+  const districtOptions       = (filterOptsData?.districts ?? []).map(v => ({ value: v, label: v }));
+  const sourceOptions         = (filterOptsData?.sources   ?? []).map(v => ({ value: v, label: v }));
+  const complaintTypeOptions  = (filterOptsData?.types     ?? []).map(v => ({ value: v, label: v }));
 
-  const getEndpoint = () => {
-    if (type === 'branch' && branch) {
-      return `/api/pending/branch/${encodeURIComponent(branch)}`;
-    }
-    return ep[type] || ep.all;
+
+  // ── Build query string with all active filters
+  const buildParams = () => {
+    const params = new URLSearchParams();
+    if (districtFilter.length > 0) params.set('district', districtFilter.join(','));
+    if (sourceFilter.length > 0) params.set('source', sourceFilter.join(','));
+    if (complaintTypeFilter.length > 0) params.set('complaintType', complaintTypeFilter.join(','));
+    if (fromDate) params.set('fromDate', fromDate);
+    if (toDate) params.set('toDate', toDate);
+    return params.toString();
   };
 
+  const endpoint = ep[type] || ep.all;
+
   const { data, isLoading } = useQuery({
-    queryKey: ['pending', type, branch],
+    queryKey: ['pending', type, districtFilter, sourceFilter, complaintTypeFilter, fromDate, toDate],
     queryFn: async () => {
-      const r = await fetch(getEndpoint(), { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
+      const qs = buildParams();
+      const url = qs ? `${endpoint}?${qs}` : endpoint;
+      const r = await fetch(url, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
       return r.json();
     },
   });
@@ -81,8 +71,14 @@ export const PendingPage = () => {
     name: `${r.firstName || ''} ${r.lastName || ''}`.trim() || '-',
     mobile: r.mobile || '-',
     date: r.complRegDt ? new Date(String(r.complRegDt)).toLocaleDateString() : '-',
-    status: 'Pending',
+    status: r.statusOfComplaint || 'Pending',
+    source: r.complaintSource || 'General Complaints',
+    complaintType: r.typeOfComplaint || r.incidentType || 'Other',
   }));
+
+  // All filtering is server-side
+  const filteredTableData = tableData;
+  const isFiltered = districtFilter.length > 0 || sourceFilter.length > 0 || complaintTypeFilter.length > 0 || statusFilter.length > 0 || !!fromDate || !!toDate;
 
   const cols: Column<typeof tableData[0]>[] = [
     { key: 'regNum', label: 'Reg. No.', sortable: true },
@@ -108,9 +104,10 @@ export const PendingPage = () => {
         <div style={{
           background: 'rgba(19,32,53,0.6)', border: '1px solid rgba(255,255,255,0.07)',
           borderRadius: '12px', padding: '12px 16px', marginBottom: '20px',
-          backdropFilter: 'blur(12px)', display: 'flex', flexWrap: 'wrap', gap: '12px', alignItems: 'center',
+          backdropFilter: 'blur(12px)', display: 'flex', flexWrap: 'wrap', gap: '16px', alignItems: 'flex-end',
+          position: 'relative', zIndex: 1000
         }}>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginBottom: '8px' }}>
             {tabs.map(t => (
               <Link
                 key={t.id}
@@ -128,22 +125,78 @@ export const PendingPage = () => {
               </Link>
             ))}
           </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', width: '100%' }}>
+            {/* Date Range */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+              <span style={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.7px', color: '#64748b' }}>
+                Date Range
+              </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <input 
+                  type="date" 
+                  value={fromDate}
+                  onChange={e => setFromDate(e.target.value)}
+                  style={{
+                    padding: '6px 10px', borderRadius: '8px', background: 'rgba(15,23,42,0.9)', 
+                    color: '#e2e8f0', border: '1px solid rgba(255,255,255,0.1)', fontSize: '12.5px',
+                    outline: 'none', cursor: 'pointer'
+                  }} 
+                />
+                <span style={{ color: '#475569' }}>-</span>
+                <input 
+                  type="date" 
+                  value={toDate}
+                  onChange={e => setToDate(e.target.value)}
+                  style={{
+                    padding: '6px 10px', borderRadius: '8px', background: 'rgba(15,23,42,0.9)', 
+                    color: '#e2e8f0', border: '1px solid rgba(255,255,255,0.1)', fontSize: '12.5px',
+                    outline: 'none', cursor: 'pointer'
+                  }} 
+                />
+              </div>
+            </div>
 
-          {type === 'branch' && (
-            <>
-              <div style={{ width: '1px', height: '20px', background: 'rgba(255,255,255,0.08)', margin: '0 4px' }} />
-              <StyledSelect value={branch} onChange={setBranch}>
-                <option value="">Select District…</option>
-                {branches.map(b => <option key={b} value={b}>{b}</option>)}
-              </StyledSelect>
-            </>
-          )}
+            <MultiSelectFilter
+              label="Source"
+              options={sourceOptions}
+              selected={sourceFilter}
+              onChange={setSourceFilter}
+              placeholder="All Sources"
+              minWidth="160px"
+            />
+
+            <MultiSelectFilter
+              label="District"
+              options={districtOptions}
+              selected={districtFilter}
+              onChange={setDistrictFilter}
+              placeholder="All Districts"
+              minWidth="160px"
+            />
+
+            <MultiSelectFilter
+              label="Complaint Type"
+              options={complaintTypeOptions}
+              selected={complaintTypeFilter}
+              onChange={setComplaintTypeFilter}
+              placeholder="All Types"
+              minWidth="160px"
+            />
+
+            {isFiltered && (
+              <button
+                onClick={() => { setDistrictFilter([]); setSourceFilter([]); setComplaintTypeFilter([]); setStatusFilter([]); setFromDate(''); setToDate(''); }}
+                style={{ padding: '6px 12px', borderRadius: '6px', fontSize: '11px', background: 'rgba(239,68,68,0.1)', color: '#fca5a5', border: '1px solid rgba(239,68,68,0.25)', cursor: 'pointer', alignSelf: 'flex-end', marginBottom: '2px' }}
+              >
+                ✕ Clear All
+              </button>
+            )}
+          </div>
         </div>
-
         {/* Data Table */}
         <DataTable
-          title={`${tabs.find(t => t.id === type)?.label} Records`}
-          data={tableData}
+          title={`${tabs.find(t => t.id === type)?.label} · ${filteredTableData.length} records${isFiltered ? ' (filtered)' : ''}`}
+          data={filteredTableData}
           isLoading={isLoading}
           skeletonRows={8}
           columns={cols.map(c => ({

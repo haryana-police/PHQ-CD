@@ -68,10 +68,18 @@ model Complaint {
   createdAt          DateTime   @default(now())
   updatedAt          DateTime   @updatedAt
 
+  resolvedDistrictId  BigInt?
+  resolvedDistrict    District_Master? @relation(fields: [resolvedDistrictId], references: [id])
+
   @@index([complRegDt])
   @@index([statusOfComplaint])
   @@index([addressDistrict])
+  @@index([complaintSource])
+  @@index([typeOfComplaint])
+  @@index([resolvedDistrictId])
   @@index([complRegDt, statusOfComplaint])
+  @@index([resolvedDistrictId, statusOfComplaint])
+  @@index([addressDistrict, statusOfComplaint])
 }
 
 model WomenSafety {
@@ -100,6 +108,11 @@ model WomenSafety {
   disposalDate    DateTime?
   createdAt         DateTime   @default(now())
   updatedAt         DateTime   @updatedAt
+
+  @@index([complRegDt])
+  @@index([complaintSource])
+  @@index([incidentType])
+  @@index([statusOfComplaint])
 }
 
 model CCTNSComplaint {
@@ -131,10 +144,12 @@ model Office {
 }
 
 model District_Master {
-  id             BigInt    @id
-  DistrictName   String    @unique
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  id               BigInt      @id
+  DistrictName     String      @unique
+  isPoliceDistrict Boolean     @default(true)
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+  complaints       Complaint[]
 }
 
 model PoliceStation_Master {

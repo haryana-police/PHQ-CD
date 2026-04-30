@@ -5,19 +5,58 @@ import { Layout } from '@/components/layout/Layout';
 import { Button } from '@/components/common/Button';
 import { DataTable, Column } from '@/components/data/DataTable';
 import { Select } from '@/components/common/Select';
+import { MultiSelectFilter } from '@/components/common/MultiSelectFilter';
 import * as XLSX from 'xlsx';
 
 export const WomenSafetyPage = () => {
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(100);
+  const [incidentFilter, setIncidentFilter] = useState<string[]>([]);
+  const [statusFilter, setStatusFilter] = useState<string[]>([]);
+  const [districtFilter, setDistrictFilter] = useState<string[]>([]);
+  const [sourceFilter, setSourceFilter] = useState<string[]>([]);
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
   const search = '';
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const { data, isLoading, refetch } = useQuery({
-    queryKey: ['women-safety', page, limit, search],
+  // ── Fetch distinct filter options from server
+  const { data: filterOpts } = useQuery({
+    queryKey: ['women-safety-filter-options'],
     queryFn: async () => {
-      const params = new URLSearchParams({ page: String(page), limit: String(limit), search });
-      const r = await fetch(`/api/women-safety?${params}`, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
+      const r = await fetch('/api/women-safety/filter-options', {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+      });
+      return r.json();
+    },
+    staleTime: 30 * 60 * 1000, gcTime: 30 * 60 * 1000,
+  });
+
+  const districtOptions = (filterOpts?.data?.districts ?? []).map((v: string) => ({ value: v, label: v }));
+  const sourceOptions = (filterOpts?.data?.sources ?? []).map((v: string) => ({ value: v, label: v }));
+  const incidentOptions = (filterOpts?.data?.incidentTypes ?? []).map((v: string) => ({ value: v, label: v }));
+  const statusOptions = (filterOpts?.data?.statuses ?? []).map((v: string) => ({ value: v, label: v }));
+
+  const handleFilterChange = (setter: (v: any) => void) => (v: any) => { setter(v); setPage(1); };
+
+  // ── Build API params with all active filters
+  const buildParams = () => {
+    const params = new URLSearchParams({ page: String(page), limit: String(limit), search });
+    if (fromDate) params.set('fromDate', fromDate);
+    if (toDate) params.set('toDate', toDate);
+    if (districtFilter.length > 0) params.set('district', districtFilter.join(','));
+    if (sourceFilter.length > 0) params.set('source', sourceFilter.join(','));
+    if (incidentFilter.length > 0) params.set('incidentType', incidentFilter.join(','));
+    if (statusFilter.length > 0) params.set('status', statusFilter.join(','));
+    return params;
+  };
+
+  const { data, isLoading, refetch } = useQuery({
+    queryKey: ['women-safety', page, limit, search, fromDate, toDate, districtFilter, sourceFilter, incidentFilter, statusFilter],
+    queryFn: async () => {
+      const r = await fetch(`/api/women-safety?${buildParams()}`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+      });
       return r.json();
     },
   });
@@ -66,15 +105,26 @@ export const WomenSafetyPage = () => {
   const records = data?.data?.data || [];
   const pagination = data?.data?.pagination;
 
-  const tableData = records.map((r: any) => ({
-    regNum: r.complRegNum || '-',
+  type WomenSafetyRow = { regNum: string; district: string; name: string; mobile: string; incidentType: string; rawDate: string; date: string; status: string; source: string; id: unknown; };
+
+  const tableData: WomenSafetyRow[] = records.map((r: Record<string, unknown>) => ({
+    regNum: String(r.complRegNum || '-'),
+    district: String((r.district as Record<string, unknown>)?.name || r.addressDistrict || '-'),
     name: `${r.firstName || ''} ${r.lastName || ''}`.trim() || '-',
-    mobile: r.mobile || '-',
-    incidentType: r.incidentType || '-',
+    mobile: String(r.mobile || '-'),
+    incidentType: String(r.incidentType || '-'),
+    rawDate: r.complRegDt ? String(r.complRegDt).slice(0, 10) : '',
     date: r.complRegDt ? new Date(String(r.complRegDt)).toLocaleDateString() : '-',
-    status: r.statusOfComplaint || 'Pending',
+    status: String(r.statusOfComplaint || 'Pending'),
+    source: String(r.complaintSource || 'Women Safety'),
     id: r.id,
   }));
+
+
+
+  // All filtering is done server-side
+  const filteredData = tableData;
+  const isFiltered = incidentFilter.length > 0 || statusFilter.length > 0 || districtFilter.length > 0 || sourceFilter.length > 0 || !!fromDate || !!toDate;
 
   const cols: Column<typeof tableData[0]>[] = [
     { key: 'regNum', label: 'Reg. No.', sortable: true },
@@ -102,6 +152,86 @@ export const WomenSafetyPage = () => {
           <Link to="/admin/women-safety/add"><Button>Add</Button></Link>
         </div>
 
+        {/* Filter Bar */}
+        <div style={{
+          background: 'rgba(19,32,53,0.6)', border: '1px solid rgba(255,255,255,0.07)',
+          borderRadius: '12px', padding: '12px 16px', marginBottom: '14px',
+          backdropFilter: 'blur(12px)', display: 'flex', flexWrap: 'wrap', gap: '16px', alignItems: 'flex-end',
+          position: 'relative', zIndex: 1000
+        }}>
+          {/* Date Range */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <span style={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.7px', color: '#64748b' }}>
+              Date Range
+            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <input 
+                type="date" 
+                value={fromDate}
+                onChange={e => setFromDate(e.target.value)}
+                style={{
+                  padding: '6px 10px', borderRadius: '8px', background: 'rgba(15,23,42,0.9)', 
+                  color: '#e2e8f0', border: '1px solid rgba(255,255,255,0.1)', fontSize: '12.5px',
+                  outline: 'none', cursor: 'pointer'
+                }} 
+              />
+              <span style={{ color: '#475569' }}>-</span>
+              <input 
+                type="date" 
+                value={toDate}
+                onChange={e => setToDate(e.target.value)}
+                style={{
+                  padding: '6px 10px', borderRadius: '8px', background: 'rgba(15,23,42,0.9)', 
+                  color: '#e2e8f0', border: '1px solid rgba(255,255,255,0.1)', fontSize: '12.5px',
+                  outline: 'none', cursor: 'pointer'
+                }} 
+              />
+            </div>
+          </div>
+
+          <MultiSelectFilter
+            label="Source"
+            options={sourceOptions}
+            selected={sourceFilter}
+            onChange={handleFilterChange(setSourceFilter)}
+            placeholder="All Sources"
+            minWidth="160px"
+          />
+
+          <MultiSelectFilter
+            label="District"
+            options={districtOptions}
+            selected={districtFilter}
+            onChange={handleFilterChange(setDistrictFilter)}
+            placeholder="All Districts"
+            minWidth="160px"
+          />
+
+          <MultiSelectFilter
+            label="Incident Type"
+            options={incidentOptions}
+            selected={incidentFilter}
+            onChange={handleFilterChange(setIncidentFilter)}
+            minWidth="160px"
+          />
+
+          <MultiSelectFilter
+            label="Status"
+            options={statusOptions}
+            selected={statusFilter}
+            onChange={handleFilterChange(setStatusFilter)}
+            minWidth="160px"
+          />
+          {isFiltered && (
+            <button
+              onClick={() => { setIncidentFilter([]); setStatusFilter([]); setDistrictFilter([]); setSourceFilter([]); setFromDate(''); setToDate(''); setPage(1); }}
+              style={{ padding: '6px 12px', borderRadius: '6px', fontSize: '11px', background: 'rgba(239,68,68,0.1)', color: '#fca5a5', border: '1px solid rgba(239,68,68,0.25)', cursor: 'pointer' }}
+            >
+              ✕ Clear All
+            </button>
+          )}
+        </div>
+
         {isLoading ? (
           <div className="loading-spinner"><svg width="28" height="28" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg></div>
         ) : tableData.length === 0 ? (
@@ -109,8 +239,8 @@ export const WomenSafetyPage = () => {
         ) : (
           <>
             <DataTable
-              title="Women Safety Complaints"
-              data={tableData}
+              title={`Women Safety Complaints${incidentFilter.length || statusFilter.length ? ` · Filtered (${filteredData.length})` : ''}`}
+              data={filteredData}
               columns={cols.map(c => ({
                 ...c,
                 render: (row) => {

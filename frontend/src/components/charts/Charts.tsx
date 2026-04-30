@@ -57,6 +57,24 @@ const yAxisVal = (name = '') => ({
 });
 
 // ── BaseChart component ───────────────────────────────────────────────────────
+export const percentFormatter = (params: any[]) => {
+  let out = `<b>${params[0].axisValue}</b><br/>`;
+  let total = params.find(p => p.seriesName.startsWith('Total'))?.value;
+  if (total === undefined) {
+    const p = params.find(x => x.seriesName === 'Pending')?.value || 0;
+    const d = params.find(x => x.seriesName === 'Disposed')?.value || 0;
+    total = p + d;
+  }
+  params.forEach((p: any) => {
+    out += `${p.marker} ${p.seriesName}: <b>${p.value?.toLocaleString() || 0}</b>`;
+    if (total && total > 0 && (p.seriesName === 'Pending' || p.seriesName === 'Disposed')) {
+      out += ` <span style="opacity: 0.8; font-size: 11px">(${((p.value / total) * 100).toFixed(1)}%)</span>`;
+    }
+    out += '<br/>';
+  });
+  return out;
+};
+
 export const BaseChart = ({ option, height = '400px', width = '100%' }: {
   option: EChartsOption; height?: string; width?: string;
 }) => (
@@ -79,11 +97,11 @@ export const getDistrictBarOptions = (
 
   if (opts?.horizontal) {
     return {
-      tooltip: { ...tooltip(), trigger: 'axis', axisPointer: { type: 'shadow' } },
+      tooltip: { ...tooltip(percentFormatter as any), trigger: 'axis', axisPointer: { type: 'shadow' } },
       legend: legend(['Pending', 'Disposed']),
       grid: { left: '2%', right: '6%', bottom: '10%', top: '4%', containLabel: true },
       xAxis: { ...yAxisVal() },
-      yAxis: { type: 'category', data: labels, axisLabel: { fontSize: 10, color: COLORS.text }, axisLine: { lineStyle: { color: 'rgba(255,255,255,0.1)' } }, axisTick: { show: false } },
+      yAxis: { type: 'category', data: labels, inverse: true, axisLabel: { fontSize: 10, color: COLORS.text }, axisLine: { lineStyle: { color: 'rgba(255,255,255,0.1)' } }, axisTick: { show: false } },
       series: [
         { name: 'Pending',  type: 'bar', stack: 'total', data: pending,  itemStyle: { color: COLORS.pending,  borderRadius: [0,0,0,0] }, barMaxWidth: 22 },
         { name: 'Disposed', type: 'bar', stack: 'total', data: disposed, itemStyle: { color: COLORS.disposed, borderRadius: [0,3,3,0] }, barMaxWidth: 22 },
@@ -92,7 +110,7 @@ export const getDistrictBarOptions = (
   }
 
   return {
-    tooltip: { ...tooltip(), trigger: 'axis', axisPointer: { type: 'shadow' } },
+    tooltip: { ...tooltip(percentFormatter as any), trigger: 'axis', axisPointer: { type: 'shadow' } },
     legend: legend(['Pending', 'Disposed']),
     grid: { left: '2%', right: '2%', bottom: '14%', top: '4%', containLabel: true },
     xAxis: xAxisCat(labels),
@@ -134,6 +152,92 @@ export const getYoYBarOptions = (
   ],
 });
 
+// ── 2b. YoY Grouped-Stacked Bar (Pending + Disposed × 2 years) ───────────────
+// Each category has 2 stacked bars side-by-side:
+//   Stack A: Pending(year) + Disposed(year)   — solid colours
+//   Stack B: Pending(y-1)  + Disposed(y-1)    — lighter colours
+export const getYoYStackedBarOptions = (
+  data: {
+    category:    string;
+    pending:     number;
+    disposed:    number;
+    prevPending: number;
+    prevDisposed:number;
+  }[],
+  currentYear: number,
+): EChartsOption => ({
+  tooltip: {
+    trigger: 'axis' as const,
+    axisPointer: { type: 'shadow' as const },
+    backgroundColor: COLORS.tooltip,
+    borderColor: 'rgba(255,255,255,0.08)',
+    textStyle: { color: COLORS.textBright, fontSize: 12 },
+    extraCssText: 'box-shadow:0 8px 32px rgba(0,0,0,0.5);border-radius:8px;padding:10px 14px;',
+    formatter: (params: any) => {
+      const name = params[0]?.axisValue ?? '';
+      let out = `<b>${name}</b><br/>`;
+      const totCur  = (params.find((p: any) => p.seriesName === `Pending ${currentYear}`)?.value   ?? 0)
+                    + (params.find((p: any) => p.seriesName === `Disposed ${currentYear}`)?.value  ?? 0);
+      const totPrev = (params.find((p: any) => p.seriesName === `Pending ${currentYear - 1}`)?.value  ?? 0)
+                    + (params.find((p: any) => p.seriesName === `Disposed ${currentYear - 1}`)?.value ?? 0);
+      params.forEach((p: any) => {
+        const pct = p.seriesName.includes(String(currentYear - 1))
+          ? (totPrev > 0 ? ` (${((p.value / totPrev) * 100).toFixed(1)}%)` : '')
+          : (totCur  > 0 ? ` (${((p.value / totCur)  * 100).toFixed(1)}%)` : '');
+        out += `${p.marker} ${p.seriesName}: <b>${p.value?.toLocaleString()}</b>${pct}<br/>`;
+      });
+      return out;
+    },
+  },
+  legend: {
+    data: [`Pending ${currentYear}`, `Disposed ${currentYear}`, `Pending ${currentYear - 1}`, `Disposed ${currentYear - 1}`],
+    bottom: 4,
+    textStyle: { color: COLORS.text, fontSize: 10 },
+    itemWidth: 10, itemHeight: 10, icon: 'roundRect',
+  },
+  grid: { left: '2%', right: '2%', bottom: '14%', top: '5%', containLabel: true },
+  xAxis: xAxisCat(data.map(d => d.category), 35),
+  yAxis: yAxisVal(),
+  series: [
+    {
+      name: `Pending ${currentYear}`,
+      type: 'bar',
+      stack: `cur`,
+      data: data.map(d => d.pending),
+      itemStyle: { color: COLORS.pending, borderRadius: [0,0,0,0] },
+      barMaxWidth: 28,
+      emphasis: { focus: 'series' as const },
+    },
+    {
+      name: `Disposed ${currentYear}`,
+      type: 'bar',
+      stack: `cur`,
+      data: data.map(d => d.disposed),
+      itemStyle: { color: COLORS.disposed, borderRadius: [3,3,0,0] },
+      barMaxWidth: 28,
+      emphasis: { focus: 'series' as const },
+    },
+    {
+      name: `Pending ${currentYear - 1}`,
+      type: 'bar',
+      stack: `prev`,
+      data: data.map(d => d.prevPending),
+      itemStyle: { color: COLORS.pending, borderRadius: [0,0,0,0], opacity: 0.5 },
+      barMaxWidth: 28,
+      emphasis: { focus: 'series' as const },
+    },
+    {
+      name: `Disposed ${currentYear - 1}`,
+      type: 'bar',
+      stack: `prev`,
+      data: data.map(d => d.prevDisposed),
+      itemStyle: { color: COLORS.disposed, borderRadius: [3,3,0,0], opacity: 0.5 },
+      barMaxWidth: 28,
+      emphasis: { focus: 'series' as const },
+    },
+  ],
+});
+
 // ── 3. Line / Area trend ──────────────────────────────────────────────────────
 export const getDurationLineOptions = (
   data: { month: string; total: number; pending: number; disposed: number; prevTotal?: number }[],
@@ -148,7 +252,7 @@ export const getDurationLineOptions = (
         out += `${p.marker} ${p.seriesName}: <b>${p.value.toLocaleString()}</b>`;
         if (p.seriesName === 'Pending' || p.seriesName === 'Disposed') {
           const t = params.find((x:any) => x.seriesName === `Total ${year}`)?.value || 1;
-          out += ` (${((p.value / t) * 100).toFixed(1)}%)`;
+          out += ` <span style="opacity: 0.8; font-size: 11px">(${((p.value / t) * 100).toFixed(1)}%)</span>`;
         }
         out += '<br/>';
       });
@@ -239,18 +343,33 @@ export const getPieOptions = (data: { name: string; value: number }[]): EChartsO
   };
 };
 
-// ── 5. Horizontal Stacked Bar (categories) ────────────────────────────────────
-export const getStackedBarOptions = (
+// ── 5. Horizontal Grouped Bar (categories) ────────────────────────────────────
+export const getGroupedBarOptions = (
   data: { category: string; total: number; pending: number; disposed: number }[]
 ): EChartsOption => ({
-  tooltip: { ...tooltip(), trigger: 'axis', axisPointer: { type: 'shadow' } },
+  tooltip: { ...tooltip(percentFormatter as any), trigger: 'axis', axisPointer: { type: 'shadow' } },
   legend: legend(['Pending', 'Disposed']),
   grid: { left: '2%', right: '6%', bottom: '10%', top: '4%', containLabel: true },
   xAxis: { type: 'value', axisLabel: { color: COLORS.text, fontSize: 10 }, splitLine: { lineStyle: { color: COLORS.grid } }, axisLine: { show: false } },
   yAxis: { type: 'category', data: data.map(d => d.category), axisLabel: { color: COLORS.text, fontSize: 10 }, axisLine: { lineStyle: { color: 'rgba(255,255,255,0.1)' } }, axisTick: { show: false } },
   series: [
-    { name: 'Pending',  type: 'bar', stack: 'total', data: data.map(d => d.pending),  itemStyle: { color: COLORS.pending,  borderRadius: [0,0,0,0] }, barMaxWidth: 20, emphasis: { focus: 'series' } },
-    { name: 'Disposed', type: 'bar', stack: 'total', data: data.map(d => d.disposed), itemStyle: { color: COLORS.disposed, borderRadius: [0,3,3,0] }, barMaxWidth: 20, emphasis: { focus: 'series' } },
+    { name: 'Pending',  type: 'bar', data: data.map(d => d.pending),  itemStyle: { color: COLORS.pending,  borderRadius: [0,3,3,0] }, barMaxWidth: 20, emphasis: { focus: 'series' } },
+    { name: 'Disposed', type: 'bar', data: data.map(d => d.disposed), itemStyle: { color: COLORS.disposed, borderRadius: [0,3,3,0] }, barMaxWidth: 20, emphasis: { focus: 'series' } },
+  ],
+});
+
+export const getHorizontalSingleBarOptions = (data: { name: string; value: number }[]): EChartsOption => ({
+  tooltip: { ...tooltip(), trigger: 'axis', axisPointer: { type: 'shadow' } },
+  grid: { left: '2%', right: '6%', bottom: '10%', top: '4%', containLabel: true },
+  xAxis: { type: 'value', axisLabel: { color: COLORS.text, fontSize: 10 }, splitLine: { lineStyle: { color: COLORS.grid } }, axisLine: { show: false } },
+  yAxis: { type: 'category', data: data.map(d => d.name), inverse: true, axisLabel: { color: COLORS.text, fontSize: 10 }, axisLine: { lineStyle: { color: 'rgba(255,255,255,0.1)' } }, axisTick: { show: false } },
+  series: [
+    {
+      type: 'bar',
+      data: data.map(d => d.value),
+      itemStyle: { color: COLORS.primary, borderRadius: [0,3,3,0] },
+      barMaxWidth: 20,
+    },
   ],
 });
 

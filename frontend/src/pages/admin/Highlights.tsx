@@ -1,38 +1,89 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Layout } from '@/components/layout/Layout';
 import { ChartCard } from '@/components/charts/ChartCard';
 import { DataTable, Column } from '@/components/data/DataTable';
-import { getPieOptions, getStackedBarOptions } from '@/components/charts/Charts';
+import { getDistrictBarOptions } from '@/components/charts/Charts';
+
+
+
+
+
 import { Select } from '@/components/common/Select';
+import { GlobalFilterBar } from '@/components/common/GlobalFilterBar';
 
 const CY = new Date().getFullYear();
+const TOP_PREVIEW_COUNT = 5;
 const PREVIEW_COUNT = 8;
+
+
 
 export const HighlightsPage = () => {
   const [showAllCategories, setShowAllCategories] = useState(false);
   const [showAllNature, setShowAllNature] = useState(false);
   const [year, setYear] = useState(CY);
+  const [natureChartSort] = useState('Total Reg');
+  const [categoryFilter, setCategoryFilter] = useState<string[]>([]);
+  const [natureFilter, setNatureFilter] = useState<string[]>([]);
   const YEARS = Array.from({ length: CY - 2014 + 1 }, (_, i) => CY - i);
 
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
+  const [sourceFilter, setSourceFilter] = useState<string[]>([]);
+  const [districtFilter, setDistrictFilter] = useState<string[]>([]);
+  const [complaintTypeFilter, setComplaintTypeFilter] = useState<string[]>([]);
+
+  const filters = useMemo(() => ({
+    year,
+    fromDate: fromDate || undefined,
+    toDate:   toDate   || undefined,
+    district: districtFilter.length > 0 ? districtFilter : undefined,
+    source:   sourceFilter.length > 0   ? sourceFilter   : undefined,
+    complaintType: complaintTypeFilter.length > 0 ? complaintTypeFilter : undefined,
+  }), [year, fromDate, toDate, districtFilter, sourceFilter, complaintTypeFilter]);
+
+  const buildQS = () => {
+    const p = new URLSearchParams();
+    if (fromDate && toDate) {
+      p.set('fromDate', fromDate);
+      p.set('toDate', toDate);
+    } else {
+      p.set('year', String(year));
+    }
+    if (districtFilter.length > 0)      p.set('district',      districtFilter.join(','));
+    if (sourceFilter.length > 0)        p.set('source',        sourceFilter.join(','));
+    if (complaintTypeFilter.length > 0) p.set('complaintType', complaintTypeFilter.join(','));
+    return p.toString();
+  };
+
   const { data: hd, isLoading: hl } = useQuery({
-    queryKey: ['reports', 'highlights', year],
+    queryKey: ['reports', 'highlights', filters],
     queryFn: async () => {
-      const r = await fetch(`/api/reports/highlights?year=${year}`, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
+      const r = await fetch(`/api/reports/highlights?${buildQS()}`, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
       return r.json();
     },
+    staleTime: 5 * 60 * 1000,
   });
+
+
 
   const { data: nd, isLoading: nl } = useQuery({
-    queryKey: ['reports', 'nature', year],
+    queryKey: ['reports', 'nature', filters],
     queryFn: async () => {
-      const r = await fetch(`/api/reports/nature-incident?year=${year}`, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
+      const r = await fetch(`/api/reports/nature-incident?${buildQS()}`, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
       return r.json();
     },
+    staleTime: 5 * 60 * 1000,
   });
 
-  const highlights = (hd?.data?.rows ?? hd?.data ?? []) as Record<string, unknown>[];
-  const natures    = (nd?.data?.rows ?? nd?.data ?? []) as Record<string, unknown>[];
+
+
+
+  const highlights      = (hd?.data?.rows    ?? (Array.isArray(hd?.data)    ? hd?.data    : [])) as Record<string, unknown>[];
+  const natures         = (nd?.data?.rows    ?? (Array.isArray(nd?.data)    ? nd?.data    : [])) as Record<string, unknown>[];
+
+
+
 
   const allTopRows = highlights.map((r, i) => ({
     rank: i + 1,
@@ -54,8 +105,57 @@ export const HighlightsPage = () => {
     };
   });
 
-  const topRows = showAllCategories ? allTopRows : allTopRows.slice(0, PREVIEW_COUNT);
-  const natureRows = showAllNature ? allNatureRows : allNatureRows.slice(0, PREVIEW_COUNT);
+  const sortedNatureRows = useMemo(() => {
+    const arr = [...allNatureRows];
+    switch (natureChartSort) {
+      case 'Total Pending':
+        arr.sort((a, b) => b.pending - a.pending);
+        break;
+      case 'Total Disposed':
+        arr.sort((a, b) => b.disposed - a.disposed);
+        break;
+      case 'Pending %':
+        arr.sort((a, b) => {
+          const pA = a.total > 0 ? a.pending / a.total : 0;
+          const pB = b.total > 0 ? b.pending / b.total : 0;
+          return pB - pA;
+        });
+        break;
+      case 'Disposed %':
+        arr.sort((a, b) => {
+          const dA = a.total > 0 ? a.disposed / a.total : 0;
+          const dB = b.total > 0 ? b.disposed / b.total : 0;
+          return dB - dA;
+        });
+        break;
+      case 'Total Reg':
+      default:
+        arr.sort((a, b) => b.total - a.total);
+    }
+    return arr;
+  }, [allNatureRows, natureChartSort]);
+
+  // Tables show the FILTERED rows (applying categoryFilter/natureFilter client-side on top of server-filtered data)
+  const topRows    = (categoryFilter.length > 0
+    ? allTopRows.filter(r => categoryFilter.includes(r.name))
+    : (showAllCategories ? allTopRows : allTopRows.slice(0, TOP_PREVIEW_COUNT)));
+
+  const natureRows = (natureFilter.length > 0
+    ? sortedNatureRows.filter(r => natureFilter.includes(r.name))
+    : (showAllNature ? sortedNatureRows : sortedNatureRows.slice(0, PREVIEW_COUNT)));
+
+  const categoryOptions = useMemo(
+    () => allTopRows.map(r => ({ value: r.name, label: r.name })),
+    [allTopRows]
+  );
+
+
+
+  const filteredNatureRows = useMemo(() => {
+    let rows = [...sortedNatureRows];
+    if (natureFilter.length > 0) rows = rows.filter(r => natureFilter.includes(r.name));
+    return rows.slice(0, natureFilter.length > 0 ? 50 : 10);
+  }, [sortedNatureRows, natureFilter]);
 
   const catCols: Column<typeof allTopRows[0]>[] = [
     { key: 'rank', label: '#', width: '50px', align: 'center' },
@@ -88,21 +188,45 @@ export const HighlightsPage = () => {
             width="100px"
           />
         </div>
-          {/* Charts */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '20px' }}>
-          <ChartCard title={`Top Categories · ${year}`} isLoading={hl}
-            option={getPieOptions(allTopRows.slice(0, 10).map(r => ({ name: r.name, value: r.count })))}
-            height="280px" />
-          <ChartCard title={`Nature of Incidents · ${year}`} isLoading={nl}
-            option={getStackedBarOptions(allNatureRows.slice(0, 10).map(r => ({ category: r.name, total: r.total, pending: r.pending, disposed: r.disposed })))}
-            height="280px" />
-        </div>
+        {/* ── Global Filter Bar — ABOVE charts ── */}
+        <GlobalFilterBar
+          fromDate={fromDate} toDate={toDate}
+          onFromDateChange={setFromDate} onToDateChange={setToDate}
+          districtFilter={districtFilter} onDistrictChange={setDistrictFilter}
+          sourceFilter={sourceFilter} onSourceChange={setSourceFilter}
+          complaintTypeFilter={complaintTypeFilter} onComplaintTypeChange={setComplaintTypeFilter}
+          extraLabel="Category"
+          extraOptions={categoryOptions}
+          extraSelected={categoryFilter}
+          onExtraChange={setCategoryFilter}
+          showExtra={categoryOptions.length > 0}
+          onClearAll={() => {
+            setCategoryFilter([]); setNatureFilter([]);
+            setSourceFilter([]); setDistrictFilter([]);
+            setComplaintTypeFilter([]); setFromDate(''); setToDate('');
+          }}
+        />
+        {/* Top Section: Chart + Top Categories Table */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(450px, 1fr))', gap: '24px', marginBottom: '24px', alignItems: 'start' }}>
 
-            {/* Side-by-side adaptive table grid */}
-            <div className="highlights-tables-grid">
+          <ChartCard
+            title={`Top Categories · ${year}`}
+            isLoading={hl || nl}
+            height="340px"
+            defaultType="horizontal"
+            option={getDistrictBarOptions(
+              filteredNatureRows.map(r => ({
+                district: r.name,
+                total: r.total,
+                pending: r.pending,
+                disposed: r.disposed,
+              })),
+              { horizontal: true }
+            )}
+          />
 
-              {/* LEFT: Top Categories (narrow — 3 columns) */}
-              <div className="highlights-section">
+          {/* RIGHT: Top Categories (narrow — 3 columns) */}
+          <div className="highlights-section" style={{ height: '100%' }}>
                 <div className="highlights-section-header">
                   <div>
                     <h3 className="highlights-section-title">Top Categories</h3>
@@ -110,7 +234,7 @@ export const HighlightsPage = () => {
                       {topRows.length} of {allTopRows.length} shown
                     </span>
                   </div>
-                  {allTopRows.length > PREVIEW_COUNT && (
+                  {allTopRows.length > TOP_PREVIEW_COUNT && (
                     <button
                       className={`show-all-btn ${showAllCategories ? 'expanded' : ''}`}
                       onClick={() => setShowAllCategories(!showAllCategories)}
@@ -129,7 +253,7 @@ export const HighlightsPage = () => {
                 <div
                   className="highlights-table-wrapper"
                   style={{
-                    maxHeight: showAllCategories ? '620px' : `${PREVIEW_COUNT * 52 + 48}px`,
+                    maxHeight: showAllCategories ? '620px' : `${TOP_PREVIEW_COUNT * 52 + 48}px`,
                     transition: 'max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
                     overflowY: showAllCategories ? 'auto' : 'hidden',
                   }}
@@ -169,9 +293,10 @@ export const HighlightsPage = () => {
                   />
                 </div>
               </div>
+            </div>
 
-              {/* RIGHT: Nature of Incidents (wide — 6 columns) */}
-              <div className="highlights-section">
+            {/* Bottom Section: Nature of Incidents Table (Full Width) */}
+            <div className="highlights-section">
                 <div className="highlights-section-header">
                   <div>
                     <h3 className="highlights-section-title">Nature of Incidents</h3>
@@ -222,7 +347,6 @@ export const HighlightsPage = () => {
                   />
                 </div>
               </div>
-            </div>
 
       </div>
     </Layout>
