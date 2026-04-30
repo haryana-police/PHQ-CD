@@ -90,16 +90,25 @@ export const pendingRoutes = async (fastify: FastifyInstance) => {
   });
 
   fastify.get('/pending/all', { preHandler: [authenticate] }, async (request, reply) => {
+    const CACHE_KEY = getRequestCacheKey('pending:all', request.query);
+    const cached = getCached<object>(CACHE_KEY);
+    if (cached) return sendSuccess(reply, cached);
+
     const extra = await buildFilterWhere(request.query as Record<string, string>);
     const complaints = await prisma.complaint.findMany({
       where: { OR: PENDING_WHERE_PRISMA, ...extra },
       orderBy: { complRegDt: 'asc' },
       take: MAX_ROWS,
     });
+    setCached(CACHE_KEY, complaints);
     return sendSuccess(reply, complaints);
   });
 
   fastify.get('/pending/15-30-days', { preHandler: [authenticate] }, async (request, reply) => {
+    const CACHE_KEY = getRequestCacheKey('pending:15-30-days', request.query);
+    const cached = getCached<object>(CACHE_KEY);
+    if (cached) return sendSuccess(reply, cached);
+
     const extra = await buildFilterWhere(request.query as Record<string, string>);
     const now  = new Date();
     const from = new Date(now.getTime() - 30 * 864e5);
@@ -108,10 +117,15 @@ export const pendingRoutes = async (fastify: FastifyInstance) => {
       where: { complRegDt: { gt: from, lte: to }, OR: PENDING_WHERE_PRISMA, ...extra },
       orderBy: { complRegDt: 'asc' }, take: MAX_ROWS,
     });
+    setCached(CACHE_KEY, complaints);
     return sendSuccess(reply, complaints);
   });
 
   fastify.get('/pending/30-60-days', { preHandler: [authenticate] }, async (request, reply) => {
+    const CACHE_KEY = getRequestCacheKey('pending:30-60-days', request.query);
+    const cached = getCached<object>(CACHE_KEY);
+    if (cached) return sendSuccess(reply, cached);
+
     const extra = await buildFilterWhere(request.query as Record<string, string>);
     const now  = new Date();
     const from = new Date(now.getTime() - 60 * 864e5);
@@ -120,31 +134,46 @@ export const pendingRoutes = async (fastify: FastifyInstance) => {
       where: { complRegDt: { gt: from, lte: to }, OR: PENDING_WHERE_PRISMA, ...extra },
       orderBy: { complRegDt: 'asc' }, take: MAX_ROWS,
     });
+    setCached(CACHE_KEY, complaints);
     return sendSuccess(reply, complaints);
   });
 
   fastify.get('/pending/over-60-days', { preHandler: [authenticate] }, async (request, reply) => {
+    const CACHE_KEY = getRequestCacheKey('pending:over-60-days', request.query);
+    const cached = getCached<object>(CACHE_KEY);
+    if (cached) return sendSuccess(reply, cached);
+
     const extra = await buildFilterWhere(request.query as Record<string, string>);
     const sixtyDaysAgo = new Date(Date.now() - 60 * 864e5);
     const complaints = await prisma.complaint.findMany({
       where: { complRegDt: { lte: sixtyDaysAgo }, OR: PENDING_WHERE_PRISMA, ...extra },
       orderBy: { complRegDt: 'asc' }, take: MAX_ROWS,
     });
+    setCached(CACHE_KEY, complaints);
     return sendSuccess(reply, complaints);
   });
 
   // ── Branch routes: district name param → resolvedDistrictId lookup
   fastify.get('/pending/branch/:branch', { preHandler: [authenticate] }, async (request, reply) => {
+    const CACHE_KEY = getRequestCacheKey(`pending:branch:${(request.params as any).branch}`, request.query);
+    const cached = getCached<object>(CACHE_KEY);
+    if (cached) return sendSuccess(reply, cached);
+
     const { branch } = request.params as { branch: string };
     const dm = await prisma.district_Master.findFirst({ where: { DistrictName: branch } });
     const complaints = await prisma.complaint.findMany({
       where: { resolvedDistrictId: dm?.id ?? BigInt(-1), OR: PENDING_WHERE_PRISMA },
       orderBy: { complRegDt: 'asc' },
     });
+    setCached(CACHE_KEY, complaints);
     return sendSuccess(reply, complaints);
   });
 
   fastify.get('/pending/branch/:branch/15-30-days', { preHandler: [authenticate] }, async (request, reply) => {
+    const CACHE_KEY = getRequestCacheKey(`pending:branch:${(request.params as any).branch}:15-30-days`, request.query);
+    const cached = getCached<object>(CACHE_KEY);
+    if (cached) return sendSuccess(reply, cached);
+
     const { branch } = request.params as { branch: string };
     const now = new Date();
     const dm = await prisma.district_Master.findFirst({ where: { DistrictName: branch } });
@@ -156,10 +185,15 @@ export const pendingRoutes = async (fastify: FastifyInstance) => {
       },
       orderBy: { complRegDt: 'asc' },
     });
+    setCached(CACHE_KEY, complaints);
     return sendSuccess(reply, complaints);
   });
 
   fastify.get('/pending/branch/:branch/30-60-days', { preHandler: [authenticate] }, async (request, reply) => {
+    const CACHE_KEY = getRequestCacheKey(`pending:branch:${(request.params as any).branch}:30-60-days`, request.query);
+    const cached = getCached<object>(CACHE_KEY);
+    if (cached) return sendSuccess(reply, cached);
+
     const { branch } = request.params as { branch: string };
     const now = new Date();
     const dm = await prisma.district_Master.findFirst({ where: { DistrictName: branch } });
@@ -171,10 +205,15 @@ export const pendingRoutes = async (fastify: FastifyInstance) => {
       },
       orderBy: { complRegDt: 'asc' },
     });
+    setCached(CACHE_KEY, complaints);
     return sendSuccess(reply, complaints);
   });
 
   fastify.get('/pending/branch/:branch/over-60-days', { preHandler: [authenticate] }, async (request, reply) => {
+    const CACHE_KEY = getRequestCacheKey(`pending:branch:${(request.params as any).branch}:over-60-days`, request.query);
+    const cached = getCached<object>(CACHE_KEY);
+    if (cached) return sendSuccess(reply, cached);
+
     const { branch } = request.params as { branch: string };
     const dm = await prisma.district_Master.findFirst({ where: { DistrictName: branch } });
     const complaints = await prisma.complaint.findMany({
@@ -185,16 +224,22 @@ export const pendingRoutes = async (fastify: FastifyInstance) => {
       },
       orderBy: { complRegDt: 'asc' },
     });
+    setCached(CACHE_KEY, complaints);
     return sendSuccess(reply, complaints);
   });
 
-  // ── List of active police district branches (from District_Master — no hardcoded list)
   fastify.get('/pending/branches', { preHandler: [authenticate] }, async (_request, reply) => {
+    const CACHE_KEY = 'pending:branches';
+    const cached = getCached<object>(CACHE_KEY);
+    if (cached) return sendSuccess(reply, cached);
+
     const rows = await prisma.district_Master.findMany({
       where: { isPoliceDistrict: true },
       orderBy: { DistrictName: 'asc' },
       select: { DistrictName: true },
     });
-    return sendSuccess(reply, rows.map(r => r.DistrictName));
+    const result = rows.map(r => r.DistrictName);
+    setCached(CACHE_KEY, result);
+    return sendSuccess(reply, result);
   });
 };

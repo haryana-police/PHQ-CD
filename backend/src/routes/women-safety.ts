@@ -49,6 +49,10 @@ export const womenSafetyRoutes = async (fastify: FastifyInstance) => {
   fastify.get('/women-safety', {
     preHandler: [authenticate],
   }, async (request, reply) => {
+    const CACHE_KEY = getRequestCacheKey('women-safety:list', request.query);
+    const cached = getCached<object>(CACHE_KEY);
+    if (cached) return sendSuccess(reply, cached);
+
     try {
       const {
         page = '1', limit = '100', search = '',
@@ -111,10 +115,12 @@ export const womenSafetyRoutes = async (fastify: FastifyInstance) => {
         prisma.womenSafety.count({ where }),
       ]);
 
-      return sendSuccess(reply, {
+      const result = {
         data: records,
         pagination: { page: pageNum, limit: limitNum, total, totalPages: Math.ceil(total / limitNum) },
-      });
+      };
+      setCached(CACHE_KEY, result);
+      return sendSuccess(reply, result);
     } catch (error) {
       console.error('[women-safety list] error:', error);
       return sendSuccess(reply, { data: [], pagination: { page: 1, limit: 100, total: 0, totalPages: 1 } });
