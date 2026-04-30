@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Layout } from '@/components/layout/Layout';
 import { ChartCard } from '@/components/charts/ChartCard';
 import { DataTable, Column } from '@/components/data/DataTable';
-import { getHorizontalSingleBarOptions, getYoYBarOptions, getYoYStackedBarOptions } from '@/components/charts/Charts';
+import { getHorizontalSingleBarOptions, getYoYBarOptions, getYoYStackedBarOptions, getDistrictBarOptions } from '@/components/charts/Charts';
 
 
 
@@ -13,6 +13,7 @@ import { Select } from '@/components/common/Select';
 import { GlobalFilterBar } from '@/components/common/GlobalFilterBar';
 
 const CY = new Date().getFullYear();
+const TOP_PREVIEW_COUNT = 5;
 const PREVIEW_COUNT = 8;
 
 const HIGHLIGHTS_SORT_OPTIONS = [
@@ -181,7 +182,7 @@ export const HighlightsPage = () => {
   // Tables show the FILTERED rows (applying categoryFilter/natureFilter client-side on top of server-filtered data)
   const topRows    = (categoryFilter.length > 0
     ? allTopRows.filter(r => categoryFilter.includes(r.name))
-    : (showAllCategories ? allTopRows : allTopRows.slice(0, PREVIEW_COUNT)));
+    : (showAllCategories ? allTopRows : allTopRows.slice(0, TOP_PREVIEW_COUNT)));
 
   const natureRows = (natureFilter.length > 0
     ? sortedNatureRows.filter(r => natureFilter.includes(r.name))
@@ -253,65 +254,27 @@ export const HighlightsPage = () => {
             setComplaintTypeFilter([]); setFromDate(''); setToDate('');
           }}
         />
-          {/* Charts */}
-        <div className="charts-grid">
+        {/* Top Section: Chart + Top Categories Table */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(450px, 1fr))', gap: '24px', marginBottom: '24px', alignItems: 'start' }}>
 
-          {/* LEFT: Top Categories — default horizontal ranking, ⊞ = YoY grouped comparison */}
           <ChartCard
-            title={`Top Categories · ${year} vs ${year - 1}`}
-            isLoading={hl}
-            height="300px"
+            title={`Top Categories · ${year}`}
+            isLoading={hl || nl}
+            height="340px"
             defaultType="horizontal"
-            option={getHorizontalSingleBarOptions(filteredTopRows.map(r => ({ name: r.name, value: r.count })))}
-            alternativeOptions={{
-              grouped: getYoYBarOptions(
-                filteredTopRows.map(r => ({
-                  district:  r.name,
-                  total:     r.count,
-                  prevTotal: prevCatMap[r.name] ?? 0,
-                })),
-                year
-              ),
-            }}
-          />
-
-          {/* RIGHT: Nature of Incidents — default = grouped-stacked (Pending+Disposed × 2 years), ≡ = YoY total simple grouped */}
-          <ChartCard
-            title={`Nature of Incidents · ${year} vs ${year - 1}`}
-            isLoading={nl}
-            height="300px"
-            defaultType="grouped"
-            option={getYoYStackedBarOptions(
+            option={getDistrictBarOptions(
               filteredNatureRows.map(r => ({
-                category:     r.name,
-                pending:      r.pending,
-                disposed:     r.disposed,
-                prevPending:  prevNatMap[r.name]?.pending  ?? 0,
-                prevDisposed: prevNatMap[r.name]?.disposed ?? 0,
+                district: r.name,
+                total: r.total,
+                pending: r.pending,
+                disposed: r.disposed,
               })),
-              year
+              { horizontal: true }
             )}
-            alternativeOptions={{
-              horizontal: getYoYBarOptions(
-                filteredNatureRows.map(r => ({
-                  district:  r.name,
-                  total:     r.total,
-                  prevTotal: prevNatMap[r.name]?.total ?? 0,
-                })),
-                year
-              ),
-            }}
-            sortOptions={HIGHLIGHTS_SORT_OPTIONS}
-            currentSort={natureChartSort}
-            onSortChange={setNatureChartSort}
           />
-        </div>
 
-            {/* Side-by-side adaptive table grid */}
-            <div className="highlights-tables-grid">
-
-              {/* LEFT: Top Categories (narrow — 3 columns) */}
-              <div className="highlights-section">
+          {/* RIGHT: Top Categories (narrow — 3 columns) */}
+          <div className="highlights-section" style={{ height: '100%' }}>
                 <div className="highlights-section-header">
                   <div>
                     <h3 className="highlights-section-title">Top Categories</h3>
@@ -319,7 +282,7 @@ export const HighlightsPage = () => {
                       {topRows.length} of {allTopRows.length} shown
                     </span>
                   </div>
-                  {allTopRows.length > PREVIEW_COUNT && (
+                  {allTopRows.length > TOP_PREVIEW_COUNT && (
                     <button
                       className={`show-all-btn ${showAllCategories ? 'expanded' : ''}`}
                       onClick={() => setShowAllCategories(!showAllCategories)}
@@ -338,7 +301,7 @@ export const HighlightsPage = () => {
                 <div
                   className="highlights-table-wrapper"
                   style={{
-                    maxHeight: showAllCategories ? '620px' : `${PREVIEW_COUNT * 52 + 48}px`,
+                    maxHeight: showAllCategories ? '620px' : `${TOP_PREVIEW_COUNT * 52 + 48}px`,
                     transition: 'max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
                     overflowY: showAllCategories ? 'auto' : 'hidden',
                   }}
@@ -378,9 +341,10 @@ export const HighlightsPage = () => {
                   />
                 </div>
               </div>
+            </div>
 
-              {/* RIGHT: Nature of Incidents (wide — 6 columns) */}
-              <div className="highlights-section">
+            {/* Bottom Section: Nature of Incidents Table (Full Width) */}
+            <div className="highlights-section">
                 <div className="highlights-section-header">
                   <div>
                     <h3 className="highlights-section-title">Nature of Incidents</h3>
@@ -431,7 +395,6 @@ export const HighlightsPage = () => {
                   />
                 </div>
               </div>
-            </div>
 
       </div>
     </Layout>
