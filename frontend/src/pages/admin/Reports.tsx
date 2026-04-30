@@ -8,20 +8,18 @@ import {
   getHorizontalSingleBarOptions, getGroupedBarOptions, getDistrictBarOptions,
   getYoYBarOptions,
 } from '@/components/charts/Charts';
-import { Select } from '@/components/common/Select';
-import { GlobalFilterBar } from '@/components/common/GlobalFilterBar';
+import { GlobalFilterBar, PeriodMode } from '@/components/common/GlobalFilterBar';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
-const CY = new Date().getFullYear();           // 2026
-const DEFAULT_YEAR = CY;                       // Current year as default
-const YEARS = Array.from({ length: CY - 2014 + 1 }, (_, i) => CY - i);
+const CY = new Date().getFullYear();
+const DEFAULT_YEAR = CY;
 
 const REPORTS_SORT_OPTIONS = [
-  { label: 'Total Reg', value: 'Total Reg' },
-  { label: 'Total Pending', value: 'Total Pending' },
+  { label: 'Total Reg',      value: 'Total Reg' },
+  { label: 'Total Pending',  value: 'Total Pending' },
   { label: 'Total Disposed', value: 'Total Disposed' },
-  { label: 'Pending %', value: 'Pending %' },
-  { label: 'Disposed %', value: 'Disposed %' }
+  { label: 'Pending %',      value: 'Pending %' },
+  { label: 'Disposed %',     value: 'Disposed %' },
 ];
 
 const TABS = [
@@ -36,58 +34,6 @@ const TABS = [
   { id: 'date-wise',        label: 'Date Wise',         nameKey: 'district' },
   { id: 'action-taken',     label: 'Action Taken',      nameKey: 'actionTaken' },
 ];
-
-// ── Styled primitives ─────────────────────────────────────────────────────────
-const PeriodBtn = ({
-  active, children, onClick,
-}: { active: boolean; children: React.ReactNode; onClick: () => void }) => (
-  <button
-    onClick={onClick}
-    style={{
-      padding: '7px 16px',
-      borderRadius: '8px',
-      fontSize: '12.5px',
-      fontWeight: active ? 600 : 400,
-      border: active ? '1px solid rgba(99,102,241,0.5)' : '1px solid rgba(255,255,255,0.06)',
-      background: active
-        ? 'linear-gradient(135deg,rgba(99,102,241,0.25),rgba(99,102,241,0.12))'
-        : 'rgba(255,255,255,0.03)',
-      color: active ? '#a5b4fc' : '#64748b',
-      cursor: 'pointer',
-      transition: 'all 0.18s cubic-bezier(.4,0,.2,1)',
-      whiteSpace: 'nowrap' as const,
-      backdropFilter: 'blur(4px)',
-      boxShadow: active ? '0 0 0 1px rgba(99,102,241,0.2) inset' : 'none',
-    }}
-  >
-    {children}
-  </button>
-);
-
-
-
-const StyledDateInput = ({ value, onChange, label }: { value: string; onChange: (v: string) => void; label?: string }) => (
-  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-    {label && <span style={{ fontSize: '11.5px', color: '#64748b', whiteSpace: 'nowrap' as const }}>{label}</span>}
-    <input
-      type="date"
-      value={value}
-      onChange={e => onChange(e.target.value)}
-      style={{
-        padding: '6px 10px',
-        borderRadius: '8px',
-        background: 'rgba(15,23,42,0.8)',
-        color: '#e2e8f0',
-        border: '1px solid rgba(255,255,255,0.1)',
-        fontSize: '12px',
-        outline: 'none',
-        cursor: 'pointer',
-        colorScheme: 'dark',
-        boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
-      }}
-    />
-  </div>
-);
 
 // ── YoY Change Badge ──────────────────────────────────────────────────────────
 const Delta = ({ change }: { change: number | null }) => {
@@ -116,7 +62,7 @@ const SummaryCard = ({
     background: 'rgba(19,32,53,0.7)',
     border: '1px solid rgba(255,255,255,0.06)',
     borderRadius: '10px',
-    padding: '16px 20px',
+    padding: '14px 18px',
     borderTop: `3px solid ${color}`,
     transition: 'transform 0.15s',
   }}>
@@ -127,16 +73,14 @@ const SummaryCard = ({
 );
 
 // ── Main ──────────────────────────────────────────────────────────────────────
-type PeriodMode = 'year' | 'custom';
-
 export const ReportsPage = () => {
   const [sp] = useSearchParams();
   const type = sp.get('type') || 'district';
 
   const [periodMode, setPeriodMode] = useState<PeriodMode>('year');
   const [selectedYear, setSelectedYear] = useState(DEFAULT_YEAR);
-  const [customFrom, setCustomFrom]   = useState('');
-  const [customTo,   setCustomTo]     = useState('');
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo]     = useState('');
   const [chartSort, setChartSort] = useState('Total Reg');
   const [itemFilter, setItemFilter] = useState<string[]>([]);
   const [districtFilter,      setDistrictFilter]      = useState<string[]>([]);
@@ -145,7 +89,6 @@ export const ReportsPage = () => {
 
   // Reset item/district filter when report tab changes
   useEffect(() => { setItemFilter([]); setDistrictFilter([]); }, [type]);
-
 
   // Build API URL — includes ALL active filters so server does the real filtering
   const apiFilters = useMemo(() => {
@@ -222,7 +165,7 @@ export const ReportsPage = () => {
     [raw, tab]
   );
 
-  // Item filter is client-side (tab-specific row name); source/type/district go to API
+  // Item filter is client-side; source/type/district go to API
   const applyItemFilter = (arr: Record<string, unknown>[]) =>
     itemFilter.length === 0
       ? arr
@@ -245,7 +188,6 @@ export const ReportsPage = () => {
   const dispRate = total > 0 ? (disp / total * 100).toFixed(1) : '0.0';
   const pendRate = total > 0 ? (pend / total * 100).toFixed(1) : '0.0';
 
-  // Period label
   const periodLabel = periodMode === 'custom' && customFrom && customTo
     ? `${customFrom} → ${customTo}`
     : `Year ${selectedYear}`;
@@ -253,7 +195,7 @@ export const ReportsPage = () => {
   const showYoY = periodMode === 'year' && type === 'district';
   const activeYear = data?.data?.year ?? selectedYear;
 
-  // Table rows (use filteredRaw)
+  // Table rows
   const tableData = filteredRaw.map((r, i) => {
     const tot = Number(r.total ?? r.count ?? 0);
     const p   = Number(r.pending  ?? 0);
@@ -283,7 +225,7 @@ export const ReportsPage = () => {
     ] : []),
   ];
 
-  // Chart options (use filteredRawForChart)
+  // Chart options
   const districtData = filteredRawForChart.map(r => ({
     district: String(r[tab.nameKey] ?? r.district ?? ''),
     total:    Number(r.total ?? 0),
@@ -292,13 +234,13 @@ export const ReportsPage = () => {
     prevTotal:Number(r.prevTotal ?? 0),
   }));
 
-  const horizontalOpt= getDistrictBarOptions(districtData, { horizontal: true });
-  const yoyOpt       = getYoYBarOptions(districtData, activeYear);
+  const horizontalOpt      = getDistrictBarOptions(districtData, { horizontal: true });
+  const yoyOpt             = getYoYBarOptions(districtData, activeYear);
   const horizontalSingleOpt = getHorizontalSingleBarOptions(filteredRawForChart.map(r => ({
     name:  String(r[tab.nameKey] ?? r.district ?? ''),
     value: Number(r.total ?? r.count ?? 0),
   })));
-  const groupedCatOpt= getGroupedBarOptions(filteredRawForChart.map(r => ({
+  const groupedCatOpt = getGroupedBarOptions(filteredRawForChart.map(r => ({
     category: String(r[tab.nameKey] ?? ''),
     total:    Number(r.total ?? 0),
     pending:  Number(r.pending ?? 0),
@@ -308,103 +250,50 @@ export const ReportsPage = () => {
   const isDistrictType = type === 'district' || type === 'date-wise';
   const isPieType = type === 'mode-receipt' || type === 'status';
 
-  const primaryOption = isDistrictType ? horizontalOpt : isPieType ? horizontalSingleOpt : groupedCatOpt;
-  const altOptions = isDistrictType
-    ? { grouped: yoyOpt }
-    : {};
+  const primaryOption    = isDistrictType ? horizontalOpt : isPieType ? horizontalSingleOpt : groupedCatOpt;
+  const altOptions       = isDistrictType ? { grouped: yoyOpt } : {};
   const defaultChartType = isDistrictType ? 'horizontal' : isPieType ? 'horizontal' : 'grouped';
 
   return (
     <Layout>
       <div className="page-content">
 
-        {/* ── Global Filter Bar — ALL filters passed to API ── */}
+        {/* ── Unified Filter Bar (period + all filters in one row) ── */}
         <GlobalFilterBar
-          districtFilter={districtFilter} onDistrictChange={setDistrictFilter}
-          sourceFilter={sourceFilter} onSourceChange={setSourceFilter}
+          showPeriod
+          periodMode={periodMode}
+          onPeriodModeChange={(m) => {
+            setPeriodMode(m);
+            if (m === 'year') { setCustomFrom(''); setCustomTo(''); }
+          }}
+          selectedYear={selectedYear}
+          onYearChange={setSelectedYear}
+          onFromDateChange={setCustomFrom}
+          onToDateChange={setCustomTo}
+
+          districtFilter={districtFilter}   onDistrictChange={setDistrictFilter}
+          sourceFilter={sourceFilter}       onSourceChange={setSourceFilter}
           complaintTypeFilter={complaintTypeFilter} onComplaintTypeChange={setComplaintTypeFilter}
-          showDate={false}
+
           extraLabel={tab.label}
           extraOptions={filterOptions}
           extraSelected={itemFilter}
           onExtraChange={setItemFilter}
           showExtra={filterOptions.length > 0 && type !== 'district' && type !== 'date-wise'}
-          onClearAll={() => { setItemFilter([]); setDistrictFilter([]); setSourceFilter([]); setComplaintTypeFilter([]); }}
+
+          onClearAll={() => {
+            setItemFilter([]); setDistrictFilter([]);
+            setSourceFilter([]); setComplaintTypeFilter([]);
+            setCustomFrom(''); setCustomTo('');
+            setPeriodMode('year'); setSelectedYear(CY);
+          }}
         />
-
-        {/* ── Period Controls ─────────────────────────────────────────────── */}
-        <div style={{
-          background: 'rgba(19,32,53,0.6)',
-          border: '1px solid rgba(255,255,255,0.07)',
-          borderRadius: '12px',
-          padding: '12px 16px',
-          marginBottom: '14px',
-          backdropFilter: 'blur(12px)',
-          display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center',
-        }}>
-
-          {/* Quick presets */}
-          <PeriodBtn active={periodMode === 'year' && selectedYear === CY}
-            onClick={() => { setPeriodMode('year'); setSelectedYear(CY); }}>
-            This Year ({CY})
-          </PeriodBtn>
-          <PeriodBtn active={periodMode === 'year' && selectedYear === CY - 1}
-            onClick={() => { setPeriodMode('year'); setSelectedYear(CY - 1); }}>
-            Last Year ({CY - 1})
-          </PeriodBtn>
-          <PeriodBtn active={periodMode === 'year' && selectedYear === CY - 2}
-            onClick={() => { setPeriodMode('year'); setSelectedYear(CY - 2); }}>
-            {CY - 2}
-          </PeriodBtn>
-
-          <div style={{ width: '1px', height: '20px', background: 'rgba(255,255,255,0.08)', margin: '0 4px' }} />
-
-          {/* Year dropdown */}
-          <Select
-            value={selectedYear}
-            onChange={v => { setSelectedYear(Number(v)); setPeriodMode('year'); }}
-            options={YEARS.map(y => ({ value: y, label: String(y) }))}
-            width="100px"
-          />
-
-          <div style={{ width: '1px', height: '20px', background: 'rgba(255,255,255,0.08)', margin: '0 4px' }} />
-
-          {/* Custom range toggle */}
-          <PeriodBtn
-            active={periodMode === 'custom'}
-            onClick={() => setPeriodMode(periodMode === 'custom' ? 'year' : 'custom')}
-          >
-            📅 Custom Range
-          </PeriodBtn>
-
-          {periodMode === 'custom' && (
-            <>
-              <StyledDateInput value={customFrom} onChange={setCustomFrom} label="From" />
-              <StyledDateInput value={customTo}   onChange={setCustomTo}   label="to" />
-            </>
-          )}
-
-          {/* Active badge */}
-          <div style={{ marginLeft: 'auto' }}>
-            <span style={{
-              fontSize: '11.5px', fontWeight: 600,
-              color: '#818cf8',
-              background: 'rgba(99,102,241,0.12)',
-              border: '1px solid rgba(99,102,241,0.2)',
-              padding: '5px 12px', borderRadius: '20px',
-              display: 'inline-flex', alignItems: 'center', gap: '5px',
-            }}>
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-              {periodLabel}
-            </span>
-          </div>
-        </div>
 
         {/* ── Report Tabs ─────────────────────────────────────────────────── */}
         <div style={{
           display: 'flex', flexWrap: 'wrap', gap: '4px',
           marginBottom: '14px',
-          padding: '6px',
+          padding: '5px',
           background: 'rgba(19,32,53,0.4)',
           borderRadius: '10px',
           border: '1px solid rgba(255,255,255,0.05)',
@@ -414,7 +303,7 @@ export const ReportsPage = () => {
               key={t.id}
               to={`?type=${t.id}`}
               style={{
-                padding: '6px 14px',
+                padding: '5px 13px',
                 borderRadius: '7px',
                 fontSize: '12.5px',
                 fontWeight: type === t.id ? 600 : 400,
@@ -443,11 +332,11 @@ export const ReportsPage = () => {
         ) : (
           <>
             {/* ── Summary Cards ──────────────────────────────────────────── */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(160px,1fr))', gap: '12px', marginBottom: '14px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: '10px', marginBottom: '12px' }}>
               <SummaryCard label="Total Complaints" value={total.toLocaleString()} color="#6366f1" sub={`Period: ${periodLabel}`} />
-              <SummaryCard label="Pending" value={pend.toLocaleString()} color="#f59e0b" sub={`${pendRate}% of total`} />
-              <SummaryCard label="Disposed" value={disp.toLocaleString()} color="#10b981" sub={`${dispRate}% of total`} />
-              <SummaryCard label="Categories" value={String(raw.length)} color="#818cf8" />
+              <SummaryCard label="Pending"   value={pend.toLocaleString()}  color="#f59e0b" sub={`${pendRate}% of total`} />
+              <SummaryCard label="Disposed"  value={disp.toLocaleString()}  color="#10b981" sub={`${dispRate}% of total`} />
+              <SummaryCard label="Categories" value={String(raw.length)}   color="#818cf8" />
               {showYoY && prevTotal > 0 && (
                 <SummaryCard
                   label={`${activeYear - 1} Total`}
@@ -459,7 +348,7 @@ export const ReportsPage = () => {
             </div>
 
             {/* ── Chart ──────────────────────────────────────────────────── */}
-            <div style={{ marginBottom: '14px' }}>
+            <div style={{ marginBottom: '12px' }}>
               <ChartCard
                 title={`${tab.label} — ${periodLabel}`}
                 option={primaryOption as any}
@@ -490,7 +379,7 @@ export const ReportsPage = () => {
                   return String(row[c.key as keyof typeof row] ?? '—');
                 },
               }))}
-              maxHeight="calc(100vh - 520px)"
+              maxHeight="calc(100vh - 500px)"
             />
           </>
         )}

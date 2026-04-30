@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Layout } from '@/components/layout/Layout';
 import { ChartCard } from '@/components/charts/ChartCard';
 import { DataTable, Column } from '@/components/data/DataTable';
-import { getHorizontalSingleBarOptions, getYoYBarOptions, getYoYStackedBarOptions, getDistrictBarOptions } from '@/components/charts/Charts';
+import { getDistrictBarOptions } from '@/components/charts/Charts';
 
 
 
@@ -16,19 +16,13 @@ const CY = new Date().getFullYear();
 const TOP_PREVIEW_COUNT = 5;
 const PREVIEW_COUNT = 8;
 
-const HIGHLIGHTS_SORT_OPTIONS = [
-  { label: 'Total Reg', value: 'Total Reg' },
-  { label: 'Total Pending', value: 'Total Pending' },
-  { label: 'Total Disposed', value: 'Total Disposed' },
-  { label: 'Pending %', value: 'Pending %' },
-  { label: 'Disposed %', value: 'Disposed %' }
-];
+
 
 export const HighlightsPage = () => {
   const [showAllCategories, setShowAllCategories] = useState(false);
   const [showAllNature, setShowAllNature] = useState(false);
   const [year, setYear] = useState(CY);
-  const [natureChartSort, setNatureChartSort] = useState('Total Reg');
+  const [natureChartSort] = useState('Total Reg');
   const [categoryFilter, setCategoryFilter] = useState<string[]>([]);
   const [natureFilter, setNatureFilter] = useState<string[]>([]);
   const YEARS = Array.from({ length: CY - 2014 + 1 }, (_, i) => CY - i);
@@ -71,23 +65,7 @@ export const HighlightsPage = () => {
     staleTime: 5 * 60 * 1000,
   });
 
-  // Previous year — same district/source/type filters but always year-1 (for YoY comparison)
-  const prevFilters = useMemo(() => ({ ...filters, year: year - 1, fromDate: undefined, toDate: undefined }), [filters, year]);
-  const buildPrevQS = () => {
-    const p = new URLSearchParams({ year: String(year - 1) });
-    if (districtFilter.length > 0)      p.set('district',      districtFilter.join(','));
-    if (sourceFilter.length > 0)        p.set('source',        sourceFilter.join(','));
-    if (complaintTypeFilter.length > 0) p.set('complaintType', complaintTypeFilter.join(','));
-    return p.toString();
-  };
-  const { data: hdPrev } = useQuery({
-    queryKey: ['reports', 'highlights', prevFilters],
-    queryFn: async () => {
-      const r = await fetch(`/api/reports/highlights?${buildPrevQS()}`, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
-      return r.json();
-    },
-    staleTime: 5 * 60 * 1000,
-  });
+
 
   const { data: nd, isLoading: nl } = useQuery({
     queryKey: ['reports', 'nature', filters],
@@ -98,35 +76,11 @@ export const HighlightsPage = () => {
     staleTime: 5 * 60 * 1000,
   });
 
-  const ndPrevFilters = useMemo(() => ({ ...filters, year: year - 1, fromDate: undefined, toDate: undefined, key: 'nature-prev' }), [filters, year]);
-  const { data: ndPrev } = useQuery({
-    queryKey: ['reports', 'nature', ndPrevFilters],
-    queryFn: async () => {
-      const r = await fetch(`/api/reports/nature-incident?${buildPrevQS()}`, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } });
-      return r.json();
-    },
-    staleTime: 5 * 60 * 1000,
-  });
 
 
 
   const highlights      = (hd?.data?.rows    ?? (Array.isArray(hd?.data)    ? hd?.data    : [])) as Record<string, unknown>[];
   const natures         = (nd?.data?.rows    ?? (Array.isArray(nd?.data)    ? nd?.data    : [])) as Record<string, unknown>[];
-  const highlightsPrev  = (hdPrev?.data?.rows ?? (Array.isArray(hdPrev?.data) ? hdPrev?.data : [])) as Record<string, unknown>[];
-  const naturesPrev     = (ndPrev?.data?.rows  ?? (Array.isArray(ndPrev?.data)  ? ndPrev?.data  : [])) as Record<string, unknown>[];
-
-  // Lookup maps: category/nature name → prev year data
-  const prevCatMap = Object.fromEntries(
-    highlightsPrev.map(r => [String(r.category), Number(r.count || 0)])
-  );
-  // For nature: store pending + disposed separately for grouped-stacked YoY chart
-  const prevNatMap = Object.fromEntries(
-    naturesPrev.map(r => [String(r.natureOfIncident), {
-      total:    Number(r.total    || 0),
-      pending:  Number(r.pending  || 0),
-      disposed: Number(r.disposed || 0),
-    }])
-  );
 
 
   const allTopRows = highlights.map((r, i) => ({
@@ -193,11 +147,7 @@ export const HighlightsPage = () => {
     [allTopRows]
   );
 
-  const filteredTopRows = useMemo(() => {
-    let rows = [...allTopRows];
-    if (categoryFilter.length > 0) rows = rows.filter(r => categoryFilter.includes(r.name));
-    return rows.slice(0, categoryFilter.length > 0 ? 50 : 10);
-  }, [allTopRows, categoryFilter]);
+
 
   const filteredNatureRows = useMemo(() => {
     let rows = [...sortedNatureRows];
